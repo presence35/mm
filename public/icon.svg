@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Marina Manager">
+  <rect width="512" height="512" rx="96" fill="#101418" />
+  <path d="M256 128v176" stroke="#8bcff8" stroke-width="24" stroke-linecap="round" />
+  <path d="M256 148l92 132h-92z" fill="#8bcff8" />
+  <path d="M132 320h248l-30 52a20 20 0 0 1-18 11H180a20 20 0 0 1-18-11z" fill="#8bcff8" />
+  <path d="M96 416c26 0 26 20 52 20s26-20 52-20 26 20 52 20 26-20 52-20 26 20 52 20 26-20 52-20"
+        fill="none" stroke="#4f616e" stroke-width="18" stroke-linecap="round" />
+</svg>

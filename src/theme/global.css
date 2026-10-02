@@ -1,0 +1,201 @@
+/* ============================================================================
+   Marina Manager — global styles
+   Reset + base element styling + layout primitives. Components live in ui/.
+   ========================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--on-surface);
+  font: var(--body-m);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd {
+  margin: 0;
+}
+
+ul[class], ol[class] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+img, svg, video {
+  display: block;
+  max-width: 100%;
+}
+
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* --- Focus -----------------------------------------------------------------
+   Visible ring, logical order. Never removed — only replaced. Keyboard
+   focus must be unmistakable on a phone used in sunlight. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--corner-s);
+}
+
+/* --- Layout primitives ---------------------------------------------------- */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.screen-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Readable measure. Content never runs the full width of a desktop window. */
+.measure {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Visually hidden but announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Section heading ------------------------------------------------------
+   Uppercase label. Used sparingly — one per screen region, never per row. */
+.section-head {
+  font: var(--label-m);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-surface-variant);
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.divider {
+  height: 1px;
+  background: var(--outline-variant);
+  border: 0;
+  margin: 0;
+}
+
+/* --- Skeleton -------------------------------------------------------------
+   Loading state must match the final layout's shape, never a spinner. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-container-high) 25%,
+    var(--surface-container-highest) 37%,
+    var(--surface-container-high) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-sheen 1.4s ease-in-out infinite;
+  border-radius: var(--corner-s);
+}
+
+@keyframes skeleton-sheen {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* --- Motion: shared axis --------------------------------------------------
+   Forward and back share easing; only direction differs. */
+@keyframes enter-forward {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes enter-back {
+  from { opacity: 0; transform: translate3d(0, -12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

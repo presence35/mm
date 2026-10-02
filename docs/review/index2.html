@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marina Manager — Feature List</title>
+<style>
+:root{--bg:#fbf8f4;--s:#fff;--s2:#f4efe8;--ln:#e2d9cc;--ink:#1f1b16;--ink2:#6b6157;--ac:#0f5c8c}
+@media (prefers-color-scheme:dark){:root{--bg:#14120f;--s:#1c1915;--s2:#262119;--ln:#38312a;--ink:#f2ece4;--ink2:#a89d90;--ac:#7cc4ee}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:820px;margin:0 auto;padding:0 20px 70px}
+header{padding:30px 0 18px;border-bottom:2px solid var(--ln)}
+h1{margin:0 0 4px;font-size:26px;letter-spacing:-.4px}
+.sub{color:var(--ink2);font-size:14px;margin:0}
+h2{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink2);
+  margin:34px 0 8px;padding-top:12px;border-top:1px solid var(--ln)}
+ul{list-style:none;margin:0;padding:0;background:var(--s);border:1px solid var(--ln);border-radius:12px;overflow:hidden}
+li{border-bottom:1px solid var(--ln)}
+li:last-child{border-bottom:0}
+.row{display:flex;gap:12px;align-items:baseline;padding:10px 16px}
+.id{font:11px ui-monospace,monospace;color:var(--ink2);background:var(--s2);
+  border-radius:5px;padding:1px 6px;flex:none}
+.nm{font-weight:600;flex:none;min-width:210px}
+.ds{color:var(--ink2);font-size:14px;flex:1}
+button.n{flex:none;font:12px inherit;color:var(--ink2);background:none;border:1px solid var(--ln);
+  border-radius:6px;padding:2px 8px;cursor:pointer}
+button.n:hover{color:var(--ink)}
+textarea{width:100%;border:0;border-top:1px dashed var(--ln);padding:10px 16px;min-height:56px;
+  font:inherit;font-size:14px;color:var(--ink);background:var(--s2);resize:vertical}
+textarea:focus{outline:2px solid var(--ac);outline-offset:-2px}
+.bar{position:sticky;bottom:0;background:var(--s);border:1px solid var(--ln);border-radius:12px;
+  padding:12px 16px;margin-top:28px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar .c{font-size:14px;color:var(--ink2);margin-right:auto}
+button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--ln);background:var(--bg);color:var(--ink)}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+#st{font-size:13px;color:var(--ink2)}
+@media print{body{background:#fff}.bar{display:none}li{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="w">
+<header>
+  <h1>Marina Manager — Feature List</h1>
+  <p class="sub">Campbell's Landing Marina · everything the app does · <b>spec v2026-10-02</b><br>
+  Anything wrong, missing, or not needed? Hit <b>note</b> on that row.</p>
+</header>
+
+<h2>Day to day, on the boat</h2>
+<ul>
+<li><div class="row"><span class="id">F-01</span><span class="nm">Cards queue</span><span class="ds">All open work, filtered by status, boat or customer</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-02</span><span class="nm">Card detail</span><span class="ds">The whole card on one screen — no jumping between tabs</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-03</span><span class="nm">New card</span><span class="ds">Scan the boat's QR, or fill the paper form in by hand</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-04</span><span class="nm">Received items</span><span class="ds">Tick off what the customer handed over — battery, keys, cover, paddles, life jackets, cushions, gas cans, tie ropes, lights</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-05</span><span class="nm">Authorised work</span><span class="ds">Oil change, outdrive service, tune up, lower unit drain, prop rebuild — approved, done, by whom, when, what products</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-06</span><span class="nm">Condition assessment</span><span class="ds">Rate six areas — top, hull, upholstery, motor, propeller, lower unit</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-07</span><span class="nm">Checklists</span><span class="ds">Fall, Spring and Storage checklists, recorded per employee</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-08</span><span class="nm">Work logs</span><span class="ds">Dated notes, with handwriting in a photo read automatically</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-09</span><span class="nm">Parts used</span><span class="ds">Part number, description, quantity</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-10</span><span class="nm">Photos</span><span class="ds">Typed, captioned, and stamped with where it was taken. Needs signal.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-11</span><span class="nm">Map</span><span class="ds">Where every boat physically is — building, boathouse, slip, row, column</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<h2>Office</h2>
+<ul>
+<li><div class="row"><span class="id">F-12</span><span class="nm">Customers &amp; boats</span><span class="ds">One screen — contact details, boats, engine and hull serials, licence numbers, length</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-13</span><span class="nm">No duplicates</span><span class="ds">Matching email or phone offers the existing customer instead of creating a second one</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-14</span><span class="nm">Invoices</span><span class="ds">Line items, quantities, tax rate, totals</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-15</span><span class="nm">Issue an invoice</span><span class="ds">Numbers it, marks it issued, locks it to the card</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-16</span><span class="nm">Customer QR link</span><span class="ds">Customer scans their copy of the card to see progress. Can be revoked instantly.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-17</span><span class="nm">Product catalogue</span><span class="ds">Products and service templates, editable without an app release</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<h2>Admin</h2>
+<ul>
+<li><div class="row"><span class="id">F-18</span><span class="nm">Employees</span><span class="ds">Add people, set their job title, deactivate them</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-19</span><span class="nm">Storage layout</span><span class="ds">Buildings, boathouses, slips, rows, columns — change the marina's layout and the app follows</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-20</span><span class="nm">Backup</span><span class="ds">Admin-only export and restore</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<h2>In the field</h2>
+<ul>
+<li><div class="row"><span class="id">F-21</span><span class="nm">Works with no signal</span><span class="ds">Everything opens. Everything you type is saved on the phone.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-22</span><span class="nm">PIN unlock offline</span><span class="ds">Your PIN opens the app in the yard. Expires after a set window.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-23</span><span class="nm">Pending count</span><span class="ds">Setup shows how many changes are still waiting to upload</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-24</span><span class="nm">Two people, one card</span><span class="ds">Badge says "Needs review". You pick which version wins — in the yard, no signal needed.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<h2>How it looks and runs</h2>
+<ul>
+<li><div class="row"><span class="id">F-25</span><span class="nm">Phone &amp; desktop</span><span class="ds">Phone layout on a phone; proper two-pane list-and-detail on a desktop. Not a stretched phone.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-26</span><span class="nm">Light &amp; dark</span><span class="ds">Both designed properly, not one flipped into the other</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-27</span><span class="nm">Readable in sunlight</span><span class="ds">Big targets, high contrast, works with gloves, scales to 200% text</span><button class="n">note</button></div><textarea hidden></textarea></li>
+<li><div class="row"><span class="id">F-28</span><span class="nm">Installable</span><span class="ds">Lives on the home screen. No app store, no install prompt.</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<h2>Deliberately not included</h2>
+<ul>
+<li><div class="row"><span class="id">F-29</span><span class="nm">Not in v1</span><span class="ds">Payments · scheduling and bay bookings · parts inventory and ordering · customer login or messaging · reports and dashboards · a second marina · bulk actions across many cards</span><button class="n">note</button></div><textarea hidden></textarea></li>
+</ul>
+
+<div class="bar">
+  <span class="c" id="c">0 features noted</span>
+  <button id="cp">Copy my notes</button>
+  <button class="p" id="snd">Submit</button>
+  <span id="st"></span>
+</div>
+</div>
+
+<script>
+const ENDPOINT = "";           // set to your POST URL when you have one
+const SPEC = "marina-manager-features-2026-10-02", KEY = SPEC;
+
+const rows = [...document.querySelectorAll("li")].map(li => ({
+  id: li.querySelector(".id").textContent,
+  name: li.querySelector(".nm").textContent,
+  note: li.querySelector("textarea")
+}));
+
+rows.forEach(r => r.note.previousElementSibling.querySelector("button.n").onclick = () => {
+  r.note.hidden = !r.note.hidden;
+  if (!r.note.hidden) r.note.focus(); else tally();
+});
+rows.forEach(r => r.note.addEventListener("input", () => { tally(); save(); }));
+
+function tally(){
+  const n = rows.filter(r => r.note.value.trim()).length;
+  document.getElementById("c").textContent = n + " feature" + (n === 1 ? "" : "s") + " noted";
+}
+function collect(){
+  const items = {};
+  rows.forEach(r => { const v = r.note.value.trim(); if (v) items[r.id] = { feature: r.name, note: v }; });
+  let name; try { name = localStorage.getItem(KEY + ".name") || ""; } catch(e){}
+  if (!name) { name = prompt("Your name (for the record):") || ""; try { localStorage.setItem(KEY + ".name", name); } catch(e){} }
+  return { spec: SPEC, reviewer: name, submitted_at: new Date().toISOString(), items };
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(collect())); } catch(e){} }
+function load(){
+  let d; try { d = JSON.parse(localStorage.getItem(KEY)); } catch(e){ return; }
+  if (!d || !d.items) return;
+  rows.forEach(r => { if (d.items[r.id]) r.note.value = d.items[r.id].note; });
+}
+
+document.getElementById("cp").onclick = async () => {
+  const json = JSON.stringify(collect(), null, 2);
+  try { await navigator.clipboard.writeText(json);
+        document.getElementById("st").textContent = "Copied — paste it back to whoever owns the spec."; }
+  catch(e){ prompt("Copy this:", json); }
+};
+document.getElementById("snd").onclick = async () => {
+  const st = document.getElementById("st");
+  if (!ENDPOINT) { save(); st.textContent = "Saved on this device. Use Copy to send it on."; return; }
+  try {
+    const r = await fetch(ENDPOINT, { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(collect()) });
+    st.textContent = r.ok ? "Sent." : "Server said " + r.status + " — use Copy instead.";
+  } catch(e){ st.textContent = "No connection. Use Copy instead."; }
+};
+
+load(); tally();
+</script>
+</body>
+</html>
