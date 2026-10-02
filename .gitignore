@@ -6,3 +6,6 @@ dev-dist
 .env
 .env.*
 !.env.example
+# Inherited/other-session artifacts, not project content
+docs/review/
+.opencode/
