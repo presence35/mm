@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import {
   Button,
+  Icon,
   IconButton,
+  ListItem,
   TopBar,
   Sheet,
   StatusPill,
@@ -24,6 +26,7 @@ const RECEIVED_LABELS = Object.fromEntries(SEED_RECEIVED_ITEMS.map((k) => [k, k.
 
 export default function CardDetail({ record, embedded, selected, onBack, onDirtyChange, actions }) {
   const [statusSheet, setStatusSheet] = useState(false)
+  const [conditionSheet, setConditionSheet] = useState(false)
 
   if (!record) {
     // Nothing chosen yet is not an error — it is the empty detail pane.
@@ -49,6 +52,12 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const meta = statusMeta(card.status)
   const options = nextStatuses(card.status)
   const storageLabel = STORAGE_TYPES.find((t) => t.value === card.storage_type)?.label ?? '—'
+
+  const rated = (card.condition ?? []).length
+  const noted = (card.condition ?? []).filter((c) => c.note).length
+  const conditionSummary = rated
+    ? `${rated} of ${SEED_CONDITIONS.length} areas rated${noted ? ` · ${noted} with notes` : ''}`
+    : 'Not yet rated'
 
   return (
     <div>
@@ -135,7 +144,14 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
 
       <Divider />
 
-      <ConditionEditor areas={SEED_CONDITIONS} condition={card.condition} onRate={actions.rate} />
+      <div className="section-head">Condition assessment</div>
+      <ListItem
+        icon="alert"
+        title="Rate condition"
+        support={conditionSummary}
+        onClick={() => setConditionSheet(true)}
+        trailing={<Icon name="right" size={20} />}
+      />
 
       <Divider />
 
@@ -161,6 +177,19 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
           Move to…
         </Button>
       </div>
+
+      <Sheet open={conditionSheet} title="Condition assessment" onDismiss={() => setConditionSheet(false)}>
+        <ConditionEditor
+          areas={SEED_CONDITIONS}
+          condition={card.condition}
+          onRate={actions.rate}
+        />
+        <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+          <Button fullWidth variant="tonal" onClick={() => setConditionSheet(false)}>
+            Done
+          </Button>
+        </div>
+      </Sheet>
 
       <Sheet open={statusSheet} title="Change status" onDismiss={() => setStatusSheet(false)}>
         {options.length ? (

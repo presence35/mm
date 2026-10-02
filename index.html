@@ -9,8 +9,10 @@
     <script>
       // Applied before first paint so a dark-mode user never sees a light flash.
       try {
-        var t = localStorage.getItem('mm.theme')
-        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+        var p = localStorage.getItem('mm.palette')
+        if (p) document.documentElement.dataset.palette = p
+        var m = localStorage.getItem('mm.theme')
+        if (m === 'light' || m === 'dark') document.documentElement.dataset.mode = m
       } catch (e) {}
     </script>
   </head>

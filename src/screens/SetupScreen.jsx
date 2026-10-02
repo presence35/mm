@@ -1,34 +1,72 @@
 import { TopBar, ListItem, Segmented, StatusPill, Icon } from '../ui'
-import { useTheme } from '../theme/ThemeProvider.jsx'
+import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { resetToSeed } from '../engines/store/localStore.js'
 import { SEED_EMPLOYEE } from '../engines/store/seed.js'
 
-/* Sync and auth controls arrive with the sync phase. Theme switching ships
-   now because both themes are a release requirement, not a preference. */
+/* Sync and auth controls arrive with the sync phase. Palette and mode ship
+   now because both are a release requirement, not a preference. */
 
-const THEME_OPTIONS = [
+const MODE_OPTIONS = [
   { value: 'system', label: 'Auto' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ]
 
+/* Preview swatches are fixed values, not live reads of the current theme —
+   otherwise every swatch would render identically to the palette you picked. */
+const SWATCHES = {
+  'deep-water': ['#00639b', '#8b5000', '#146c2e'],
+  'sunset-harbour': ['#a83f0d', '#00639b', '#146c2e'],
+  'storm-watch': ['#00694a', '#8a5a00', '#146c2e'],
+  'coral-bay': ['#a8203f', '#00694a', '#146c2e'],
+}
+
+function PalettePicker({ palette, onChange }) {
+  return (
+    <div className="palette-grid" role="radiogroup" aria-label="Colour palette">
+      {PALETTES.map((p) => (
+        <button
+          key={p.id}
+          className="palette-option"
+          role="radio"
+          aria-checked={palette === p.id}
+          onClick={() => onChange(p.id)}
+        >
+          <span className="palette-option__swatches" aria-hidden="true">
+            {SWATCHES[p.id].map((c) => (
+              <span key={c} className="palette-option__dot" style={{ background: c }} />
+            ))}
+          </span>
+          <span className="palette-option__text">
+            <span className="palette-option__name">{p.name}</span>
+            <span className="palette-option__desc">{p.desc}</span>
+          </span>
+          {palette === p.id ? (
+            <span className="palette-option__check">
+              <Icon name="check" size={18} />
+            </span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function SetupScreen() {
-  const { theme, setTheme } = useTheme()
+  const { palette, setPalette, mode, setMode } = useTheme()
   const { navigate } = useRouter()
 
   return (
     <div>
       <TopBar title="Setup" />
 
+      <div className="section-head">Colour palette</div>
+      <PalettePicker palette={palette} onChange={setPalette} />
+
       <div className="section-head">Appearance</div>
       <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-        <Segmented
-          options={THEME_OPTIONS}
-          value={theme}
-          onChange={setTheme}
-          ariaLabel="Theme"
-        />
+        <Segmented options={MODE_OPTIONS} value={mode} onChange={setMode} ariaLabel="Light or dark" />
       </div>
 
       <div className="section-head">Offline</div>

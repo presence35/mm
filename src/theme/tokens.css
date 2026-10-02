@@ -1,76 +1,150 @@
 /* ============================================================================
    Marina Manager — design tokens
    Material Design 3. Semantic roles only. No screen may reference a literal.
-   Source palette: marine blue-teal (primary), warm amber (tertiary accent).
-   Light and dark are authored independently — neither is derived from the other.
+
+   A palette is four variables: a primary hue, its chroma, and the same for
+   the tertiary accent. Everything else — every surface, every container, the
+   whole neutral family — is derived from that one hue. Adding a palette costs
+   four lines instead of forty, and no palette can drift out of contrast with
+   the rest of the ramp because they all share the same lightness profile.
+
+   Lightness is set once per mode. Roles are defined once. A palette only ever
+   moves hue and chroma, never lightness, so contrast holds everywhere.
    ========================================================================= */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  /* --- Colour: LIGHT (authored) ------------------------------------------ */
-  --primary: #00639b;
-  --on-primary: #ffffff;
-  --primary-container: #c8e6ff;
-  --on-primary-container: #001d33;
+  /* --- Palette: Deep Water (default) ------------------------------------- */
+  --hue: 205;
+  --chroma: 42%;
+  --hue-tertiary: 30;
+  --chroma-tertiary: 44%;
 
-  --secondary: #4f616e;
-  --on-secondary: #ffffff;
-  --secondary-container: #d2e5f5;
-  --on-secondary-container: #0b1d29;
+  /* Semantic hues are fixed — success must read as success in every palette. */
+  --hue-success: 142;
+  --chroma-success: 46%;
+  --hue-warning: 40;
+  --chroma-warning: 60%;
+  --hue-error: 6;
+  --chroma-error: 48%;
+  --neutral-chroma: 12%;
 
-  --tertiary: #8b5000;
-  --on-tertiary: #ffffff;
-  --tertiary-container: #ffddb6;
-  --on-tertiary-container: #2c1600;
+  /* --- Mode: light lightness profile ------------------------------------- */
+  --l-primary: 40%;
+  --l-on-primary: 100%;
+  --l-primary-container: 88%;
+  --l-on-primary-container: 16%;
 
-  --error: #ba1a1a;
-  --on-error: #ffffff;
-  --error-container: #ffdad6;
-  --on-error-container: #410002;
+  --l-secondary: 42%;
+  --l-on-secondary: 100%;
+  --l-secondary-container: 89%;
+  --l-on-secondary-container: 18%;
+
+  --l-tertiary: 38%;
+  --l-on-tertiary: 100%;
+  --l-tertiary-container: 88%;
+  --l-on-tertiary-container: 16%;
+
+  --l-success: 38%;
+  --l-on-success: 100%;
+  --l-success-container: 88%;
+  --l-on-success-container: 16%;
+
+  --l-warning: 36%;
+  --l-on-warning: 100%;
+  --l-warning-container: 90%;
+  --l-on-warning-container: 16%;
+
+  --l-error: 42%;
+  --l-on-error: 100%;
+  --l-error-container: 90%;
+  --l-on-error-container: 15%;
+
+  --l-surface: 99%;
+  --l-on-surface: 12%;
+  --l-surface-variant: 90%;
+  --l-on-surface-variant: 36%;
+
+  --l-surface-dim: 87%;
+  --l-surface-bright: 99%;
+  --l-container-lowest: 100%;
+  --l-container-low: 98%;
+  --l-container: 95%;
+  --l-container-high: 93%;
+  --l-container-highest: 91%;
+
+  --l-outline: 46%;
+  --l-outline-variant: 80%;
+
+  --l-inverse-surface: 22%;
+  --l-inverse-on-surface: 96%;
+  --l-inverse-primary: 78%;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28), 0 1px 3px 1px rgba(0, 0, 0, 0.13);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.28), 0 2px 6px 2px rgba(0, 0, 0, 0.13);
+  --shadow-3: 0 1px 3px rgba(0, 0, 0, 0.28), 0 4px 8px 3px rgba(0, 0, 0, 0.13);
+  --shadow-4: 0 2px 3px rgba(0, 0, 0, 0.28), 0 6px 10px 4px rgba(0, 0, 0, 0.13);
+  --shadow-5: 0 4px 4px rgba(0, 0, 0, 0.28), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+
+  /* --- Roles --------------------------------------------------------------
+     Defined once. Every value below is a function of the palette and mode
+     above; this block never changes per palette. */
+  --primary: hsl(var(--hue) var(--chroma) var(--l-primary));
+  --on-primary: hsl(var(--hue) 40% var(--l-on-primary));
+  --primary-container: hsl(var(--hue) calc(var(--chroma) * 0.85) var(--l-primary-container));
+  --on-primary-container: hsl(var(--hue) var(--chroma) var(--l-on-primary-container));
+
+  --secondary: hsl(var(--hue) calc(var(--chroma) * 0.32) var(--l-secondary));
+  --on-secondary: hsl(var(--hue) 32% var(--l-on-secondary));
+  --secondary-container: hsl(var(--hue) calc(var(--chroma) * 0.3) var(--l-secondary-container));
+  --on-secondary-container: hsl(var(--hue) calc(var(--chroma) * 0.4) var(--l-on-secondary-container));
+
+  --tertiary: hsl(var(--hue-tertiary) var(--chroma-tertiary) var(--l-tertiary));
+  --on-tertiary: hsl(var(--hue-tertiary) 40% var(--l-on-tertiary));
+  --tertiary-container: hsl(var(--hue-tertiary) calc(var(--chroma-tertiary) * 0.6) var(--l-tertiary-container));
+  --on-tertiary-container: hsl(var(--hue-tertiary) var(--chroma-tertiary) var(--l-on-tertiary-container));
 
   /* Deliberate M3 extension. M3 has no success role; card READY / archived
-     states need one. Never use it to attract attention, only to confirm. */
-  --success: #146c2e;
-  --on-success: #ffffff;
-  --success-container: #c4f0cc;
-  --on-success-container: #002108;
+     states need one. Never used to attract attention, only to confirm. */
+  --success: hsl(var(--hue-success) var(--chroma-success) var(--l-success));
+  --on-success: hsl(var(--hue-success) 40% var(--l-on-success));
+  --success-container: hsl(var(--hue-success) calc(var(--chroma-success) * 0.8) var(--l-success-container));
+  --on-success-container: hsl(var(--hue-success) var(--chroma-success) var(--l-on-success-container));
 
-  /* Warning is a second extension, for STALE / NEEDS-SIGNAL states. */
-  --warning: #7a5900;
-  --on-warning: #ffffff;
-  --warning-container: #ffdf9a;
-  --on-warning-container: #261a00;
+  --warning: hsl(var(--hue-warning) var(--chroma-warning) var(--l-warning));
+  --on-warning: hsl(var(--hue-warning) 45% var(--l-on-warning));
+  --warning-container: hsl(var(--hue-warning) calc(var(--chroma-warning) * 0.7) var(--l-warning-container));
+  --on-warning-container: hsl(var(--hue-warning) var(--chroma-warning) var(--l-on-warning-container));
 
-  --surface: #f7f9ff;
-  --on-surface: #191c20;
-  --surface-variant: #dce3e9;
-  --on-surface-variant: #40484d;
+  --error: hsl(var(--hue-error) var(--chroma-error) var(--l-error));
+  --on-error: hsl(var(--hue-error) 40% var(--l-on-error));
+  --error-container: hsl(var(--hue-error) calc(var(--chroma-error) * 0.75) var(--l-error-container));
+  --on-error-container: hsl(var(--hue-error) var(--chroma-error) var(--l-on-error-container));
 
-  --surface-dim: #d8dbe0;
-  --surface-bright: #f7f9ff;
-  --surface-container-lowest: #ffffff;
-  --surface-container-low: #f1f4f8;
-  --surface-container: #ebeff4;
-  --surface-container-high: #e5e9ee;
-  --surface-container-highest: #dfe3e8;
+  --surface: hsl(var(--hue) var(--neutral-chroma) var(--l-surface));
+  --on-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-on-surface));
+  --surface-variant: hsl(var(--hue) var(--neutral-chroma) var(--l-surface-variant));
+  --on-surface-variant: hsl(var(--hue) var(--neutral-chroma) var(--l-on-surface-variant));
 
-  --outline: #70787d;
-  --outline-variant: #c0c8cd;
+  --surface-dim: hsl(var(--hue) var(--neutral-chroma) var(--l-surface-dim));
+  --surface-bright: hsl(var(--hue) var(--neutral-chroma) var(--l-surface-bright));
+  --surface-container-lowest: hsl(var(--hue) var(--neutral-chroma) var(--l-container-lowest));
+  --surface-container-low: hsl(var(--hue) var(--neutral-chroma) var(--l-container-low));
+  --surface-container: hsl(var(--hue) var(--neutral-chroma) var(--l-container));
+  --surface-container-high: hsl(var(--hue) var(--neutral-chroma) var(--l-container-high));
+  --surface-container-highest: hsl(var(--hue) var(--neutral-chroma) var(--l-container-highest));
+
+  --outline: hsl(var(--hue) calc(var(--neutral-chroma) * 0.7) var(--l-outline));
+  --outline-variant: hsl(var(--hue) calc(var(--neutral-chroma) * 0.7) var(--l-outline-variant));
 
   --scrim: #000000;
-  --inverse-surface: #2e3135;
-  --inverse-on-surface: #f0f1f4;
-  --inverse-primary: #8bcff8;
-
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
-  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
-  --shadow-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-4: 0 6px 10px 4px rgba(0, 0, 0, 0.15), 0 2px 3px rgba(0, 0, 0, 0.3);
-  --shadow-5: 0 8px 12px 6px rgba(0, 0, 0, 0.15), 0 4px 4px rgba(0, 0, 0, 0.3);
+  --inverse-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-inverse-surface));
+  --inverse-on-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-inverse-on-surface));
+  --inverse-primary: hsl(var(--hue) var(--chroma) var(--l-inverse-primary));
 
   /* --- Typography: fluid, mobile-first, capped on desktop ---------------- */
-  --font-brand: 'Barlow', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-brand: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --display-l: 400 clamp(2.75rem, 2rem + 3.75vw, 3.5625rem) / 1.16 var(--font-brand);
   --display-m: 400 clamp(2.25rem, 1.75rem + 2.5vw, 2.8125rem) / 1.2 var(--font-brand);
@@ -153,124 +227,166 @@
   --top-bar-height: 64px;
 }
 
-/* --- Colour: DARK (authored independently, not an inversion) ------------- */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --primary: #8bcff8;
-    --on-primary: #003352;
-    --primary-container: #004a78;
-    --on-primary-container: #c8e6ff;
+/* ============================================================================
+   Palettes — four lines each. Names carry over from the previous app so staff
+   recognise them. Only hue and chroma move; contrast is guaranteed by the
+   shared lightness profile above.
+   ========================================================================= */
 
-    --secondary: #b6c9d8;
-    --on-secondary: #21323d;
-    --secondary-container: #374955;
-    --on-secondary-container: #d2e5f5;
-
-    --tertiary: #ffb868;
-    --on-tertiary: #4a2800;
-    --tertiary-container: #6a3b00;
-    --on-tertiary-container: #ffddb6;
-
-    --error: #ffb4ab;
-    --on-error: #690005;
-    --error-container: #93000a;
-    --on-error-container: #ffdad6;
-
-    --success: #a8d5ae;
-    --on-success: #0a3d18;
-    --success-container: #14532a;
-    --on-success-container: #c4f0cc;
-
-    --warning: #f0c048;
-    --on-warning: #412d00;
-    --warning-container: #5d4200;
-    --on-warning-container: #ffdf9a;
-
-    --surface: #101418;
-    --on-surface: #e1e2e8;
-    --surface-variant: #40484d;
-    --on-surface-variant: #c0c8cd;
-
-    --surface-dim: #101418;
-    --surface-bright: #36393e;
-    --surface-container-lowest: #0b0f13;
-    --surface-container-low: #191c20;
-    --surface-container: #1d2024;
-    --surface-container-high: #272a2f;
-    --surface-container-highest: #32353a;
-
-    --outline: #8a9297;
-    --outline-variant: #40484d;
-
-    --inverse-surface: #e1e2e8;
-    --inverse-on-surface: #2e3135;
-    --inverse-primary: #00639b;
-
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px 2px rgba(0, 0, 0, 0.3);
-    --shadow-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.4);
-    --shadow-4: 0 6px 10px 4px rgba(0, 0, 0, 0.15), 0 2px 3px rgba(0, 0, 0, 0.4);
-    --shadow-5: 0 8px 12px 6px rgba(0, 0, 0, 0.2), 0 4px 4px rgba(0, 0, 0, 0.4);
-  }
+:root[data-palette='deep-water'] {
+  --hue: 205;
+  --chroma: 42%;
+  --hue-tertiary: 30;
+  --chroma-tertiary: 44%;
 }
 
-/* Explicit override wins over the media query. */
-:root[data-theme='dark'] {
-  --primary: #8bcff8;
-  --on-primary: #003352;
-  --primary-container: #004a78;
-  --on-primary-container: #c8e6ff;
+:root[data-palette='sunset-harbour'] {
+  --hue: 24;
+  --chroma: 48%;
+  --hue-tertiary: 205;
+  --chroma-tertiary: 40%;
+}
 
-  --secondary: #b6c9d8;
-  --on-secondary: #21323d;
-  --secondary-container: #374955;
-  --on-secondary-container: #d2e5f5;
+:root[data-palette='storm-watch'] {
+  --hue: 158;
+  --chroma: 26%;
+  --hue-tertiary: 62;
+  --chroma-tertiary: 30%;
+}
 
-  --tertiary: #ffb868;
-  --on-tertiary: #4a2800;
-  --tertiary-container: #6a3b00;
-  --on-tertiary-container: #ffddb6;
+:root[data-palette='coral-bay'] {
+  --hue: 352;
+  --chroma: 40%;
+  --hue-tertiary: 168;
+  --chroma-tertiary: 38%;
+}
 
-  --error: #ffb4ab;
-  --on-error: #690005;
-  --error-container: #93000a;
-  --on-error-container: #ffdad6;
+/* ============================================================================
+   Mode — light and dark are authored independently. Dark is not an inversion
+   of light; it is its own lightness profile with its own shadow behaviour.
+   ========================================================================= */
 
-  --success: #a8d5ae;
-  --on-success: #0a3d18;
-  --success-container: #14532a;
-  --on-success-container: #c4f0cc;
+:root[data-mode='dark'] {
+  color-scheme: dark;
 
-  --warning: #f0c048;
-  --on-warning: #412d00;
-  --warning-container: #5d4200;
-  --on-warning-container: #ffdf9a;
+  --l-primary: 78%;
+  --l-on-primary: 18%;
+  --l-primary-container: 30%;
+  --l-on-primary-container: 88%;
 
-  --surface: #101418;
-  --on-surface: #e1e2e8;
-  --surface-variant: #40484d;
-  --on-surface-variant: #c0c8cd;
+  --l-secondary: 78%;
+  --l-on-secondary: 20%;
+  --l-secondary-container: 30%;
+  --l-on-secondary-container: 88%;
 
-  --surface-dim: #101418;
-  --surface-bright: #36393e;
-  --surface-container-lowest: #0b0f13;
-  --surface-container-low: #191c20;
-  --surface-container: #1d2024;
-  --surface-container-high: #272a2f;
-  --surface-container-highest: #32353a;
+  --l-tertiary: 80%;
+  --l-on-tertiary: 20%;
+  --l-tertiary-container: 30%;
+  --l-on-tertiary-container: 88%;
 
-  --outline: #8a9297;
-  --outline-variant: #40484d;
+  --l-success: 76%;
+  --l-on-success: 18%;
+  --l-success-container: 28%;
+  --l-on-success-container: 88%;
 
-  --inverse-surface: #e1e2e8;
-  --inverse-on-surface: #2e3135;
-  --inverse-primary: #00639b;
+  --l-warning: 80%;
+  --l-on-warning: 20%;
+  --l-warning-container: 34%;
+  --l-on-warning-container: 90%;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px 2px rgba(0, 0, 0, 0.3);
-  --shadow-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-4: 0 6px 10px 4px rgba(0, 0, 0, 0.15), 0 2px 3px rgba(0, 0, 0, 0.4);
-  --shadow-5: 0 8px 12px 6px rgba(0, 0, 0, 0.2), 0 4px 4px rgba(0, 0, 0, 0.4);
+  --l-error: 78%;
+  --l-on-error: 20%;
+  --l-error-container: 38%;
+  --l-on-error-container: 90%;
+
+  --l-surface: 8%;
+  --l-on-surface: 91%;
+  --l-surface-variant: 26%;
+  --l-on-surface-variant: 78%;
+
+  --l-surface-dim: 8%;
+  --l-surface-bright: 22%;
+  --l-container-lowest: 5%;
+  --l-container-low: 10%;
+  --l-container: 13%;
+  --l-container-high: 17%;
+  --l-container-highest: 22%;
+
+  --l-outline: 60%;
+  --l-outline-variant: 30%;
+
+  --l-inverse-surface: 91%;
+  --l-inverse-on-surface: 22%;
+  --l-inverse-primary: 40%;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px 2px rgba(0, 0, 0, 0.28);
+  --shadow-3: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 8px 3px rgba(0, 0, 0, 0.14);
+  --shadow-4: 0 2px 3px rgba(0, 0, 0, 0.4), 0 6px 10px 4px rgba(0, 0, 0, 0.14);
+  --shadow-5: 0 4px 4px rgba(0, 0, 0, 0.4), 0 8px 12px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* System mode follows the OS unless the user has pinned a mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode='light']) {
+    color-scheme: dark;
+
+    --l-primary: 78%;
+    --l-on-primary: 18%;
+    --l-primary-container: 30%;
+    --l-on-primary-container: 88%;
+
+    --l-secondary: 78%;
+    --l-on-secondary: 20%;
+    --l-secondary-container: 30%;
+    --l-on-secondary-container: 88%;
+
+    --l-tertiary: 80%;
+    --l-on-tertiary: 20%;
+    --l-tertiary-container: 30%;
+    --l-on-tertiary-container: 88%;
+
+    --l-success: 76%;
+    --l-on-success: 18%;
+    --l-success-container: 28%;
+    --l-on-success-container: 88%;
+
+    --l-warning: 80%;
+    --l-on-warning: 20%;
+    --l-warning-container: 34%;
+    --l-on-warning-container: 90%;
+
+    --l-error: 78%;
+    --l-on-error: 20%;
+    --l-error-container: 38%;
+    --l-on-error-container: 90%;
+
+    --l-surface: 8%;
+    --l-on-surface: 91%;
+    --l-surface-variant: 26%;
+    --l-on-surface-variant: 78%;
+
+    --l-surface-dim: 8%;
+    --l-surface-bright: 22%;
+    --l-container-lowest: 5%;
+    --l-container-low: 10%;
+    --l-container: 13%;
+    --l-container-high: 17%;
+    --l-container-highest: 22%;
+
+    --l-outline: 60%;
+    --l-outline-variant: 30%;
+
+    --l-inverse-surface: 91%;
+    --l-inverse-on-surface: 22%;
+    --l-inverse-primary: 40%;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.28);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 6px 2px rgba(0, 0, 0, 0.28);
+    --shadow-3: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 8px 3px rgba(0, 0, 0, 0.14);
+    --shadow-4: 0 2px 3px rgba(0, 0, 0, 0.4), 0 6px 10px 4px rgba(0, 0, 0, 0.14);
+    --shadow-5: 0 4px 4px rgba(0, 0, 0, 0.4), 0 8px 12px 6px rgba(0, 0, 0, 0.18);
+  }
 }
 
 /* --- Reduced motion ------------------------------------------------------ */

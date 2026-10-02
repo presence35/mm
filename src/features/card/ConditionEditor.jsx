@@ -17,7 +17,6 @@ export default function ConditionEditor({ areas, condition, onRate, onNote }) {
 
   return (
     <section>
-      <div className="section-head">Condition assessment</div>
       {areas.map((a) => {
         const entry = byArea[a.key]
         return (
