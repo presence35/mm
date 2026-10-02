@@ -294,18 +294,20 @@ Grows as code lands. Grouped by subsystem; every file with its responsibility; a
 
 ```
 src/
-  theme/     tokens.css, global.css          — semantic tokens, light + dark
-  ui/        primitives + barrel              — stateless, token-driven
-  shell/     router, nav bar, nav rail        — window-size navigation
+  theme/     tokens.css, global.css, ThemeProvider.jsx
+  ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
+             ui.css, index.js               — stateless, token-driven
+  shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
   engines/
-    store/   local store (IndexedDB)
-    sync/    sync engine, outbox, SyncProvider
-    auth/    auth engine, permissions, AuthProvider
-    media/   photo queue
-  domain/    cardStatus, validation, selectors — pure, deterministic
-  features/  one folder per screen area
-  screens/   screen composition only
+    store/   localStore.js, seed.js          — Phase 1: memory + localStorage
+  domain/    cardStatus.js, storageLocation.js — pure, deterministic
+  features/
+    card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
+             LogComposer.jsx, PhotoStrip.jsx, useCard.js
+  screens/   composition only
 ```
+
+Not yet built: `engines/sync/`, `engines/auth/`, `engines/media/`, and the People/Map/Setup/Scan/New-card/Invoice/Admin/Public-view screens.
 
 ## Build order
 
