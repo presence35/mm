@@ -32,7 +32,7 @@ const ROLE_CAN_WRITE = {
   mechanic: new Set(['received_items', 'authorized_work', 'condition_assessment', 'checklist_completions', 'work_logs', 'parts_used', 'photos']),
 }
 
-function rowToPayload(entity, row) {
+export function rowToPayload(entity, row) {
   const out = {}
   for (const c of columnsFor(entity)) out[c] = normaliseRead(entity, c, row[c])
   return out

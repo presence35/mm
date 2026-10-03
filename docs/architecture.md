@@ -313,6 +313,24 @@ src/
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
              Map, Setup, Scan, Admin, Conflicts, Login, PublicCard
+
+server/
+  index.js   routes; the only place that knows HTTP
+  sync.js    the two protocol implementations: push, pull
+  schema.js  DDL generation, both dialects
+  entities.js  the entity registry + T(), the single place table names are built
+  db/
+    driver.js  SQLite and MySQL; dialectDDL and toMySQL live here, and nowhere else
+    index.js   createDb, bootstrap, PIN hashing, token signing
+  photos.js  upload handling
+  legacy/    the one-shot import from the legacy app
+    reader.js     parses the INSERT-only export with no database present
+    plan.js       ids, FK remapping, metadata — pure, no I/O
+    apply.js      inserts rows + change_log entries; verify() checks referential
+                  integrity against the database rather than trusting the map
+    photos.js     copies image files, and reports any row without one
+    import.js     CLI. Dry run by default; --apply writes; refuses to run twice
+    inspect-db.js reads the result back through pull() and checks the joins
 ```
 
 Not built, and out of scope: billing, multi-marina, and anything named under

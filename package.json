@@ -10,7 +10,9 @@
     "server": "node server/main.js",
     "test:sync": "node --test server/sync.test.js",
     "test:client": "node --test server/client-sync.test.js",
-    "test": "node --test server/sync.test.js server/client-sync.test.js"
+    "test": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js",
+    "import:legacy": "node server/legacy/import.js",
+    "inspect:legacy": "node server/legacy/inspect-db.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
