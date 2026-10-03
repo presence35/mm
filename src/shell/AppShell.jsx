@@ -14,6 +14,7 @@ import NewCardScreen from '../screens/NewCardScreen.jsx'
 import InvoiceScreen from '../screens/InvoiceScreen.jsx'
 import AdminScreen from '../screens/AdminScreen.jsx'
 import PublicCardScreen from '../screens/PublicCardScreen.jsx'
+import ConflictsScreen from '../screens/ConflictsScreen.jsx'
 import LoginScreen from '../screens/LoginScreen.jsx'
 
 const NAV = [
@@ -35,6 +36,7 @@ const SCREENS = {
   'new-card': NewCardScreen,
   invoice: InvoiceScreen,
   admin: AdminScreen,
+  conflicts: ConflictsScreen,
 }
 
 function NavBar({ active, onSelect }) {

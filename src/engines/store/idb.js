@@ -203,7 +203,11 @@ export async function removeAndQueue(entity, id) {
 
 function stripMeta(row) {
   const { version, rev, updated_at, updated_by, device_id, deleted_at, local_pending, ...rest } = row
-  return rest
+  /* Child collections are not columns on their parent entity. They are their
+     own entities and are written separately; carrying them here would be
+     silently dropped by the server and lose a worker's log entries. */
+  const { received_items, authorized_work, condition, logs, parts_used, photos, invoice_items, ...domain } = rest
+  return domain
 }
 
 /* ---------------------------------------------------------------- outbox */
@@ -263,6 +267,24 @@ export async function resolveConflict(id, status, resolution) {
   const db = await open()
   const row = await tx(db, ['conflicts'], 'readwrite', (t) => reqp(t.objectStore('conflicts').put({ id, status: 'resolved', resolution })))
   return row
+}
+
+/* After a pull the local store holds the server's version of anything that was
+   overwritten. Snapshot it onto the open conflict so the worker can see both
+   sides side by side and choose, rather than being told one exists. */
+export async function attachServerPayloads() {
+  const db = await open()
+  const all = await tx(db, ['conflicts'], 'readonly', (t) => reqp(t.objectStore('conflicts').getAll()))
+  const pending = all.filter((c) => c.status === 'open' && !c.server_payload)
+  for (const c of pending) {
+    const row = await tx(db, [c.entity], 'readonly', (t) => reqp(t.objectStore(c.entity).get(c.entity_id)))
+    if (row) {
+      const { version, rev, updated_at, updated_by, device_id, deleted_at, local_pending, ...server } = row
+      c.server_payload = server
+      await tx(db, ['conflicts'], 'readwrite', (t) => reqp(t.objectStore('conflicts').put(c)))
+    }
+  }
+  return pending.length
 }
 
 /* ------------------------------------------------------------ reference */

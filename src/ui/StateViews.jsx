@@ -68,6 +68,9 @@ export function OfflineBar({ state, pending }) {
   if (state === 'synced' || state === 'idle') return null
 
   if (state === 'conflict') {
+    /* Never render a count of zero: if nothing is open, there is nothing to
+       review and this bar should not exist. */
+    if (!pending) return null
     return (
       <div className="offline-bar offline-bar--conflict" role="status">
         <Icon name="alert" size={18} />

@@ -1,0 +1,47 @@
+Conflict resolution: the last missing piece of the contract.
+
+The engine already kept both versions and SyncProvider.resolve() already
+worked, but nothing in the app called it. A worker who got a conflict saw a
+count and had no way to act on it.
+
+- screens/ConflictsScreen.jsx lists open conflicts, shows only the fields
+  that actually differ side by side, and offers keep mine / keep theirs.
+  Resolution is a queued write, so it works with no signal.
+- features/conflicts/useConflicts.js owns the read and the diff.
+- Card detail badges a conflicted card and links here; the Setup sync row
+  carries the count.
+- SyncProvider.resolve no longer requires the network: the choice lands
+  locally and is queued, and the push to the server is best effort.
+
+Drain now runs before pull. A device's own edits reach the server before it
+learns about anyone else's, which is what avoids manufacturing conflicts
+against itself. attachServerPayloads() then snapshots the server's side onto
+each open conflict so the worker can compare rather than being told.
+
+Bugs found and fixed while doing this:
+
+- a returning device with a valid cached token was locked on the login
+  screen. Nothing kicks the machine on boot — it starts idle and only enters
+  syncing on a write — so hasCachedSession was never set and there was no way
+  past. Boot now starts a sync when a cached token exists.
+- a failed sync flipped offline -> syncing -> offline as fast as it could,
+  hammering a server that was already refusing connections, and React blew
+  the stack depth. Retry now comes from the poll timer, network events, a
+  local write, or the user; a failure does not bounce back into syncing.
+  Added a 30s backoff so the poll cannot stack either.
+- the UI showed "Needs review — 0 changes conflicted", a state that cannot
+  exist, because conflict status was derived from conflicts created this
+  cycle rather than from what is still open. Both sides now derive from the
+  open set, and the bar refuses to render a count of zero.
+- a local const named `open` shadowed the open() function in
+  attachServerPayloads, so it referenced itself before initialisation.
+
+32 tests. Two more cover the server payload being attached after a pull, and
+a conflict being resolvable with no network at all.
+
+One gap remains and is deliberate for now: child collections (work logs,
+received items, authorised work, condition notes) still live inside the card
+row rather than as their own entities. stripMeta now drops them from the
+queue payload instead of letting the server silently discard them, which
+means those values do not sync yet rather than appearing to. Writing them as
+child entities is the next thing to do.

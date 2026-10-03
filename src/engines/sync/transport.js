@@ -209,6 +209,7 @@ export async function pullAll(token, deviceId, now = new Date()) {
   }
   await idb.setMeta('cursor', res.cursor)
   await idb.setMeta('last_pull_at', new Date(now).toISOString())
+  await idb.attachServerPayloads()
   return { applied, full: false }
 }
 

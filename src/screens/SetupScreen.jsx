@@ -85,9 +85,15 @@ export default function SetupScreen() {
                   ? 'Sync failed'
                   : 'Up to date'
         }
-        support={`${sync.pending} queued · last synced ${lastSynced}`}
-        trailing={sync.pending ? <StatusPill tone="warn" shape="bar">{sync.pending}</StatusPill> : null}
-        onClick={sync.syncNow}
+        support={`${sync.pending} queued · last synced ${lastSynced}${sync.failure ? ` · ${sync.failure}` : ''}`}
+        trailing={
+          sync.conflicts ? (
+            <StatusPill tone="warn" shape="diamond">{sync.conflicts}</StatusPill>
+          ) : sync.pending ? (
+            <StatusPill tone="warn" shape="bar">{sync.pending}</StatusPill>
+          ) : null
+        }
+        onClick={() => (sync.conflicts ? navigate('conflicts') : sync.syncNow())}
       />
 
       {/* Reachable today so the offline states are testable before the

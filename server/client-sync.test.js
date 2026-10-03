@@ -187,6 +187,66 @@ test('a second device seeding the same snapshot does not conflict with itself', 
   assert.equal(result.conflicts, 0, 'no conflict manufactured against our own snapshot')
 })
 
+test('a conflict gains the server payload after a pull, so it can be compared', async () => {
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+
+  const ID = 'c-conflict-probe'
+  await idb.putAndQueue('customers', { id: ID, name: 'Probe Person', city: 'Comox', version: 0 })
+  await transport.drain(token, 'dev-1')
+
+  /* Two devices, both at version 1. */
+  const starting = await idb.get('customers', ID)
+  assert.equal(starting.version, 1)
+
+  await idb.putAndQueue('customers', { ...starting, city: 'Courtney' })
+  await idb.putAndQueue('customers', { ...starting, city: 'Nanaimo' })
+  const queued = await idb.pendingOps()
+  assert.equal(queued.length, 2)
+
+  await transport.push(token, 'dev-2', [toOp(queued[0])])
+  await idb.ackOps([queued[0].op_id])
+
+  /* Draining records the conflict; the following pull brings the server's
+     side so a worker can actually choose between the two. */
+  const res = await transport.drain(token, 'dev-1')
+  assert.equal(res.conflicts, 1)
+  await transport.pullAll(token, 'dev-1')
+
+  const open = await idb.openConflicts()
+  const c = open.find((x) => x.entity_id === ID)
+  assert.ok(c, 'the conflict is stored against this row')
+  assert.equal(c.local_payload.city, 'Nanaimo')
+  assert.ok(c.server_payload, 'the server side was attached')
+  assert.equal(c.server_payload.city, 'Courtney')
+})
+
+test('a conflict can be resolved offline without a network call', async () => {
+  const ID = 'c-conflict-probe'
+  const c = (await idb.openConflicts()).find((x) => x.entity_id === ID)
+  assert.ok(c, 'a conflict is open from the previous test')
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch')
+  }
+  try {
+    /* Resolving writes the chosen version locally and queues it. The push to
+       the server is best-effort; the choice is not lost either way. */
+    const row = await idb.get(c.entity, c.entity_id)
+    await idb.putAndQueue(c.entity, { ...row, ...c.local_payload })
+    await idb.resolveConflict(c.id, 'resolved', 'kept_local')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal((await idb.openConflicts()).filter((x) => x.entity_id === ID).length, 0)
+  const queued = (await idb.pendingOps()).filter((o) => o.entity_id === ID)
+  assert.ok(queued.length >= 1, 'the chosen version is queued for when signal returns')
+  const row = await idb.get(c.entity, ID)
+  assert.equal(row.city, 'Nanaimo')
+})
+
 test('reference data never carries PIN hashes', async () => {
   const ref = await transport.reference(token)
   assert.ok(Array.isArray(ref.employees))

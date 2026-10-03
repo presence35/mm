@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import CardDetail from '../features/card/CardDetail.jsx'
 import { useCard } from '../features/card/useCard.js'
+import { useConflicts } from '../features/conflicts/useConflicts.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
@@ -11,6 +12,7 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
   const { may, refuseReason } = useAuth()
   const sync = useSync()
   const api = useCard(selected ? params.id : null)
+  const { conflicts } = useConflicts()
   const [toast, setToast] = useState(null)
 
   const openInvoice = useCallback(() => {
@@ -53,6 +55,8 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
           onRetryUpload: () => sync.syncNow(),
           onOpenInvoice: openInvoice,
           onCopyCustomerLink: copyCustomerLink,
+          conflictedIds: conflicts.filter((c) => c.entity_id === params.id).map((c) => c.entity_id),
+          onResolveConflicts: () => navigate('conflicts'),
         }}
       />
       <Snackbar message={toast} onDismiss={() => setToast(null)} />

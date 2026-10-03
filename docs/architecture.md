@@ -82,7 +82,7 @@ Five top-level destinations. M3 caps a navigation bar at five; we are at the lim
 | **Setup** | Theme, offline state, sync queue, account. | — |
 | **Scan** | Camera → new card, or QR customer link. | Scan |
 
-Contextual only, never in navigation: Card detail · New card wizard · New log · Invoice · Admin (`admin` only) · Customer public view.
+Contextual only, never in navigation: Card detail · New card wizard · New log · Invoice · **Needs review (conflicts)** · Admin (`admin` only) · Customer public view.
 
 ### Navigation by window size
 
@@ -310,7 +310,7 @@ src/
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
-             Map, Setup, Scan, Admin, Login, PublicCard
+             Map, Setup, Scan, Admin, Conflicts, Login, PublicCard
 ```
 
 Not yet built: `engines/media/` (photo capture, HEIC, OCR), and the billing/multi-marina surfaces that are out of scope entirely.

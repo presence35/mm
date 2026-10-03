@@ -52,6 +52,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const meta = statusMeta(card.status)
   const options = nextStatuses(card.status)
   const storageLabel = STORAGE_TYPES.find((t) => t.value === card.storage_type)?.label ?? '—'
+  const conflicted = actions.conflictedIds?.includes(card.id)
 
   const rated = (card.condition ?? []).length
   const noted = (card.condition ?? []).filter((c) => c.note).length
@@ -72,12 +73,12 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
       ) : null}
 
       {/* Conflict is a first-class state, not a toast. Both versions survive. */}
-      {card.conflict ? (
+      {conflicted ? (
         <div className="offline-bar offline-bar--conflict" role="alert">
-          <Icon2 />
+          <Icon name="alert" size={18} />
           Needs review — this card changed on another device
           <span className="spacer" />
-          <Button variant="text" size="sm">
+          <Button variant="text" size="sm" onClick={actions.onResolveConflicts}>
             Resolve
           </Button>
         </div>
@@ -228,12 +229,3 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   )
 }
 
-function Icon2() {
-  return (
-    <span aria-hidden="true" style={{ display: 'inline-flex' }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3 2.5 20h19z M12 9v5 M12 17.5h.01" />
-      </svg>
-    </span>
-  )
-}

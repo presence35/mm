@@ -21,6 +21,7 @@ import * as idb from '../store/idb.js'
 const SyncCtx = createContext(null)
 
 const POLL_MS = 60_000
+const BACKOFF_MS = 30_000
 const MAX_ATTEMPTS = 5
 const TOKEN_KEY = 'mm.token'
 
@@ -33,6 +34,7 @@ export function SyncProvider({ children }) {
   const [failure, setFailure] = useState(null)
 
   const attempts = useRef(0)
+  const lastAttempt = useRef(0)
   const timer = useRef(null)
   const running = useRef(false)
   const [hasCachedSession, setHasCachedSession] = useState(false)
@@ -82,6 +84,21 @@ export function SyncProvider({ children }) {
       deviceId.current = await idb.deviceId()
       setPending(await store.refreshPending())
       setConflicts((await idb.openConflicts()).length)
+
+      /* A returning device has a cached session. Nothing else kicks the
+         machine on boot — it starts idle and only enters syncing when a write
+         happens — so without this a valid token still lands on the login
+         screen with no way past it. */
+      let cached = null
+      try {
+        cached = localStorage.getItem(TOKEN_KEY)
+      } catch {
+        cached = null
+      }
+      if (cached) {
+        setHasCachedSession(true)
+        setState('syncing')
+      }
     })()
     return () => {
       alive = false
@@ -93,6 +110,7 @@ export function SyncProvider({ children }) {
   const cycle = useCallback(async () => {
     if (running.current) return
     running.current = true
+    lastAttempt.current = Date.now()
     try {
       if (!online) {
         setState('offline')
@@ -115,11 +133,14 @@ export function SyncProvider({ children }) {
         platform: 'web',
       })
 
-      const out = await transport.pullAll(t, deviceId.current, new Date())
-      if (out.full) await store.reload()
-
+      /* Push before pulling. Draining first means a device's own edits reach
+         the server before it learns about anyone else's, which is what avoids
+         manufacturing conflicts against itself. */
       await store.refreshPending()
       const res = await transport.drain(t, deviceId.current, new Date())
+
+      const out = await transport.pullAll(t, deviceId.current, new Date())
+      if (out.full) await store.reload()
 
       setPending(await store.refreshPending())
       const open = await idb.openConflicts()
@@ -129,7 +150,10 @@ export function SyncProvider({ children }) {
       attempts.current = 0
       setFailure(null)
       setLastSyncedAt(new Date())
-      setState(res.conflicts > 0 || open.length > 0 ? 'conflict' : 'synced')
+      /* Derived from what is actually still open, not from conflicts created
+         this cycle. Those may already have been resolved, which produced a
+         'Needs review — 0 changes conflicted' state that cannot exist. */
+      setState(open.length > 0 ? 'conflict' : 'synced')
     } catch (e) {
       if (e.offline) {
         setState('offline')
@@ -170,8 +194,12 @@ export function SyncProvider({ children }) {
     const onOffline = () => setState('offline')
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+    /* Poll, but never sooner than the backoff after a failure. */
     const poll = setInterval(() => {
-      if (online && state !== 'syncing') setState('syncing')
+      if (!online) return
+      if (state === 'syncing') return
+      if (attempts.current > 0 && Date.now() - lastAttempt.current < BACKOFF_MS) return
+      setState('syncing')
     }, POLL_MS)
     return () => {
       window.removeEventListener('online', onOnline)
@@ -180,10 +208,24 @@ export function SyncProvider({ children }) {
     }
   }, [online, state])
 
+  /* Only an explicit "go online" toggles trigger a cycle. A failed cycle must
+     NOT bounce back into 'syncing': that made the machine flip
+     offline -> syncing -> offline as fast as it could, hammering a server
+     that was already refusing connections, and React correctly blew the stack
+     depth. Retries now come from the poll timer, network events, a local
+     write, or the user tapping sync. */
+  const wasForced = useRef(false)
   useEffect(() => {
-    if (forceOffline) setState('offline')
-    else if (state === 'offline') setState('syncing')
-  }, [forceOffline, state])
+    if (forceOffline) {
+      wasForced.current = true
+      setState('offline')
+      return
+    }
+    if (wasForced.current) {
+      wasForced.current = false
+      setState('syncing')
+    }
+  }, [forceOffline])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -223,14 +265,32 @@ export function SyncProvider({ children }) {
 
   const resolve = useCallback(
     async (conflictId, { resolution, payload }) => {
-      const t = await ensureSession()
-      if (!t) return
-      await transport.resolveConflict(t, conflictId, { resolution, payload, deviceId: deviceId.current })
-      await idb.resolveConflict(conflictId, 'resolved', resolution)
+      /* Resolving is a queued write, not a network call: a worker who spots a
+         conflict in the yard should not have to find signal to settle it. */
+      const conflict = (await idb.openConflicts()).find((c) => c.id === conflictId)
+      if (!conflict) return
+
       if (resolution !== 'kept_server') {
-        const conflict = (await idb.openConflicts()).find((c) => c.id === conflictId)
-        if (conflict) await store.patchCard(conflict.entity_id, payload ?? conflict.local_payload)
+        await store.putEntity(conflict.entity, {
+          ...(await store.getEntity(conflict.entity, conflict.entity_id)),
+          ...(payload ?? conflict.local_payload),
+        })
       }
+      await idb.resolveConflict(conflictId, 'resolved', resolution)
+
+      try {
+        const t = await ensureSession()
+        if (t) {
+          await transport.resolveConflict(t, conflictId, {
+            resolution,
+            payload: payload ?? conflict.local_payload,
+            deviceId: deviceId.current,
+          })
+        }
+      } catch {
+        /* Stays resolved locally; the next cycle pushes the outcome. */
+      }
+
       setConflicts((await idb.openConflicts()).length)
       setState('syncing')
     },
@@ -251,7 +311,11 @@ export function SyncProvider({ children }) {
       signIn,
       signOut,
       resolve,
-      retry: () => setState('syncing'),
+      retry: () => {
+        attempts.current = 0
+        lastAttempt.current = 0
+        setState('syncing')
+      },
       syncNow: () => setState('syncing'),
     }),
     [state, pending, conflicts, lastSyncedAt, online, forceOffline, hasCachedSession, failure, signIn, signOut, resolve],

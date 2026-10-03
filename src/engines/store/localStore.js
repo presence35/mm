@@ -259,6 +259,32 @@ export async function clearPendingFlags() {
   notify()
 }
 
+/* Generic entity access for the conflict resolver, which deals in whatever
+   entity a conflict happened to be on rather than cards specifically. */
+const LISTS = { service_cards: 'cards', boats: 'boats', customers: 'customers' }
+
+export function getEntity(entity, id) {
+  const list = LISTS[entity]
+  if (!list) return null
+  return db[list].find((r) => r.id === id) ?? null
+}
+
+export async function putEntity(entity, row) {
+  const list = LISTS[entity]
+  if (!list) return null
+  const next = { ...row, local_pending: true }
+  db[list] = next.id && !db[list].some((r) => r.id === next.id)
+    ? [next, ...db[list]]
+    : db[list].map((r) => (r.id === next.id ? next : r))
+  try {
+    await idb.putAndQueue(entity, next)
+  } catch {
+    /* keep the session usable even if persistence fails */
+  }
+  notify()
+  return next
+}
+
 export async function resetToSeed() {
   try {
     await idb.wipe()
