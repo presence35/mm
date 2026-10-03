@@ -35,10 +35,17 @@ export function AuthProvider({ children }) {
   /* Permissions are re-validated on every successful reconnect. */
   const validated = sync.state === 'synced'
 
-  const may = useCallback((capability) => {
-    if (sync.online) return can(employee.role, capability)
-    return canOffline(employee.role, capability)
-  }, [employee.role, sync.online])
+  /* Offline unlock drops to the mechanic capability set: a cached snapshot may
+     predate a demotion, so nothing privileged is granted without a server. */
+  const effectiveRole = sync.online ? employee.role : 'mechanic'
+
+  const may = useCallback(
+    (capability) => {
+      if (sync.online) return can(employee.role, capability)
+      return canOffline(employee.role, capability)
+    },
+    [employee.role, sync.online],
+  )
 
   const refuseReason = useCallback(
     (capability) => {
@@ -51,24 +58,30 @@ export function AuthProvider({ children }) {
   )
 
   const signOut = useCallback(() => {
+    sync.signOut()
     setState('anonymous')
     setEmployee(null)
-  }, [])
+  }, [sync])
 
   const value = useMemo(
     () => ({
       state,
       employee,
+      effectiveRole,
       snapshotAt,
       snapshotExpiresAt: new Date(snapshotAt.getTime() + SNAPSHOT_TTL_MS),
       validated,
       may,
       refuseReason,
       signOut,
-      unlock: () => setState('unlocked'),
+      setEmployee: (e) => {
+        setEmployee(e)
+        setState('online')
+        setSnapshotAt(new Date())
+      },
       CAPABILITIES,
     }),
-    [state, employee, snapshotAt, validated, may, refuseReason, signOut],
+    [state, employee, effectiveRole, snapshotAt, validated, may, refuseReason, signOut, sync],
   )
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>

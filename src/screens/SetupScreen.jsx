@@ -5,7 +5,7 @@ import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
-import { resetToSeed } from '../engines/store/localStore.js'
+import { resetToSeed, storageProblem } from '../engines/store/localStore.js'
 import { SEED_EMPLOYEE } from '../engines/store/seed.js'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
 
@@ -103,6 +103,13 @@ export default function SetupScreen() {
       <Divider />
 
       <div className="section-head">This device</div>
+      {storageProblem() ? (
+        <div className="offline-bar" role="alert" style={{ borderRadius: 'var(--corner-m)', margin: '0 var(--space-4) var(--space-3)' }}>
+          <Icon name="alert" size={18} />
+          Storage is not working on this device — writes are being lost. Private browsing usually
+          causes this.
+        </div>
+      ) : null}
       <ListItem
         icon="cards"
         title="Reinstall sample data"

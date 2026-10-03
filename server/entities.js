@@ -90,32 +90,40 @@ export const ENTITIES = {
   },
 }
 
-/* Reference data: server-owned, delivered through the same stream. */
+/* Reference data: server-owned, delivered through the same stream.
+   `expose` is the allow-list sent to clients; anything absent stays server-side. */
 export const REFERENCE = {
   products: {
     table: 'products',
     pk: 'id',
     columns: ['name', 'part_number', 'unit', 'category', 'unit_price', 'active'],
+    expose: ['id', 'name', 'part_number', 'unit', 'category', 'unit_price', 'active'],
   },
   service_item_templates: {
     table: 'service_item_templates',
     pk: 'id',
     columns: ['item_key', 'label', 'category', 'cleaning_cat', 'sort_order', 'active', 'unit_price'],
+    expose: ['id', 'item_key', 'label', 'category', 'cleaning_cat', 'sort_order', 'active', 'unit_price'],
   },
   storage_layout: {
     table: 'storage_layout',
     pk: 'id',
     columns: ['kind', 'value', 'label', 'sort_order'],
+    expose: ['id', 'kind', 'value', 'label', 'sort_order'],
   },
   checklist_templates: {
     table: 'checklist_templates',
     pk: 'id',
     columns: ['checklist_type', 'item_key', 'label', 'category', 'sort_order'],
+    expose: ['id', 'checklist_type', 'item_key', 'label', 'category', 'sort_order'],
   },
   employees: {
     table: 'employees',
     pk: 'id',
-    columns: ['name', 'role', 'initials', 'active', 'created_at'],
+    columns: ['name', 'role', 'initials', 'pin_salt', 'pin_hash', 'active', 'created_at'],
+    /* Explicit allow-list. pin_salt and pin_hash stay on the server — the
+       same discipline as the public card endpoint. */
+    expose: ['id', 'name', 'role', 'initials', 'active'],
   },
 }
 

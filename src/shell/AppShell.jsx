@@ -89,6 +89,10 @@ export default function AppShell() {
   const search = new URLSearchParams(window.location.search)
   if (search.has('wo')) return <PublicCardScreen token={search.get('wo')} />
 
+  /* Online with no server session: sign in. Offline with a cached one:
+     unlock. Offline with neither: sign in is impossible, so say so rather
+     than showing an empty app. */
+  if (!sync.hasCachedSession) return <LoginScreen />
   if (authState === 'anonymous') return <LoginScreen />
 
   // A card detail opened from the list belongs to the Cards destination, so

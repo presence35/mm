@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "marina-manager",
   "private": true,
   "version": "0.1.0",
@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/main.js",
-    "test:sync": "node --test server/sync.test.js"
+    "test:sync": "node --test server/sync.test.js",
+    "test:client": "node --test server/client-sync.test.js",
+    "test": "node --test server/sync.test.js server/client-sync.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
