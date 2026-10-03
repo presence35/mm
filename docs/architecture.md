@@ -304,16 +304,20 @@ src/
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js
+    media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js — pure, deterministic
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
+    conflicts/useConflicts.js
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
              Map, Setup, Scan, Admin, Conflicts, Login, PublicCard
 ```
 
-Not yet built: `engines/media/` (photo capture, HEIC, OCR), and the billing/multi-marina surfaces that are out of scope entirely.
+Not built, and out of scope: billing, multi-marina, and anything named under
+Non-goals. Paper-card OCR (scanning the physical intake form into a new card)
+is the one piece of the old app's feature set with no home yet.
 
 `server/` is the sync peer. It is a peer, not a CRUD API: the client never waits on it, and it never allocates an ID.
 
