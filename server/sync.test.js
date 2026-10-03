@@ -8,6 +8,7 @@ import { sqliteDriver } from './db/driver.js'
 import { FULL_DDL } from './schema.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { createServer } from './index.js'
+import { bootstrap } from './db/index.js'
 
 function freshDb() {
   const file = join(mkdtempSync(join(tmpdir(), 'mm-')), 't.db')
@@ -285,6 +286,93 @@ test('unknown and malformed tokens are indistinguishable', async () => {
   assert.equal(unknown.status, 404)
   assert.equal(malformed.status, 404)
   assert.equal(await unknown.text(), await malformed.text())
+})
+
+test('a photo uploads, is written with metadata, and reaches the change log', async () => {
+  const db = freshDb()
+  /* Passing `db` skips bootstrap, and without it there is no admin to sign in
+     as. Auth is exactly what this test is about, so seed it. */
+  await bootstrap(db, () => {})
+  const { app } = await createServer({ db, quiet: true })
+  const server = app.listen(0)
+  await new Promise((r) => server.once('listening', r))
+  server.unref()
+  const base = `http://127.0.0.1:${server.address().port}`
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '1234' }),
+  })
+  const { token } = await login.json()
+  const auth = { authorization: `Bearer ${token}` }
+
+  await push(db, {
+    ...ADMIN,
+    ops: [
+      customer('c-1'),
+      { op_id: 'op-b', entity: 'boats', entity_id: 'b-1', op: 'upsert', rev: 0, payload: { id: 'b-1', customer_id: 'c-1', name: 'Sea Jay' } },
+      { op_id: 'op-k', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-1' } },
+    ],
+  })
+
+  /* A one-pixel JPEG is enough to prove the pipeline. */
+  const png = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+    'base64',
+  )
+  const form = new FormData()
+  form.append('photo', new Blob([png], { type: 'image/jpeg' }), 'shot.jpg')
+  form.append('card_id', 'k-1')
+  form.append('device_id', 'dev-photo')
+  form.append('caption', 'Waterline scuff')
+
+  const res = await fetch(`${base}/api/photos`, { method: 'POST', headers: auth, body: form })
+  const body = await res.json()
+  server.close()
+
+  assert.equal(res.status, 200)
+  assert.equal(body.photo.caption, 'Waterline scuff')
+  assert.equal(body.photo.card_id, 'k-1')
+
+  const row = await db.get('SELECT * FROM photos WHERE id = ?', [body.photo.id])
+  assert.equal(row.version, 1)
+  assert.ok(row.updated_at, 'carries the shared metadata block')
+
+  /* And it is reachable by another device through the delta stream. */
+  const changes = await pull(db, { cursor: 0 })
+  const photo = changes.changes.find((c) => c.entity === 'photos')
+  assert.ok(photo, 'the photo is in the change log')
+  assert.equal(photo.payload.caption, 'Waterline scuff')
+})
+
+test('a photo for a card that does not exist is refused', async () => {
+  const db = freshDb()
+  await bootstrap(db, () => {})
+  const { app } = await createServer({ db, quiet: true })
+  const server = app.listen(0)
+  await new Promise((r) => server.once('listening', r))
+  server.unref()
+  const base = `http://127.0.0.1:${server.address().port}`
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '1234' }),
+  })
+  const { token } = await login.json()
+
+  const form = new FormData()
+  form.append('photo', new Blob([Buffer.from('x')], { type: 'image/jpeg' }), 'shot.jpg')
+  form.append('card_id', 'k-nope')
+
+  const res = await fetch(`${base}/api/photos`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form,
+  })
+  server.close()
+  assert.equal(res.status, 404)
 })
 
 test('sync routes require a session', async () => {

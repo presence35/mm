@@ -13,3 +13,6 @@ data/*.db
 data/*.db-*
 data/api.log
 data/vite.log
+uploads/
+data/uploads/
+data/vite.log

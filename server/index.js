@@ -1,10 +1,17 @@
 import express from 'express'
+import multer from 'multer'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken } from './db/index.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { referenceSnapshot } from './reference.js'
+import { storePhoto } from './photos.js'
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 1 },
+})
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -168,6 +175,38 @@ export async function createServer({ db, quiet = false } = {}) {
     )
 
     res.json({ results })
+  })
+
+  /* ------------------------------------------------------------- photos */
+
+  /* Online only. There is no upload queue: the client refuses rather than
+     queueing, because queued photos can be evicted from a phone. */
+  app.post('/api/photos', authenticate, upload.single('photo'), async (req, res) => {
+    const { card_id: cardId, caption, photo_type: photoType, work_log_id: workLogId } = req.body ?? {}
+    if (!req.file) {
+      res.status(400).json({ error: 'photo_required' })
+      return
+    }
+    let gps
+    if (req.body.gps_lat && req.body.gps_lng) {
+      gps = { lat: Number(req.body.gps_lat), lng: Number(req.body.gps_lng) }
+    }
+    const out = await storePhoto(db, {
+      root: ROOT,
+      file: req.file,
+      cardId,
+      employeeId: req.employee.employee_id,
+      deviceId: req.body.device_id ?? null,
+      workLogId,
+      caption,
+      photoType,
+      gps,
+    })
+    if (!out.ok) {
+      res.status(out.status).json({ error: out.reason })
+      return
+    }
+    res.json({ photo: out.photo })
   })
 
   /* ------------------------------------------------------------- public */

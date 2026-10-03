@@ -51,7 +51,6 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
           toggleCompleted: api.toggleCompleted,
           addLog: api.addLog,
           online: sync.online,
-          onAddPhoto: () => setToast('Camera arrives with the capture phase'),
           onRetryUpload: () => sync.syncNow(),
           onOpenInvoice: openInvoice,
           onCopyCustomerLink: copyCustomerLink,

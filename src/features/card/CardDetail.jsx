@@ -164,7 +164,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
 
       <Divider />
 
-      <PhotoStrip photos={card.photos ?? []} online={actions.online} onAdd={actions.onAddPhoto} onRetry={actions.onRetryUpload} />
+      <PhotoStrip cardId={card.id} photos={card.photos ?? []} onRetryUpload={actions.onRetryUpload} />
 
       <Divider />
 
