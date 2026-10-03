@@ -236,13 +236,42 @@
   gap: var(--space-1);
 }
 
+/* --- Touch target expansion -----------------------------------------------
+   M3 control heights (chip 32, small button 36) are visual heights. The
+   48px target lives outside them, so a gloved hand can still hit the control
+   without the chip row growing into a wall of buttons. Expanding the hit area
+   with an overlay keeps the density the spec asks for. */
+.chip,
+.btn--sm,
+.icon-btn--sm {
+  position: relative;
+}
+
+.chip::before,
+.btn--sm::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--target-min);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 /* ------------------------------------------------------------------ Chip -- */
 
 .chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  height: 32px;
+  /* A floor, not a fixed height: at 200% text the chip must grow rather than
+     clip its own label. */
+  min-height: 32px;
+  /* Short labels like "Fair" would otherwise be a 43px-wide target. Widening
+     the chip beats widening its hit area, which would overlap its neighbour. */
+  min-width: var(--target-min);
   padding: 0 var(--space-3);
   border-radius: var(--corner-m);
   box-shadow: inset 0 0 0 1px var(--outline);
@@ -297,13 +326,13 @@
   border-radius: var(--corner-full);
   box-shadow: inset 0 0 0 1px var(--outline);
   overflow: hidden;
-  height: 40px;
+  min-height: var(--target-min);
 }
 
 .segmented__item {
   flex: 1;
   min-width: 64px;
-  min-height: 40px;
+  min-height: var(--target-min);
   padding: 0 var(--space-3);
   font: var(--label-m);
   color: var(--on-surface);

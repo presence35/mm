@@ -165,6 +165,28 @@ test('pull never clobbers a row with unsynced local edits', async () => {
   assert.equal(stillQueued.length, 1)
 })
 
+test('a second device seeding the same snapshot does not conflict with itself', async () => {
+  /* The bootstrap snapshot is queued, so two fresh devices both try to create
+     the same rows. The second must recognise the first's work rather than
+     push a stale rev and manufacture a conflict. */
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+
+  await idb.putAndQueue('customers', { id: 'c-seed', name: 'Seeded Person', city: 'Comox', version: 0 })
+  const first = await transport.drain(token, 'dev-A')
+  assert.equal(first.applied, 1)
+
+  /* Device B seeds the same row and then pulls before pushing. */
+  await idb.putAndQueue('customers', { id: 'c-seed', name: 'Seeded Person', city: 'Comox', version: 0 })
+  await transport.pullAll(token, 'dev-B')
+
+  const remaining = (await idb.pendingOps()).filter((o) => o.entity_id === 'c-seed')
+  assert.equal(remaining.length, 0, 'the duplicate seed op was dropped')
+
+  const result = await transport.drain(token, 'dev-B')
+  assert.equal(result.conflicts, 0, 'no conflict manufactured against our own snapshot')
+})
+
 test('reference data never carries PIN hashes', async () => {
   const ref = await transport.reference(token)
   assert.ok(Array.isArray(ref.employees))

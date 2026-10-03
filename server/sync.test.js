@@ -49,6 +49,85 @@ test('an edit must present the version it saw', async () => {
   assert.equal(edited.version, 2)
 })
 
+test('numeric identifiers survive a round trip as integers, not "3.0"', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [
+    customer(),
+    { op_id: 'op-boat', entity: 'boats', entity_id: 'b-1', op: 'upsert', rev: 0, payload: { id: 'b-1', customer_id: 'c-1', name: 'Sea Jay' } },
+    { op_id: 'op-card', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', storage_type: 'marina_boathouse', boathouse_no: 3, slip_no: 7, season_year: 2026 } },
+  ] })
+
+  const row = await db.get('SELECT * FROM service_cards WHERE id = ?', ['k-1'])
+  assert.equal(row.boathouse_no, 3)
+  assert.equal(row.slip_no, 7)
+
+  /* And the payload a client pulls is an integer, not a float-ish string. */
+  const changes = await pull(db, { cursor: 0 })
+  const card = changes.changes.find((c) => c.entity === 'service_cards')
+  assert.equal(card.payload.boathouse_no, 3)
+  assert.equal(card.payload.slip_no, 7)
+  assert.equal(`${card.payload.boathouse_no}`, '3')
+})
+
+test('a legacy row stored as TEXT "3.0" reads back as 3', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [
+    customer(),
+    { op_id: 'op-boat2', entity: 'boats', entity_id: 'b-2', op: 'upsert', rev: 0, payload: { id: 'b-2', customer_id: 'c-1' } },
+  ] })
+
+  /* Simulate the wrong affinity an older build left behind. */
+  await db.run(
+    `INSERT INTO service_cards (id, boat_id, storage_type, boathouse_no, slip_no, rev, version, updated_at)
+     VALUES ('k-legacy', 'b-2', 'marina_boathouse', '3.0', '7.0', 0, 1, '2026-01-01T00:00:00.000Z')`,
+  )
+
+  /* Legacy rows reach clients through the full rehydrate, which reads the
+     tables directly rather than the change log. */
+  await registerDevice(db, { deviceId: 'ahead', label: 'Desk', platform: 'web', employeeId: 'emp-admin' })
+  await touchDevice(db, 'ahead', 9999)
+
+  const result = await pull(db, { cursor: 0 })
+  assert.equal(result.full_sync, true)
+  const legacy = result.changes.find((c) => c.entity_id === 'k-legacy')
+  assert.equal(legacy.payload.boathouse_no, 3)
+  assert.equal(legacy.payload.slip_no, 7)
+  assert.equal(`${legacy.payload.boathouse_no}`, '3')
+})
+
+test('booleans from a JS client bind as 0/1 and never crash the process', async () => {
+  const db = freshDb()
+  const [created] = await push(db, { ...ADMIN, ops: [customer()] })
+
+  const [r] = await push(db, {
+    ...ADMIN,
+    ops: [{
+      op_id: 'op-bool',
+      entity: 'service_cards',
+      entity_id: 'k-1',
+      op: 'upsert',
+      rev: 0,
+      payload: { id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-1', wrap_required: false, unwrap_done: true, tax_rate: 0, remarks: null },
+    }],
+  })
+  assert.equal(r.result, 'applied')
+
+  const row = await db.get('SELECT * FROM service_cards WHERE id = ?', ['k-1'])
+  assert.equal(row.wrap_required, 0)
+  assert.equal(row.unwrap_done, 1)
+})
+
+test('a non-scalar payload field is stored as JSON rather than killing the server', async () => {
+  const db = freshDb()
+  const [r] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-obj', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { id: 'c-1', name: { weird: true } } }],
+  })
+  assert.equal(r.result, 'applied')
+  const row = await db.get('SELECT * FROM customers WHERE id = ?', ['c-1'])
+  assert.equal(row.name, '{"weird":true}')
+})
+
 test('a stale edit does not overwrite and preserves both versions', async () => {
   const db = freshDb()
   const [created] = await push(db, { ...ADMIN, ops: [customer()] })

@@ -195,6 +195,15 @@ export async function pullAll(token, deviceId, now = new Date()) {
       if (!pendingHere) {
         await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
         applied += 1
+      } else {
+        /* The server may already hold this edit — a second device seeding the
+           same bootstrap snapshot, for instance. Drop the duplicate rather
+           than pushing it into a conflict with ourselves. */
+        const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
+        if (dropped && !pendingHere) {
+          await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+          applied += 1
+        }
       }
     }
   }

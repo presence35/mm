@@ -144,11 +144,14 @@ export function SyncProvider({ children }) {
     }
   }, [online, ensureSession])
 
-  /* A local write is the trigger. */
+  /* A local write is the trigger — but only a write. Unconditionally entering
+     'syncing' here meant a cycle's own reload notified the store, which
+     re-entered 'syncing', forever. The data was correct; the state never
+     settled. */
   const notifyLocalWrite = useCallback(() => {
     store.refreshPending().then((n) => {
       setPending(n)
-      if (online) setState('syncing')
+      if (n > 0 && online) setState('syncing')
     })
   }, [online])
 

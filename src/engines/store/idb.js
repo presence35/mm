@@ -221,6 +221,26 @@ export async function ackOps(opIds) {
   })
 }
 
+/* Drop queued ops the server has already superseded.
+   Only when the incoming change is OLDER than when we queued our op and is at
+   or beyond the version we based it on — that means it is the same edit, or an
+   earlier one. A change made after our queue time is somebody else's work
+   layered on top, and our op is still owed. */
+export async function dropSuperseded(entity, entityId, incoming) {
+  const db = await open()
+  const queued = await tx(db, ['outbox'], 'readonly', (t) => reqp(t.objectStore('outbox').getAll()))
+  const doomed = queued.filter(
+    (o) =>
+      o.entity === entity &&
+      o.entity_id === entityId &&
+      Number(incoming.version) >= Number(o.rev) &&
+      String(incoming.updated_at ?? '') <= String(o.queued_at ?? ''),
+  )
+  if (!doomed.length) return 0
+  await ackOps(doomed.map((o) => o.op_id))
+  return doomed.length
+}
+
 export async function requeueOp(op) {
   const db = await open()
   await tx(db, ['outbox'], 'readwrite', (t) => reqp(t.objectStore('outbox').put(op)))

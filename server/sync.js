@@ -34,9 +34,37 @@ const ROLE_CAN_WRITE = {
 
 function rowToPayload(entity, row) {
   const out = {}
-  for (const c of columnsFor(entity)) out[c] = row[c] ?? null
+  for (const c of columnsFor(entity)) out[c] = normaliseRead(entity, c, row[c])
   return out
 }
+
+/* SQLite refuses booleans, and undefined. The client speaks JS; the wire
+   speaks SQL. Anything that is not a bindable scalar is stored as JSON text
+   rather than crashing the process — a malformed write must not take the
+   server down. */
+function bindable(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'boolean') return value ? 1 : 0
+  if (typeof value === 'number') return Number.isInteger(value) ? value : Math.trunc(value)
+  if (typeof value === 'string') return value
+  if (value instanceof Date) return value.toISOString()
+  return JSON.stringify(value)
+}
+
+/* Reads a numeric column back as a number. An old row stored as TEXT comes
+   back as "3.0"; without this that value propagates to every client that
+   pulls it and keeps reproducing itself. */
+function normaliseRead(entity, name, value) {
+  if (value === null || value === undefined) return null
+  if (NUMERIC_COLUMNS.has(name)) {
+    const n = Number(value)
+    return Number.isFinite(n) ? Math.trunc(n) : null
+  }
+  if (typeof value === 'boolean') return value ? 1 : 0
+  return value
+}
+
+const NUMERIC_COLUMNS = new Set(['boathouse_no', 'slip_no', 'storage_row', 'season_year', 'length_ft', 'tax_rate', 'unit_price', 'total', 'quantity', 'gps_lat', 'gps_lng'])
 
 /* ------------------------------------------------------------------ push */
 
@@ -108,7 +136,7 @@ async function applyUpsert(db, { deviceId, actorId, op }) {
     if (c === 'updated_by') return actorId
     if (c === 'device_id') return deviceId
     if (c === 'deleted_at') return existing?.deleted_at ?? null
-    return payload[c] ?? existing?.[c] ?? null
+    return bindable(payload[c] ?? existing?.[c] ?? null)
   })
 
   const placeholders = columns.map(() => '?').join(', ')

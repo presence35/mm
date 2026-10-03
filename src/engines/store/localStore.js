@@ -20,6 +20,7 @@ const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customer
 
 let db = { cards: [], boats: [], customers: [] }
 let hydrated = false
+let hydratePromise = null
 let degraded = null
 const listeners = new Set()
 
@@ -34,42 +35,63 @@ export function subscribe(fn) {
 
 /* ------------------------------------------------------------------ boot */
 
-/* A cold device with nothing stored gets the seed fixture, exactly once. This
-   is the bootstrap snapshot; after the first sync the server is the truth. */
-export async function hydrate() {
-  if (hydrated) return db
-  try {
-    const [cards, boats, customers] = await Promise.all([
-      idb.all('service_cards'),
-      idb.all('boats'),
-      idb.all('customers'),
-    ])
+/* A cold device with nothing stored gets the seed fixture. This is the
+   bootstrap snapshot; after the first sync the server is the truth.
 
-    if (!cards.length && !customers.length) {
-      const now = new Date().toISOString()
-      await Promise.all([
-        ...SEED_CUSTOMERS.map((c) => idb.put('customers', { ...c, version: 1, updated_at: now })),
-        ...SEED_BOATS.map((b) => idb.put('boats', { ...b, version: 1, updated_at: now })),
-        ...SEED_CARDS.map((c) => idb.put('service_cards', { ...c, version: 1, updated_at: now })),
+   Memoised on the promise, not on a boolean: Boot and SyncProvider both call
+   this on mount, and a flag checked at the top lets two callers through before
+   either sets it. That seeded the snapshot twice, queued every row twice, and
+   turned the duplicate into a wall of conflicts against our own data. */
+export function hydrate() {
+  if (hydrated) return Promise.resolve(db)
+  if (hydratePromise) return hydratePromise
+
+  hydratePromise = (async () => {
+    try {
+      const [cards, boats, customers] = await Promise.all([
+        idb.all('service_cards'),
+        idb.all('boats'),
+        idb.all('customers'),
       ])
+
+      if (!cards.length && !customers.length) {
+        /* Queued, not just stored. A brand-new server has nothing, so this
+           snapshot is what creates the marina there. Stored-only, the first
+           edit would carry rev 1 against a row the server has never seen and
+           be rejected as a conflict instead of an insert. */
+        const now = new Date().toISOString()
+        await Promise.all([
+          ...SEED_CUSTOMERS.map((c) => idb.putAndQueue('customers', { ...c, version: 0, updated_at: now })),
+          ...SEED_BOATS.map((b) => idb.putAndQueue('boats', { ...b, version: 0, updated_at: now })),
+          ...SEED_CARDS.map((c) => idb.putAndQueue('service_cards', { ...c, version: 0, updated_at: now })),
+        ])
+        db = {
+          cards: SEED_CARDS.map((c) => ({ ...c, version: 0, local_pending: true })),
+          boats: SEED_BOATS.map((b) => ({ ...b, version: 0, local_pending: true })),
+          customers: SEED_CUSTOMERS.map((c) => ({ ...c, version: 0, local_pending: true })),
+        }
+      } else {
+        db = { cards, boats, customers }
+      }
+    } catch (e) {
+      /* Storage is unavailable — private mode, or a browser that refuses. Say
+         so rather than running in a state that looks fine and silently loses
+         every write. `degraded` drives a visible warning in Setup. */
+      degraded = e?.message ?? 'storage unavailable'
       db = { cards: SEED_CARDS, boats: SEED_BOATS, customers: SEED_CUSTOMERS }
-    } else {
-      db = { cards, boats, customers }
     }
-  } catch (e) {
-    /* Storage is unavailable — private mode, or a browser that refuses. Say so
-       rather than running in a state that looks fine and silently loses every
-       write. `degraded` drives a visible warning in Setup. */
-    degraded = e?.message ?? 'storage unavailable'
-    db = { cards: SEED_CARDS, boats: SEED_BOATS, customers: SEED_CUSTOMERS }
-  }
-  hydrated = true
-  notify()
-  return db
+    hydrated = true
+    hydratePromise = null
+    notify()
+    return db
+  })()
+
+  return hydratePromise
 }
 
 export async function reload() {
   hydrated = false
+  hydratePromise = null
   return hydrate()
 }
 

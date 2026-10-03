@@ -22,6 +22,10 @@ const META_DDL = `
   deleted_at   TEXT
 `
 
+/* Existing installations need these rebuilt — SQLite cannot alter a column's
+   type, and the wrong affinity is what produced the "3.0" readings. */
+export const REBUILD_IF_TYPE_WRONG = ['boathouse_no', 'slip_no', 'storage_row', 'season_year']
+
 function columnDdl(name) {
   const n = name.toLowerCase()
   if (n === 'id') return '  id           TEXT PRIMARY KEY'
@@ -33,7 +37,10 @@ function columnDdl(name) {
      so a NOT NULL here would turn "absent" into an explicit NULL and defeat
      the DEFAULT. Constraints that matter live in the metadata block, where
      the server always supplies the value. */
-  if (['version', 'sort_order', 'quantity', 'total', 'active', 'is_fake', 'is_scanned', 'wrap_required', 'unwrap_done', 'authorized', 'completed', 'present'].includes(n))
+  /* Numeric identifiers must be declared numeric. As TEXT, SQLite's affinity
+   stores 3 and reads back "3.0" after a round trip, which then renders as
+   "BH 3.0" and, once pulled onto a client, keeps re-seeding that value. */
+  if (['version', 'sort_order', 'quantity', 'total', 'active', 'is_fake', 'is_scanned', 'wrap_required', 'unwrap_done', 'authorized', 'completed', 'present', 'boathouse_no', 'slip_no', 'storage_row', 'season_year'].includes(n))
     return `  ${name.padEnd(12)} INTEGER DEFAULT 0`
   if (['length_ft', 'tax_rate', 'unit_price', 'gps_lat', 'gps_lng'].includes(n))
     return `  ${name.padEnd(12)} REAL`
