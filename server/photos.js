@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { join, extname } from 'node:path'
+import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+
+import { T } from './entities.js'
 
 /*
  * Photo upload.
@@ -25,7 +27,7 @@ export async function storePhoto(db, { root, file, cardId, employeeId, deviceId,
     return { ok: false, status: 413, reason: 'payload_too_large' }
   }
 
-  const card = await db.get('SELECT id FROM service_cards WHERE id = ? AND deleted_at IS NULL', [cardId])
+  const card = await db.get(`SELECT id FROM ${T('service_cards')} WHERE id = ? AND deleted_at IS NULL`, [cardId])
   if (!card) return { ok: false, status: 404, reason: 'entity_not_found' }
 
   /* Client-generated id, per the sync contract: the server never allocates
@@ -50,13 +52,13 @@ export async function storePhoto(db, { root, file, cardId, employeeId, deviceId,
   }
 
   await db.run(
-    `INSERT INTO photos (id, card_id, work_log_id, filename, photo_type, caption, uploaded_by, uploaded_at, gps_lat, gps_lng, rev, version, updated_at, updated_by, device_id)
+    `INSERT INTO ${T('photos')} (id, card_id, work_log_id, filename, photo_type, caption, uploaded_by, uploaded_at, gps_lat, gps_lng, rev, version, updated_at, updated_by, device_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)`,
     [row.id, row.card_id, row.work_log_id, row.filename, row.photo_type, row.caption, row.uploaded_by, row.uploaded_at, row.gps_lat, row.gps_lng, now, employeeId, deviceId],
   )
 
   await db.run(
-    `INSERT INTO change_log (op_id, entity, entity_id, op, version, payload, changed_at, updated_by, device_id)
+    `INSERT INTO ${T('change_log')} (op_id, entity, entity_id, op, version, payload, changed_at, updated_by, device_id)
      VALUES (?, 'photos', ?, 'upsert', 1, ?, ?, ?, ?)`,
     [randomUUID(), row.id, JSON.stringify(row), now, employeeId, deviceId],
   )

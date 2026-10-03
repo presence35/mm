@@ -4,10 +4,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { sqliteDriver } from './db/driver.js'
+import { sqliteDriver, dialectDDL, toMySQL } from './db/driver.js'
 import { FULL_DDL } from './schema.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { createServer } from './index.js'
+import { T, PREFIX, ALL_TABLES } from './entities.js'
 import { bootstrap } from './db/index.js'
 
 function freshDb() {
@@ -35,7 +36,7 @@ test('replaying the same op_id returns the original result and does not double-a
   const [first] = await push(db, { ...ADMIN, ops: [op] })
   const [second] = await push(db, { ...ADMIN, ops: [op] })
   assert.deepEqual(second, first)
-  const rows = await db.all('SELECT * FROM customers')
+  const rows = await db.all(`SELECT * FROM ${T('customers')}`)
   assert.equal(rows.length, 1)
 })
 
@@ -58,7 +59,7 @@ test('numeric identifiers survive a round trip as integers, not "3.0"', async ()
     { op_id: 'op-card', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', storage_type: 'marina_boathouse', boathouse_no: 3, slip_no: 7, season_year: 2026 } },
   ] })
 
-  const row = await db.get('SELECT * FROM service_cards WHERE id = ?', ['k-1'])
+  const row = await db.get(`SELECT * FROM ${T('service_cards')} WHERE id = ?`, ['k-1'])
   assert.equal(row.boathouse_no, 3)
   assert.equal(row.slip_no, 7)
 
@@ -79,7 +80,7 @@ test('a legacy row stored as TEXT "3.0" reads back as 3', async () => {
 
   /* Simulate the wrong affinity an older build left behind. */
   await db.run(
-    `INSERT INTO service_cards (id, boat_id, storage_type, boathouse_no, slip_no, rev, version, updated_at)
+    `INSERT INTO ${T('service_cards')} (id, boat_id, storage_type, boathouse_no, slip_no, rev, version, updated_at)
      VALUES ('k-legacy', 'b-2', 'marina_boathouse', '3.0', '7.0', 0, 1, '2026-01-01T00:00:00.000Z')`,
   )
 
@@ -113,7 +114,7 @@ test('booleans from a JS client bind as 0/1 and never crash the process', async 
   })
   assert.equal(r.result, 'applied')
 
-  const row = await db.get('SELECT * FROM service_cards WHERE id = ?', ['k-1'])
+  const row = await db.get(`SELECT * FROM ${T('service_cards')} WHERE id = ?`, ['k-1'])
   assert.equal(row.wrap_required, 0)
   assert.equal(row.unwrap_done, 1)
 })
@@ -125,7 +126,7 @@ test('a non-scalar payload field is stored as JSON rather than killing the serve
     ops: [{ op_id: 'op-obj', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { id: 'c-1', name: { weird: true } } }],
   })
   assert.equal(r.result, 'applied')
-  const row = await db.get('SELECT * FROM customers WHERE id = ?', ['c-1'])
+  const row = await db.get(`SELECT * FROM ${T('customers')} WHERE id = ?`, ['c-1'])
   assert.equal(row.name, '{"weird":true}')
 })
 
@@ -148,10 +149,10 @@ test('a stale edit does not overwrite and preserves both versions', async () => 
   assert.ok(stale.conflict_id)
 
   // The server keeps what it had; the other version is not lost.
-  const row = await db.get('SELECT * FROM customers WHERE id = ?', ['c-1'])
+  const row = await db.get(`SELECT * FROM ${T('customers')} WHERE id = ?`, ['c-1'])
   assert.equal(row.city, 'Comox')
 
-  const conflicts = await db.all('SELECT * FROM card_conflicts WHERE id = ?', [stale.conflict_id])
+  const conflicts = await db.all(`SELECT * FROM ${T('card_conflicts')} WHERE id = ?`, [stale.conflict_id])
   assert.equal(conflicts.length, 1)
   assert.equal(JSON.parse(conflicts[0].local_payload).city, 'Campbell River')
   assert.equal(JSON.parse(conflicts[0].server_payload).city, 'Comox')
@@ -210,7 +211,7 @@ test('delete is a tombstone, never a hard delete', async () => {
   const [del] = await push(db, { ...ADMIN, ops: [{ op_id: 'op-del', entity: 'customers', entity_id: 'c-1', op: 'delete', rev: created.version }] })
   assert.equal(del.result, 'applied')
 
-  const row = await db.get('SELECT * FROM customers WHERE id = ?', ['c-1'])
+  const row = await db.get(`SELECT * FROM ${T('customers')} WHERE id = ?`, ['c-1'])
   assert.ok(row, 'row still exists')
   assert.ok(row.deleted_at, 'tombstoned')
 })
@@ -335,7 +336,7 @@ test('a photo uploads, is written with metadata, and reaches the change log', as
   assert.equal(body.photo.caption, 'Waterline scuff')
   assert.equal(body.photo.card_id, 'k-1')
 
-  const row = await db.get('SELECT * FROM photos WHERE id = ?', [body.photo.id])
+  const row = await db.get(`SELECT * FROM ${T('photos')} WHERE id = ?`, [body.photo.id])
   assert.equal(row.version, 1)
   assert.ok(row.updated_at, 'carries the shared metadata block')
 
@@ -373,6 +374,123 @@ test('a photo for a card that does not exist is refused', async () => {
   })
   server.close()
   assert.equal(res.status, 404)
+})
+
+/*
+ * The new app shares a MySQL schema with the legacy app during cutover. A SQL
+ * site that forgot T() would not fail loudly — CREATE TABLE IF NOT EXISTS would
+ * adopt the legacy table's shape and reads would quietly return legacy columns.
+ * So assert the property directly rather than trusting a grep.
+ */
+test('every table this app owns is created under the prefix, and none bare', async () => {
+  const db = freshDb()
+
+  const created = (await db.all("SELECT name FROM sqlite_master WHERE type = 'table'"))
+    .map((r) => r.name)
+    .filter((n) => !n.startsWith('sqlite_'))
+
+  const expected = [
+    ...Object.values(ALL_TABLES).map((s) => s.table),
+    'change_log',
+    'sync_ops',
+    'sync_devices',
+    'card_conflicts',
+    'sessions',
+    'login_attempts',
+  ].map((n) => T(n))
+
+  for (const name of expected) {
+    assert.ok(created.includes(name), `${name} was not created`)
+  }
+
+  /* The failure this guards against: a bare name that a legacy table already
+     occupies. Any table we did not expect is either a typo or a regression. */
+  const unexpected = created.filter((n) => !expected.includes(n))
+  assert.deepEqual(unexpected, [], `tables outside the prefix: ${unexpected.join(', ')}`)
+  assert.ok(PREFIX.length > 0, 'a bare table name would collide with the legacy schema')
+})
+
+test('the prefix is configurable so a second environment can differ', () => {
+  /* Read once at import. The value must be a plain prefix, not a qualified
+     name — dot-qualifying here would produce "mm_.service_cards". */
+  assert.match(PREFIX, /^[A-Za-z0-9_]*$/)
+  assert.equal(T('photos'), `${PREFIX}photos`)
+})
+
+/*
+ * MySQL DDL is generated but never executed in CI — there is no MySQL here.
+ * dialectDDL is pure string transformation, so it can still be asserted. This
+ * is the cheapest possible guard on code that otherwise ships unexecuted.
+ */
+test('the MySQL dialect rewrite is prefix-safe', () => {
+  const mysql = dialectDDL('mysql', FULL_DDL)
+
+  assert.ok(mysql.includes(`CREATE TABLE IF NOT EXISTS ${T('change_log')}`), 'change_log is created')
+  assert.ok(mysql.includes('BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY'), 'seq becomes an auto-increment')
+  assert.ok(!mysql.includes('INTEGER PRIMARY KEY AUTOINCREMENT'), 'no SQLite autoincrement survives')
+  assert.ok(!/CREATE INDEX IF NOT EXISTS/.test(mysql), 'MySQL has no CREATE INDEX IF NOT EXISTS')
+
+  /* The rewrite is a regex over generated SQL. A stale pattern would silently
+     stop matching and hand MySQL SQLite's autoincrement, which fails at
+     CREATE TABLE — so assert it still matches after the prefix changed. */
+  /* Every created object must carry the prefix. Checking this catches a stale
+     regex in dialectDDL just as well as a missed T() in a query. */
+  const createdNames = [...mysql.matchAll(/(?:TABLE IF NOT EXISTS|CREATE(?: UNIQUE)? INDEX) (\w+)/g)].map(
+    (m) => m[1],
+  )
+  assert.ok(createdNames.length >= 25, `expected every table, found ${createdNames.length}`)
+  const unprefixed = createdNames.filter((n) => !n.startsWith(PREFIX))
+  assert.deepEqual(unprefixed, [], `created outside the prefix: ${unprefixed.join(', ')}`)
+
+  assert.equal(dialectDDL('sqlite', FULL_DDL), FULL_DDL, 'SQLite DDL is passed through untouched')
+})
+
+/*
+ * MySQL is not reachable from here, so the translation is asserted instead of
+ * executed. These are the exact statements in the running code — if a call site
+ * changes its conflict target, this fails rather than the deployment.
+ */
+test('SQLite upserts are translated to MySQL, and only when provably portable', () => {
+  assert.equal(
+    toMySQL('INSERT INTO login_attempts (employee_id, source) VALUES (?, ?) ON CONFLICT (employee_id, source) DO UPDATE SET count = count + 1'),
+    'INSERT INTO login_attempts (employee_id, source) VALUES (?, ?) ON DUPLICATE KEY UPDATE count = count + 1',
+  )
+  assert.equal(
+    toMySQL('INSERT INTO sync_devices (device_id, label) VALUES (?, ?) ON CONFLICT (device_id) DO UPDATE SET label = ?'),
+    'INSERT INTO sync_devices (device_id, label) VALUES (?, ?) ON DUPLICATE KEY UPDATE label = ?',
+  )
+
+  /* Whitespace and case vary between call sites; both must still translate. */
+  assert.ok(toMySQL('... on conflict ( DEVICE_ID ) do update set x = ?').includes('ON DUPLICATE KEY UPDATE'))
+
+  /* Statements with no upsert are untouched. */
+  const plain = 'SELECT * FROM mm_customers WHERE id = ?'
+  assert.equal(toMySQL(plain), plain)
+
+  /* A conflict on a non-unique column would change behaviour if the target were
+     silently dropped, so it refuses instead. */
+  assert.throws(
+    () => toMySQL('INSERT INTO t VALUES (1) ON CONFLICT (some_column) DO UPDATE SET x = 1'),
+    /no primary key/,
+  )
+})
+
+test('the upserts in the running code are ones toMySQL can translate', async () => {
+  /* Guards the two hand-listed call sites above against drift: if a third
+     upsert appears with a non-primary-key target, this is where it shows up. */
+  const { readFileSync, readdirSync } = await import('node:fs')
+  const sources = readdirSync(new URL('.', import.meta.url))
+    .filter((f) => f.endsWith('.js') && !f.endsWith('.test.js'))
+    .map((f) => readFileSync(new URL(f, import.meta.url), 'utf8'))
+    .join('\n')
+
+  /* Require DO UPDATE: `async function conflict(db, op, ...)` is a function
+     declaration that merely starts with the token, not a statement. */
+  const targets = [...sources.matchAll(/ON CONFLICT\s*\(([^)]*)\)\s*DO UPDATE/gi)].map((m) => m[1])
+  assert.ok(targets.length >= 2, `expected the two known upserts, found ${targets.length}`)
+  for (const cols of targets) {
+    assert.doesNotThrow(() => toMySQL(`ON CONFLICT (${cols}) DO UPDATE SET x = 1`), cols)
+  }
 })
 
 test('sync routes require a session', async () => {

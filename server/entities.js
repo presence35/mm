@@ -129,6 +129,27 @@ export const REFERENCE = {
 
 export const ALL_TABLES = { ...ENTITIES, ...REFERENCE }
 
+/*
+ * Physical table names.
+ *
+ * The new app shares one MySQL schema with the legacy app during cutover. The
+ * legacy tables are `service_cards`, `customers`, `photos` and so on; ours have
+ * a different shape, and CREATE TABLE IF NOT EXISTS would silently adopt the old
+ * shape instead of creating ours. A prefix removes the collision entirely, and
+ * leaves the legacy tables untouched so rolling back is "redeploy the old repo".
+ *
+ * The prefix is applied here and nowhere else. Every SQL site spells its table
+ * as T('...'), so `grep "T('"` enumerates every physical table reference and a
+ * bare name is visibly wrong. Silently rewriting SQL inside the driver was the
+ * alternative and is not worth the risk of matching a string literal.
+ *
+ * This is a server-side concept only. IndexedDB store names are entity names,
+ * not table names, and are unaffected.
+ */
+export const PREFIX = process.env.DB_PREFIX ?? 'mm_'
+
+export const T = (name) => `${PREFIX}${name}`
+
 /* Includes the primary key: an insert without it silently produces a row with
    a NULL id, which then cannot be read back. */
 export function columnsFor(entity) {

@@ -1,4 +1,4 @@
-import { ALL_TABLES } from './entities.js'
+import { ALL_TABLES, T } from './entities.js'
 
 /*
  * Schema. Every mutable table carries the same metadata block so the sync
@@ -51,14 +51,14 @@ export function domainDdl() {
   const out = []
   for (const [entity, spec] of Object.entries(ALL_TABLES)) {
     const cols = [spec.pk, ...spec.columns.filter((c) => c !== spec.pk)].map(columnDdl)
-    out.push(`CREATE TABLE IF NOT EXISTS ${spec.table} (\n${[...cols, META_DDL].join(',\n')}\n);`)
+    out.push(`CREATE TABLE IF NOT EXISTS ${T(spec.table)} (\n${[...cols, META_DDL].join(',\n')}\n);`)
   }
   return out.join('\n\n')
 }
 
 /* SQLite and MySQL both accept this verbatim. */
 export const SYNC_DDL = `
-CREATE TABLE IF NOT EXISTS change_log (
+CREATE TABLE IF NOT EXISTS ${T('change_log')} (
   seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   op_id      TEXT NOT NULL,
   entity     TEXT NOT NULL,
@@ -71,15 +71,15 @@ CREATE TABLE IF NOT EXISTS change_log (
   device_id  TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_change_entity ON change_log(entity, entity_id);
+CREATE INDEX IF NOT EXISTS ${T('idx_change_entity')} ON ${T('change_log')}(entity, entity_id);
 
-CREATE TABLE IF NOT EXISTS sync_ops (
+CREATE TABLE IF NOT EXISTS ${T('sync_ops')} (
   op_id      TEXT PRIMARY KEY,
   result     TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS sync_devices (
+CREATE TABLE IF NOT EXISTS ${T('sync_devices')} (
   device_id    TEXT PRIMARY KEY,
   label        TEXT NOT NULL,
   platform     TEXT NOT NULL,
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS sync_devices (
   revoked_at   TEXT
 );
 
-CREATE TABLE IF NOT EXISTS card_conflicts (
+CREATE TABLE IF NOT EXISTS ${T('card_conflicts')} (
   id               TEXT PRIMARY KEY,
   entity           TEXT NOT NULL,
   entity_id        TEXT NOT NULL,
@@ -105,14 +105,14 @@ CREATE TABLE IF NOT EXISTS card_conflicts (
   resolved_at      TEXT
 );
 
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS ${T('sessions')} (
   token      TEXT PRIMARY KEY,
   employee_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS login_attempts (
+CREATE TABLE IF NOT EXISTS ${T('login_attempts')} (
   employee_id TEXT NOT NULL,
   source      TEXT NOT NULL,
   count       INTEGER NOT NULL DEFAULT 0,

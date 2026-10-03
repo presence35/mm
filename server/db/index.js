@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 
 import { sqliteDriver, mysqlDriver, dialectDDL } from './driver.js'
 import { FULL_DDL } from '../schema.js'
+import { T } from '../entities.js'
 
 export function createDb() {
   if (process.env.DB_HOST) {
@@ -31,12 +32,12 @@ export async function bootstrap(db, log = () => {}) {
 /* One admin so a fresh install is usable. PIN 1234, and it says so out loud
    rather than being discoverable by guesswork in production. */
 async function seedAdmin(db) {
-  const existing = await db.get('SELECT id FROM employees LIMIT 1')
+  const existing = await db.get(`SELECT id FROM ${T('employees')} LIMIT 1`)
   if (existing) return false
   const { salt, hash } = hashPin('1234')
   const now = new Date().toISOString()
   await db.run(
-    'INSERT INTO employees (id, name, role, initials, pin_salt, pin_hash, active, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 1)',
+    `INSERT INTO ${T('employees')} (id, name, role, initials, pin_salt, pin_hash, active, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 1)`,
     ['emp-admin', 'Admin', 'admin', 'AD', salt, hash, now, now],
   )
   return true

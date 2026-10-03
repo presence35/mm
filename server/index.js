@@ -7,6 +7,7 @@ import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken } from '
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
+import { T } from './entities.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -51,15 +52,15 @@ export async function createServer({ db, quiet = false } = {}) {
     }
 
     const employee = employeeId
-      ? await database.get('SELECT * FROM employees WHERE id = ? AND active = 1', [employeeId])
-      : await database.get('SELECT * FROM employees WHERE active = 1 ORDER BY created_at ASC LIMIT 1')
+      ? await database.get(`SELECT * FROM ${T('employees')} WHERE id = ? AND active = 1`, [employeeId])
+      : await database.get(`SELECT * FROM ${T('employees')} WHERE active = 1 ORDER BY created_at ASC LIMIT 1`)
 
     if (!employee) {
       res.status(401).json({ error: 'invalid_credentials' })
       return
     }
 
-    const attempt = await database.get('SELECT * FROM login_attempts WHERE employee_id = ? AND source = ?', [employee.id, source])
+    const attempt = await database.get(`SELECT * FROM ${T('login_attempts')} WHERE employee_id = ? AND source = ?`, [employee.id, source])
     if (attempt && attempt.count >= PIN_MAX_ATTEMPTS) {
       res.status(429).json({ error: 'too_many_attempts' })
       return
@@ -67,7 +68,7 @@ export async function createServer({ db, quiet = false } = {}) {
 
     if (!verifyPin(pin, employee.pin_salt, employee.pin_hash)) {
       await database.run(
-        `INSERT INTO login_attempts (employee_id, source, count, last_at) VALUES (?, ?, 1, ?)
+        `INSERT INTO ${T('login_attempts')} (employee_id, source, count, last_at) VALUES (?, ?, 1, ?)
          ON CONFLICT (employee_id, source) DO UPDATE SET count = count + 1, last_at = ?`,
         [employee.id, source, new Date().toISOString(), new Date().toISOString()],
       )
@@ -75,7 +76,7 @@ export async function createServer({ db, quiet = false } = {}) {
       return
     }
 
-    await database.run('DELETE FROM login_attempts WHERE employee_id = ? AND source = ?', [employee.id, source])
+    await database.run(`DELETE FROM ${T('login_attempts')} WHERE employee_id = ? AND source = ?`, [employee.id, source])
     const token = issueToken({ employee_id: employee.id, role: employee.role }, SESSION_TTL_MS)
 
     res.json({
@@ -86,7 +87,7 @@ export async function createServer({ db, quiet = false } = {}) {
   })
 
   app.get('/api/auth/me', authenticate, async (req, res) => {
-    const e = await database.get('SELECT id, name, role, initials, active FROM employees WHERE id = ?', [req.employee.employee_id])
+    const e = await database.get(`SELECT id, name, role, initials, active FROM ${T('employees')} WHERE id = ?`, [req.employee.employee_id])
     if (!e || !e.active) {
       res.status(401).json({ error: 'unauthenticated' })
       return
@@ -134,7 +135,7 @@ export async function createServer({ db, quiet = false } = {}) {
   })
 
   app.get('/api/sync/conflicts', authenticate, async (req, res) => {
-    const rows = await database.all('SELECT * FROM card_conflicts WHERE status = ? ORDER BY detected_at DESC', ['open'])
+    const rows = await database.all(`SELECT * FROM ${T('card_conflicts')} WHERE status = ? ORDER BY detected_at DESC`, ['open'])
     res.json({ conflicts: rows.map(decodeConflict) })
   })
 
@@ -144,7 +145,7 @@ export async function createServer({ db, quiet = false } = {}) {
       res.status(400).json({ error: 'invalid_resolution' })
       return
     }
-    const row = await database.get('SELECT * FROM card_conflicts WHERE id = ?', [req.params.id])
+    const row = await database.get(`SELECT * FROM ${T('card_conflicts')} WHERE id = ?`, [req.params.id])
     if (!row) {
       res.status(404).json({ error: 'not_found' })
       return
@@ -170,7 +171,7 @@ export async function createServer({ db, quiet = false } = {}) {
     })
 
     await database.run(
-      "UPDATE card_conflicts SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = ? WHERE id = ?",
+      `UPDATE ${T('card_conflicts')} SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = ? WHERE id = ?`,
       [resolution, req.employee.employee_id, new Date().toISOString(), req.params.id],
     )
 
@@ -191,7 +192,7 @@ export async function createServer({ db, quiet = false } = {}) {
     if (req.body.gps_lat && req.body.gps_lng) {
       gps = { lat: Number(req.body.gps_lat), lng: Number(req.body.gps_lng) }
     }
-    const out = await storePhoto(db, {
+    const out = await storePhoto(database, {
       root: ROOT,
       file: req.file,
       cardId,
@@ -222,18 +223,21 @@ export async function createServer({ db, quiet = false } = {}) {
 
     const card = await database.get(
       `SELECT c.id, c.boat_id, c.work_order_no, c.season_year, c.status, c.updated_at, c.is_fake
-       FROM service_cards c WHERE c.customer_token = ? AND c.deleted_at IS NULL`,
+       FROM ${T('service_cards')} c WHERE c.customer_token = ? AND c.deleted_at IS NULL`,
       [req.params.token],
     )
     if (!card) return generic()
 
-    const boat = await database.get('SELECT name, model, length_ft FROM boats WHERE id = ?', [card.boat_id])
+    const boat = await database.get(`SELECT name, model, length_ft FROM ${T('boats')} WHERE id = ?`, [card.boat_id])
     const customer = boat
-      ? await database.get('SELECT cu.name FROM boats b JOIN customers cu ON cu.id = b.customer_id WHERE b.id = ?', [card.boat_id])
+      ? await database.get(
+          `SELECT cu.name FROM ${T('boats')} b JOIN ${T('customers')} cu ON cu.id = b.customer_id WHERE b.id = ?`,
+          [card.boat_id],
+        )
       : null
     const services = await database.all(
       `SELECT t.label, w.authorized, w.completed
-       FROM authorized_work w LEFT JOIN service_item_templates t ON t.item_key = w.service_type
+       FROM ${T('authorized_work')} w LEFT JOIN ${T('service_item_templates')} t ON t.item_key = w.service_type
        WHERE w.card_id = ? AND w.deleted_at IS NULL`,
       [card.id],
     )

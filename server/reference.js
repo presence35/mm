@@ -1,4 +1,4 @@
-import { REFERENCE } from './entities.js'
+import { REFERENCE, T } from './entities.js'
 
 /*
  * Reference data is server-owned so the marina can change its physical layout
@@ -15,7 +15,7 @@ export async function referenceSnapshot(db) {
   for (const [entity, spec] of Object.entries(REFERENCE)) {
     const cols = spec.expose ?? [spec.pk]
     const rows = await db.all(
-      `SELECT ${cols.join(', ')} FROM ${spec.table} WHERE ${spec.pk} IS NOT NULL`,
+      `SELECT ${cols.join(', ')} FROM ${T(spec.table)} WHERE ${spec.pk} IS NOT NULL`,
     )
     out[entity] = rows.map((row) => {
       const o = {}
