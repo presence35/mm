@@ -299,9 +299,11 @@ src/
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
   engines/
-    store/   localStore.js, seed.js          — memory + localStorage + outbox
-    sync/    SyncProvider.jsx                — sync state machine
-    auth/    AuthProvider.jsx, permissions.js — auth state machine + capabilities
+    store/   localStore.js (sync read API over a hydrated projection),
+             idb.js (IndexedDB), seed.js
+    sync/    SyncProvider.jsx (state machine), transport.js (the only module
+             that does network I/O)
+    auth/    AuthProvider.jsx, permissions.js
   domain/    cardStatus.js, storageLocation.js — pure, deterministic
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
@@ -311,7 +313,9 @@ src/
              Map, Setup, Scan, Admin, Login, PublicCard
 ```
 
-Not yet built: `engines/media/` (photo capture, HEIC, OCR), the server, and the real sync/auth transports. The store is still memory + localStorage; Phase 4 swaps in IndexedDB and the sync protocol without moving the API.
+Not yet built: `engines/media/` (photo capture, HEIC, OCR), and the billing/multi-marina surfaces that are out of scope entirely.
+
+`server/` is the sync peer. It is a peer, not a CRUD API: the client never waits on it, and it never allocates an ID.
 
 ## Build order
 
