@@ -11,3 +11,4 @@ docs/review/
 .opencode/
 data/*.db
 data/*.db-*
+data/api.log
