@@ -133,19 +133,24 @@ export function SyncProvider({ children }) {
         platform: 'web',
       })
 
-      /* Push before pulling. Draining first means a device's own edits reach
-         the server before it learns about anyone else's, which is what avoids
-         manufacturing conflicts against itself. */
+      /* Pull before draining. A device joining an existing marina seeds its own
+         snapshot locally at rev 0; the pull brings the server's version and
+         dropSuperseded discards the duplicate ops. Draining first would push
+         that stale snapshot into a conflict with the server's own data. */
+      const out = await transport.pullAll(t, deviceId.current, new Date())
+
+      /* Always rebuild the projection, not just after a full rehydrate. A delta
+         pull brings child rows — logs, received items, authorised work — and
+         the in-memory projection has to see them or the card renders as if
+         they do not exist. */
+      await store.reload()
+
       await store.refreshPending()
       const res = await transport.drain(t, deviceId.current, new Date())
-
-      const out = await transport.pullAll(t, deviceId.current, new Date())
-      if (out.full) await store.reload()
 
       setPending(await store.refreshPending())
       const open = await idb.openConflicts()
       setConflicts(open.length)
-      await store.reload()
 
       attempts.current = 0
       setFailure(null)

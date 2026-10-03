@@ -12,3 +12,4 @@ docs/review/
 data/*.db
 data/*.db-*
 data/api.log
+data/vite.log

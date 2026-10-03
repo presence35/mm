@@ -247,6 +247,85 @@ test('a conflict can be resolved offline without a network call', async () => {
   assert.equal(row.city, 'Nanaimo')
 })
 
+test('seeding the snapshot queues each row exactly once', async () => {
+  const store = await import('../src/engines/store/localStore.js')
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await store.reload()
+
+  const queued = await idb.pendingOps()
+  const seen = new Set()
+  for (const op of queued) {
+    const key = `${op.entity}:${op.entity_id}`
+    assert.equal(seen.has(key), false, `duplicate op queued for ${key}`)
+    seen.add(key)
+  }
+
+  /* A joining device pulls first: the pull brings the server's version of the
+     snapshot and dropSuperseded discards the duplicate local ops. */
+  await transport.pullAll(token, 'dev-fresh')
+  const result = await transport.drain(token, 'dev-fresh')
+  assert.equal(result.conflicts, 0, `a fresh device produced ${result.conflicts} conflicts against its own seed`)
+  assert.equal((await idb.pendingOps()).length, 0)
+})
+
+test('a work log survives the round trip as its own entity', async () => {
+  const store = await import('../src/engines/store/localStore.js')
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await store.hydrate()
+
+  const card = store.listCards()[0]
+  const before = store.getCard(card.id).card.logs.length
+
+  /* A fresh device seeds the snapshot, which includes child rows. Clear that
+     first so the assertion is about this log and not the fixture. */
+  await transport.drain(token, 'dev-seed')
+  assert.equal((await idb.pendingOps()).length, 0)
+
+  /* A mechanic writes a log entry with no signal. */
+  store.addLog(card.id, { id: 'test-1', employee_id: 'emp-1', name: 'Bo', date: '2026-10-03', description: 'Lower unit drained' })
+
+  const withLog = store.getCard(card.id).card
+  assert.equal(withLog.logs.length, before + 1)
+
+  /* It is queued against the work_logs entity, not the card. */
+  const queued = await idb.pendingOps()
+  const logOps = queued.filter((o) => o.entity === 'work_logs')
+  assert.equal(logOps.length, 1, 'queued as its own entity')
+  assert.equal(logOps[0].payload.description, 'Lower unit drained')
+  assert.equal(logOps[0].payload.card_id, card.id)
+  assert.equal(logOps[0].entity_id, logOps[0].payload.id)
+
+  const result = await transport.drain(token, 'dev-log')
+  assert.equal(result.applied, 1)
+
+  /* And a second device pulls it. */
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await transport.pullAll(token, 'dev-reader')
+  const pulled = await idb.all('work_logs')
+  assert.ok(pulled.some((r) => r.description === 'Lower unit drained'), 'the log reached the server and came back')
+})
+
+test('ticking the same task twice updates one row, not two', async () => {
+  const store = await import('../src/engines/store/localStore.js')
+  /* The previous test wiped and re-pulled; the projection has to follow. */
+  await store.reload()
+  const card = store.listCards()[0]
+
+  const rows = () => (store.getCard(card.id).card.authorized_work ?? []).filter((w) => w.key === 'tune_up').length
+  const start = rows()
+
+  store.setAuthorizedWork(card.id, 'tune_up', { authorized: true })
+  store.setAuthorizedWork(card.id, 'tune_up', { completed: true })
+
+  assert.equal(rows(), start + 1, 'still exactly one row for that service')
+  const entry = store.getCard(card.id).card.authorized_work.find((w) => w.key === 'tune_up')
+  assert.equal(entry.authorized, true)
+  assert.equal(entry.completed, true)
+})
+
 test('reference data never carries PIN hashes', async () => {
   const ref = await transport.reference(token)
   assert.ok(Array.isArray(ref.employees))
