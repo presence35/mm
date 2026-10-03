@@ -16,3 +16,4 @@ data/vite.log
 uploads/
 data/uploads/
 data/vite.log
+data/*.txt
