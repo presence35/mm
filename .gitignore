@@ -9,3 +9,5 @@ dev-dist
 # Inherited/other-session artifacts, not project content
 docs/review/
 .opencode/
+data/*.db
+data/*.db-*
