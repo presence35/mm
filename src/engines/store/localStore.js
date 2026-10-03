@@ -26,21 +26,35 @@ function load() {
   }
 }
 
-let db = load() ?? {
+const restored = load()
+
+let db = restored ?? {
   cards: SEED_CARDS,
   boats: SEED_BOATS,
   customers: SEED_CUSTOMERS,
 }
 
+/* Outbox: every mutation is queued here and drained by the sync engine.
+   This is the local-first loop — writes land in the store first, always, and
+   reach the server later or never. Nothing in this module talks to a network. */
+let outbox = restored?.outbox ?? []
+let opSeq = 0
+
 const listeners = new Set()
 
 function persist() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(db))
+    localStorage.setItem(KEY, JSON.stringify({ ...db, outbox }))
   } catch {
     /* private mode or quota — the in-memory copy still serves this session */
   }
   listeners.forEach((fn) => fn())
+}
+
+function enqueue(entity, op, payload) {
+  opSeq += 1
+  outbox = [...outbox, { op_id: `op-${opSeq}`, entity, op, payload, queued_at: Date.now() }]
+  persist()
 }
 
 export function subscribe(fn) {
@@ -86,7 +100,7 @@ export function patchCard(id, patch) {
   const i = db.cards.findIndex((c) => c.id === id)
   if (i < 0) return null
   db.cards[i] = { ...db.cards[i], ...patch }
-  persist()
+  enqueue('service_cards', 'upsert', { id, ...patch })
   return db.cards[i]
 }
 
@@ -109,8 +123,114 @@ export function addLog(id, log) {
   return patchCard(id, { logs: [...(card.logs ?? []), log] })
 }
 
-/* Pending-write counter. A real implementation reads the sync outbox; until
-   that exists this reflects unsynced local mutations. */
+/* IDs are client-generated ULIDs — the server never allocates one, so an
+   entity created with no signal already has a final ID. */
+let ulidCounter = 0
+export function newId(prefix) {
+  ulidCounter += 1
+  const stamp = Date.now().toString(32).toUpperCase().padStart(10, '0')
+  const rand = Math.random().toString(32).slice(2, 8).toUpperCase()
+  return `${prefix}-${stamp}${rand}${ulidCounter.toString(32).toUpperCase()}`
+}
+
+export function createCustomer(fields) {
+  const customer = { ...fields, id: newId('c'), created_at: new Date().toISOString() }
+  db.customers = [...db.customers, customer]
+  enqueue('customers', 'upsert', customer)
+  persist()
+  return customer
+}
+
+export function findDuplicateCustomer({ email, phone }) {
+  if (!email && !phone) return null
+  return (
+    db.customers.find((c) => (email && c.email?.toLowerCase() === email.toLowerCase()) || (phone && c.phone === phone)) ?? null
+  )
+}
+
+export function createBoat(fields) {
+  const boat = { ...fields, id: newId('b'), created_at: new Date().toISOString() }
+  db.boats = [...db.boats, boat]
+  enqueue('boats', 'upsert', boat)
+  persist()
+  return boat
+}
+
+export function boatsForCustomer(customerId) {
+  return db.boats.filter((b) => b.customer_id === customerId)
+}
+
+export function cardsForCustomer(customerId) {
+  const boatIds = new Set(db.boats.filter((b) => b.customer_id === customerId).map((b) => b.id))
+  return db.cards.filter((c) => boatIds.has(c.boat_id))
+}
+
+export function cardsForBoat(boatId) {
+  return db.cards.filter((c) => c.boat_id === boatId)
+}
+
+export function nextWorkOrderNo(now) {
+  const year = now.getFullYear()
+  const max = db.cards
+    .filter((c) => String(c.work_order_no).startsWith(`WO-${year}`))
+    .reduce((acc, c) => Math.max(acc, Number(String(c.work_order_no).split('-')[1]) || 0), 2400)
+  return `WO-${year}${max + 1}`
+}
+
+export function createCard(fields) {
+  const card = {
+    storage_type: null,
+    boathouse_no: null,
+    slip_no: null,
+    storage_building: null,
+    storage_row: null,
+    storage_col: null,
+    wrap_required: false,
+    unwrap_done: false,
+    remarks: null,
+    other_work: null,
+    pickup_delivery: null,
+    invoice_number: null,
+    invoice_status: null,
+    tax_rate: 0,
+    status: 'intake',
+    is_fake: 0,
+    is_scanned: 0,
+    received_items: [],
+    authorized_work: [],
+    condition: [],
+    logs: [],
+    photos: [],
+    customer_token: newId('tk'),
+    ...fields,
+    id: newId('k'),
+    created_at: new Date().toISOString(),
+  }
+  db.cards = [card, ...db.cards]
+  enqueue('service_cards', 'upsert', card)
+  persist()
+  return card
+}
+
+/* ------------------------------------------------------------------ outbox */
+
+export function pendingWrites() {
+  return outbox
+}
+
 export function pendingWriteCount() {
-  return 0
+  return outbox.length
+}
+
+/* Drain acknowledged ops. The sync engine calls this; nothing else does. */
+export function drainOutbox(opIds) {
+  const done = new Set(opIds)
+  const before = outbox.length
+  outbox = outbox.filter((o) => !done.has(o.op_id))
+  if (outbox.length !== before) persist()
+  return outbox.length
+}
+
+export function cardByToken(token) {
+  return db.cards.find((c) => c.customer_token === token) ?? null
 }

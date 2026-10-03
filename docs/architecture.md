@@ -299,15 +299,19 @@ src/
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
   engines/
-    store/   localStore.js, seed.js          — Phase 1: memory + localStorage
+    store/   localStore.js, seed.js          — memory + localStorage + outbox
+    sync/    SyncProvider.jsx                — sync state machine
+    auth/    AuthProvider.jsx, permissions.js — auth state machine + capabilities
   domain/    cardStatus.js, storageLocation.js — pure, deterministic
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
-  screens/   composition only
+  screens/   composition only:
+             Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
+             Map, Setup, Scan, Admin, Login, PublicCard
 ```
 
-Not yet built: `engines/sync/`, `engines/auth/`, `engines/media/`, and the People/Map/Setup/Scan/New-card/Invoice/Admin/Public-view screens.
+Not yet built: `engines/media/` (photo capture, HEIC, OCR), the server, and the real sync/auth transports. The store is still memory + localStorage; Phase 4 swaps in IndexedDB and the sync protocol without moving the API.
 
 ## Build order
 

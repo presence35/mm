@@ -172,9 +172,20 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
       <LogComposer onSave={actions.addLog} onDirtyChange={onDirtyChange} />
 
       {/* One dominant action per screen: move the card forward. */}
-      <div style={{ padding: '0 var(--space-4) var(--space-6)' }}>
+      <div style={{ padding: '0 var(--space-4) var(--space-3)' }}>
         <Button fullWidth onClick={() => setStatusSheet(true)} iconAfter="down" disabled={!options.length}>
           Move to…
+        </Button>
+      </div>
+
+      <div style={{ padding: '0 var(--space-4) var(--space-6)', display: 'flex', gap: 'var(--space-2)' }}>
+        {actions.onOpenInvoice ? (
+          <Button variant="outlined" fullWidth icon="receipt" onClick={actions.onOpenInvoice}>
+            Invoice
+          </Button>
+        ) : null}
+        <Button variant="text" fullWidth icon="qr" onClick={actions.onCopyCustomerLink}>
+          Customer link
         </Button>
       </div>
 

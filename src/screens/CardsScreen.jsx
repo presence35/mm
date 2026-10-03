@@ -46,7 +46,7 @@ export default function CardsScreen({ embedded = false }) {
           icon="cards"
           title="No cards yet"
           body="Create the first service card to start tracking work."
-          action={{ label: 'New card', icon: 'plus', onClick: () => navigate('scan') }}
+          action={{ label: 'New service card', icon: 'plus', onClick: () => navigate('new-card') }}
         />
       </div>
     )
@@ -54,7 +54,9 @@ export default function CardsScreen({ embedded = false }) {
 
   return (
     <div>
-      {!embedded ? <TopBar title="Cards" actions={<Fab icon="plus" />} /> : null}
+      {!embedded ? (
+        <TopBar title="Cards" actions={<Fab icon="plus" aria-label="New service card" onClick={() => navigate('new-card')} />} />
+      ) : null}
 
       <SearchBar value={query} onChange={setQuery} placeholder="Search work order, boat, customer" />
       <ChipRow>

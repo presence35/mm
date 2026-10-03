@@ -62,6 +62,7 @@ export const SEED_CARDS = [
     other_work: 'Trim sticking when lifting — customer flagged in September, wants it looked at before spring.',
     wrap_required: true, unwrap_done: false, pickup_delivery: null,
     invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
+    customer_token: 'tk-2481-7f3a91',
     received_items: ['battery', 'keys', 'cover', 'tie_ropes'],
     authorized_work: [
       { key: 'outdrive_service', authorized: true, completed: true },
@@ -104,6 +105,7 @@ export const SEED_CARDS = [
     other_work: null,
     wrap_required: false, unwrap_done: false, pickup_delivery: null,
     invoice_number: 'INV-1180', invoice_status: 'issued', tax_rate: 0.05, is_fake: 0, is_scanned: 0,
+    customer_token: 'tk-2479-c40b2e',
     received_items: ['keys', 'cover'],
     authorized_work: [{ key: 'tune_up', authorized: true, completed: true }],
     condition: [{ area: 'hull', rating: 'good', note: null }],
@@ -119,6 +121,7 @@ export const SEED_CARDS = [
     other_work: 'Paddle loose in port locker.',
     wrap_required: false, unwrap_done: false, pickup_delivery: null,
     invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
+    customer_token: 'tk-2484-2b8c05',
     received_items: ['keys', 'paddles', 'tie_ropes'],
     authorized_work: [],
     condition: [],
