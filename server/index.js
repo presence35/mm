@@ -1,9 +1,10 @@
 import express from 'express'
+import { readFileSync } from 'node:fs'
 import multer from 'multer'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
-import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken } from './db/index.js'
+import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertProductionReady } from './db/index.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
@@ -24,6 +25,18 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000
 export async function createServer({ db, quiet = false } = {}) {
   const database = db ?? createDb()
   if (!db) await bootstrap(database, quiet ? () => {} : console.log)
+
+  /* Runs on every boot, not only the createDb() path, so the refusal cannot be
+     bypassed by whichever entry point starts the server. It is a no-op for
+     SQLite, which is the local development database. */
+  const unsafe = await assertProductionReady(database)
+  if (unsafe.length) {
+    throw new Error(
+      `Refusing to start: ${unsafe.length} production ${unsafe.length === 1 ? 'problem' : 'problems'}.\n` +
+        unsafe.map((p) => `  - ${p}`).join('\n') +
+        '\n\nFix these before serving. See README "Before this touches production".',
+    )
+  }
 
   const app = express()
   app.use(express.json({ limit: '2mb' }))
@@ -251,6 +264,30 @@ export async function createServer({ db, quiet = false } = {}) {
       services: services.map((s) => ({ label: s.label ?? 'Service', authorized: !!s.authorized, completed: !!s.completed })),
       updated_at: card.updated_at,
       fake: !!card.is_fake,
+    })
+  })
+
+  /* ------------------------------------------------------------- version */
+
+  /* Unauthenticated on purpose: this is the first thing to check when a deploy
+     looks stale, and making it need a session defeats that. It exposes nothing
+     sensitive — no host, no database name, no employee. It answers two
+     questions the README asks: is this the new code, and is it pointed at the
+     database we think it is. */
+  const bootedAt = new Date().toISOString()
+
+  app.get('/api/version', (_req, res) => {
+    res.set('Cache-Control', 'no-store')
+    res.json({
+      name: 'marina-manager',
+      version: readFileSync(join(ROOT, 'package.json'), 'utf8').match(/"version":\s*"([^"]+)"/)?.[1] ?? 'unknown',
+      /* Set by the host if it exposes one. Absent locally, which is honest. */
+      build: process.env.BUILD_ID ?? null,
+      booted_at: bootedAt,
+      /* Confirming the prefix is the point: a wrong one silently reads the
+         legacy tables instead of ours. */
+      dialect: database.dialect,
+      prefix: T(''),
     })
   })
 

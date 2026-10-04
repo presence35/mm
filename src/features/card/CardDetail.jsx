@@ -14,7 +14,7 @@ import {
 import { statusMeta, nextStatuses, progressPercent, CARD_STATUS } from '../../domain/cardStatus.js'
 import { locationSummary, STORAGE_TYPES } from '../../domain/storageLocation.js'
 import { SEED_RECEIVED_ITEMS, SEED_AUTHORIZED_WORK, SEED_CONDITIONS } from '../../engines/store/seed.js'
-import ConditionEditor, { ratingLabel } from './ConditionEditor.jsx'
+import ConditionEditor, { summarise } from './ConditionEditor.jsx'
 import { ReceivedItems, AuthorizedWork, WrapControl } from './TaskList.jsx'
 import LogComposer, { LogList } from './LogComposer.jsx'
 import PhotoStrip from './PhotoStrip.jsx'
@@ -54,16 +54,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const storageLabel = STORAGE_TYPES.find((t) => t.value === card.storage_type)?.label ?? '—'
   const conflicted = actions.conflictedIds?.includes(card.id)
 
-  /* Count rows that actually carry a rating. A row can exist with no rating — a
-     card imported from the legacy app, or an area where a note was typed before
-     anyone chose a grade — and counting rows would claim a check that never
-     happened. */
-  const rated = (card.condition ?? []).filter((c) => c.rating).length
-  const noted = (card.condition ?? []).filter((c) => c.note).length
-  const worst = ['damage', 'poor', 'fair', 'good'].find((r) => (card.condition ?? []).some((c) => c.rating === r))
-  const conditionSummary = rated
-    ? `${rated} of ${SEED_CONDITIONS.length} checked · worst ${ratingLabel(worst).toLowerCase()}${noted ? ` · ${noted} with notes` : ''}`
-    : 'Not yet checked'
+  const conditionSummary = summarise(card.condition, SEED_CONDITIONS.length)
 
   return (
     <div>

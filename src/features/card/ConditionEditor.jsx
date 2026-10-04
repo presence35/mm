@@ -1,4 +1,5 @@
 import { Segmented, TextField } from '../../ui'
+import { RATINGS, LABEL, needsNote } from './conditionModel.js'
 
 /*
  * Condition, per area.
@@ -20,24 +21,11 @@ import { Segmented, TextField } from '../../ui'
  *
  * Severity is echoed as a word on every row so all six can be read at a glance.
  * Colour reinforces it and is never the only signal.
+ *
+ * The rules live in conditionModel.js. This file only renders.
  */
 
-const RATINGS = [
-  { value: 'good', label: 'Good' },
-  { value: 'fair', label: 'Fair' },
-  { value: 'poor', label: 'Poor' },
-  { value: 'damage', label: 'Damage' },
-]
-
 const OPTIONS = RATINGS.map((r) => ({ value: r.value, label: r.label }))
-
-const LABEL = Object.fromEntries(RATINGS.map((r) => [r.value, r.label]))
-
-/* Good is the absence of a problem, so a note beside it has nothing to
-   describe. Below Good the note is what makes the rating actionable — it is what
-   the customer is told and what a dispute turns on. A note already on file keeps
-   its field even if the rating is cleared, so nothing typed is ever hidden. */
-const NEEDS_NOTE = new Set(['fair', 'poor', 'damage'])
 
 const SEVERITY = {
   good: null,
@@ -87,7 +75,7 @@ export default function ConditionEditor({ areas, condition, onRate, onNote }) {
               onChange={(v) => onRate(a.key, v === rating ? null : v)}
             />
 
-            {NEEDS_NOTE.has(rating) || entry?.note ? (
+            {needsNote(rating) || entry?.note ? (
               <TextField
                 label="What's wrong"
                 value={entry?.note ?? ''}
@@ -105,3 +93,6 @@ export default function ConditionEditor({ areas, condition, onRate, onNote }) {
 export function ratingLabel(value) {
   return LABEL[value] ?? null
 }
+
+/* Re-exported so screens and the editor share one source for the rules. */
+export { summarise } from './conditionModel.js'

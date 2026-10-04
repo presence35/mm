@@ -31,14 +31,17 @@ usable, and it is only acceptable locally — see below.
 
 ## Before this touches production
 
-Three things. None is optional.
+Three things. None is optional. **The first two are enforced**: on MySQL the
+server refuses to start and lists everything that is still wrong, because
+`README` steps that get skipped on a deploy day are not steps.
 
 1. **Set `APP_SECRET`.** Unset, the server signs tokens with a literal string
    that is in the repository. Anyone can mint a valid session. Nothing reads a
    `.env` file — set it in the shell, or in GoDaddy's environment settings.
 2. **Change the admin PIN.** `1234` is seeded on first boot. There is no UI to
    change it yet — update the row in `mm_employees` (`pin_salt` / `pin_hash`) or
-   add the admin screen.
+   add the admin screen. The boot check reads the stored hash, so it catches a
+   PIN that was changed back.
 3. **Delete `data/*.db` from any image or archive.** A dev SQLite file can
    contain real customer data.
 
@@ -78,6 +81,17 @@ service worker update prompt, or clear site data for the origin. Verify with
 
 Verify production MySQL by looking for `schema ensured` in the server logs. If
 the `mm_`-prefixed tables are missing, the database account lacked `CREATE`.
+
+Then check the live build:
+
+```
+GET <site>/api/version
+```
+
+It reports the package version, the boot time, and — the part worth reading —
+`dialect` and `prefix`. A wrong `prefix` means the app is reading the legacy
+tables instead of ours, which looks like an empty database rather than an error.
+Set `BUILD_ID` on the host if you want it to report a commit.
 
 ## Importing the legacy marina data
 

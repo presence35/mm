@@ -333,6 +333,16 @@ server/
     inspect-db.js reads the result back through pull() and checks the joins
 ```
 
+`src/features/card/conditionModel.js` holds the rating and note rules as pure
+functions. They used to live inside a React hook, which is why a note field that
+silently refused to save shipped: nothing could reach them to test. The
+invariant is that an entry exists if and only if it has a rating or a note, so an
+empty row cannot be constructed and clearing one is never a separate tombstone.
+
+`server/db/index.js` refuses to start on MySQL with a published `APP_SECRET` or a
+seeded PIN. It runs on every `createServer`, including one with an injected
+database, so the refusal cannot be bypassed and can be tested.
+
 Not built, and out of scope: billing, multi-marina, and anything named under
 Non-goals. Paper-card OCR (scanning the physical intake form into a new card)
 is the one piece of the old app's feature set with no home yet.
