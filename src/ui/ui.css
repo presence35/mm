@@ -487,7 +487,30 @@
   box-shadow: inset 0 0 0 2px var(--primary);
 }
 
-.field--invalid .field__control { box-shadow: inset 0 0 0 2px var(--error); }
+/*
+ * One ring, not two.
+ *
+ * .field__control draws a themed indicator on :focus-within, and the global
+ * :focus-visible rule in global.css draws another around the input inside it.
+ * Because the input sits within the control, that second outline lands on top of
+ * the first: two concentric rings of the same primary colour, which reads as a
+ * rendering fault and makes the actual focus state harder to pick out — the
+ * opposite of what the ring is for.
+ *
+ * Scoped to inputs whose container already draws one. Everything else keeps the
+ * global outline; buttons, list items and segmented controls rely on it.
+ */
+.field__input:focus-visible,
+.search-bar input:focus-visible {
+  outline: none;
+}
+
+/* An invalid field with focus previously showed two rings as well, and it was
+   genuinely unclear which one was the error. The invalid state wins outright. */
+.field--invalid .field__control,
+.field--invalid .field__control:focus-within {
+  box-shadow: inset 0 0 0 2px var(--error);
+}
 
 .field__input {
   flex: 1;
