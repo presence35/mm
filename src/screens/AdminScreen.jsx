@@ -126,6 +126,11 @@ function Catalogue() {
 }
 
 function AddStaff({ onClose, onDone }) {
+  /* Own hook call. It was reaching for a `sync` that only existed in
+     AdminScreen's scope, so every add threw a ReferenceError and the catch
+     reported it as "could not add them" — a server problem that was never
+     touched. */
+  const sync = useSync()
   const [name, setName] = useState('')
   const [role, setRole] = useState('mechanic')
   const [pin, setPin] = useState('')
