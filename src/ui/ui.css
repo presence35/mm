@@ -358,6 +358,54 @@
 .segmented__item[aria-checked='true']::before { opacity: 0; }
 .segmented__item:disabled { opacity: 0.38; }
 
+/* ------------------------------------------------------------ condition -- */
+/* One row per area: the label and its current state, then the rating control.
+   The state readout is what makes six areas scannable in one pass, and it is
+   also how "not checked" stays visibly different from "good" — on a damage
+   record only one of those is a pass. */
+.condition {
+  display: flex;
+  flex-direction: column;
+}
+
+.condition__area {
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.condition__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.condition__label {
+  font: var(--title-s);
+  color: var(--on-surface);
+}
+
+.condition__value {
+  font: var(--label-m);
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+  border-radius: var(--corner-full);
+  padding: var(--space-1) var(--space-3);
+  white-space: nowrap;
+}
+
+.condition__value--unset {
+  background: none;
+  padding-inline: 0;
+  font-style: italic;
+}
+
+/* Full width here: the four states are words, and squeezing them to their 64px
+   minimum wraps the labels. */
+.condition .segmented {
+  display: flex;
+}
+
 /* ------------------------------------------------------------- TextField -- */
 
 .field {

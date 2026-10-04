@@ -1,4 +1,26 @@
-import { Chip, ChipRow } from '../../ui'
+import { Segmented, TextField } from '../../ui'
+
+/*
+ * Condition, per area.
+ *
+ * Six independent questions, not a form. The previous layout answered that with
+ * four chips per area — twenty-four controls in a column of near-identical
+ * blocks, which is both tall and hard to compare down. Now: one row per area,
+ * carrying its current state as text, above a single rating control.
+ *
+ * The correctness point, which does not depend on how often anyone rates
+ * anything: "nobody checked" and "somebody checked and it is fine" are
+ * different facts, and on a damage record only one of them is a pass. Three
+ * unselected chips rendered both identically. Unrated now says "Not checked".
+ *
+ * Ratings are named states, not a magnitude, so this is a segmented radiogroup
+ * and deliberately not a slider: a slider hides the four labels, invites
+ * imprecise drags, and is hostile with gloves on. One tap per answer either
+ * way — what changed is the twenty-four controls becoming six.
+ *
+ * Severity is echoed as a word on every row so all six can be read at a glance.
+ * Colour reinforces it and is never the only signal.
+ */
 
 const RATINGS = [
   { value: 'good', label: 'Good' },
@@ -7,36 +29,71 @@ const RATINGS = [
   { value: 'damage', label: 'Damage' },
 ]
 
+const OPTIONS = RATINGS.map((r) => ({ value: r.value, label: r.label }))
+
 const LABEL = Object.fromEntries(RATINGS.map((r) => [r.value, r.label]))
 
-/* Per-area condition rating. Chips are the correct control here: mutually
-   exclusive selection among a small set. Colour is never the only signal —
-   the selected chip shows a check and carries the label. */
+/* Good is the absence of a problem, so a note beside it has nothing to
+   describe. Below Good the note is what makes the rating actionable — it is what
+   the customer is told and what a dispute turns on. A note already on file keeps
+   its field even if the rating is cleared, so nothing typed is ever hidden. */
+const NEEDS_NOTE = new Set(['fair', 'poor', 'damage'])
+
+const SEVERITY = {
+  good: null,
+  fair: 'var(--warning-container)',
+  poor: 'var(--error-container)',
+  damage: 'var(--error-container)',
+}
+
+const SEVERITY_TEXT = {
+  fair: 'var(--on-warning-container)',
+  poor: 'var(--on-error-container)',
+  damage: 'var(--on-error-container)',
+}
+
 export default function ConditionEditor({ areas, condition, onRate, onNote }) {
   const byArea = Object.fromEntries((condition ?? []).map((c) => [c.area, c]))
 
   return (
-    <section>
+    <section className="condition">
       {areas.map((a) => {
         const entry = byArea[a.key]
+        const rating = entry?.rating ?? null
+        const tint = rating ? SEVERITY[rating] : null
+
         return (
-          <div key={a.key} style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-            <p style={{ font: 'var(--title-s)', color: 'var(--on-surface)' }}>{a.label}</p>
-            <ChipRow>
-              {RATINGS.map((r) => (
-                <Chip
-                  key={r.value}
-                  selected={entry?.rating === r.value}
-                  onClick={() => onRate(a.key, entry?.rating === r.value ? null : r.value)}
+          <div key={a.key} className="condition__area">
+            <div className="condition__head">
+              <span className="condition__label">{a.label}</span>
+              {rating ? (
+                <span
+                  className="condition__value"
+                  style={tint ? { background: tint, color: SEVERITY_TEXT[rating] } : undefined}
                 >
-                  {r.label}
-                </Chip>
-              ))}
-            </ChipRow>
-            {entry?.note ? (
-              <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', marginTop: 'var(--space-2)' }}>
-                {entry.note}
-              </p>
+                  {LABEL[rating]}
+                </span>
+              ) : (
+                <span className="condition__value condition__value--unset">Not checked</span>
+              )}
+            </div>
+
+            <Segmented
+              options={OPTIONS}
+              value={rating}
+              ariaLabel={`${a.label} condition`}
+              /* Tapping the current rating clears it, so an accidental second
+                 tap undoes rather than re-confirming. */
+              onChange={(v) => onRate(a.key, v === rating ? null : v)}
+            />
+
+            {NEEDS_NOTE.has(rating) || entry?.note ? (
+              <TextField
+                label="What's wrong"
+                value={entry?.note ?? ''}
+                onChange={(value) => onNote?.(a.key, value)}
+                placeholder="Scuff on starboard at waterline"
+              />
             ) : null}
           </div>
         )

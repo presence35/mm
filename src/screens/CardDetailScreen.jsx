@@ -46,6 +46,7 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
         actions={{
           patch: api.patch,
           rate: api.rate,
+    note: api.note,
           toggleReceivedItem: api.toggleReceivedItem,
           toggleAuthorized: api.toggleAuthorized,
           toggleCompleted: api.toggleCompleted,
