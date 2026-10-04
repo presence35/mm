@@ -37,7 +37,18 @@ export function SyncProvider({ children }) {
   const lastAttempt = useRef(0)
   const timer = useRef(null)
   const running = useRef(false)
-  const [hasCachedSession, setHasCachedSession] = useState(false)
+  /*
+ * Read synchronously from the first render. It used to start false and be set
+ * from an effect, so every boot flashed the sign-in screen before the app
+ * appeared — and on a reload that flash looked exactly like being logged out.
+ */
+const [hasCachedSession, setHasCachedSession] = useState(() => {
+  try {
+    return Boolean(localStorage.getItem(TOKEN_KEY))
+  } catch {
+    return false
+  }
+})
 
   const token = useRef(null)
   const deviceId = useRef(null)
@@ -54,11 +65,41 @@ export function SyncProvider({ children }) {
     } catch {
       t = null
     }
-    /* A cached token is what makes offline unlock possible at all. Without
-       one, a phone that has never signed in must not appear to have a
-       session. */
-    setHasCachedSession(Boolean(t))
-    if (!t) return null
+
+    /* No token at all: this device has never signed in, and must not appear to
+       have a session. A cached token is what makes offline unlock possible. */
+    if (!t) {
+      setHasCachedSession(false)
+      return null
+    }
+
+    /* Used the cached session immediately. Waiting to ask the server first is
+       what made every boot flash the sign-in screen before the app appeared. */
+    token.current = t
+
+    try {
+      /* Validates and refreshes permissions against the server. A cached
+         snapshot is never trusted across a reconnect. */
+      await transport.me(t)
+      return t
+    } catch (e) {
+      /* Only an actual rejection ends the session. Being unable to ask is not
+         the same as being told no: this app exists to work with no signal, and
+         deleting the token because the dock wifi dropped logged staff out and
+         destroyed their offline unlock. An unreachable server leaves the cached
+         session alone - the permission snapshot already downgrades offline, and
+         capability checks fall back to canOffline. */
+      if (!e?.unauthorized) return t
+
+      try {
+        localStorage.removeItem(TOKEN_KEY)
+      } catch {
+        /* ignore */
+      }
+      token.current = null
+      setHasCachedSession(false)
+      return null
+    }
 
     try {
       /* Validates and refreshes permissions against the server. A cached

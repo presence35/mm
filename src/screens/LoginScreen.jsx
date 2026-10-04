@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, TextField, ListItem, Divider, Icon } from '../ui'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
+import { resolveRemembered, rememberEmployeeId } from '../engines/auth/session.js'
 import * as store from '../engines/store/localStore.js'
 
 /*
@@ -22,23 +23,12 @@ import * as store from '../engines/store/localStore.js'
  * no platform authenticator, which is the failure this app cannot afford.
  */
 
-const LAST_EMPLOYEE_KEY = 'mm.employee'
-
-const remembered = () => {
-  try {
-    const id = localStorage.getItem(LAST_EMPLOYEE_KEY)
-    return id ? store.listStaff().find((e) => e.id === id) ?? null : null
-  } catch {
-    return null
-  }
-}
-
 export default function LoginScreen() {
   const { setEmployee } = useAuth()
   const sync = useSync()
   const [staff, setStaff] = useState(() => store.listStaff())
-  const [chosen, setChosen] = useState(() => remembered())
-  const [picking, setPicking] = useState(() => !remembered())
+  const [chosen, setChosen] = useState(() => resolveRemembered())
+  const [picking, setPicking] = useState(() => !resolveRemembered())
   const [pin, setPin] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -64,15 +54,12 @@ export default function LoginScreen() {
   }
 
   const choose = (person) => {
+    /* Selection only. Who this device belongs to is decided on a successful
+       sign-in, so picking someone and backing out changes nothing. */
     setChosen(person)
     setPicking(false)
     setError(null)
     setPin('')
-    try {
-      localStorage.setItem(LAST_EMPLOYEE_KEY, person.id)
-    } catch {
-      /* private mode: they pick every time, which still works */
-    }
   }
 
   const submit = async () => {
@@ -97,8 +84,17 @@ export default function LoginScreen() {
     try {
       const employee = await sync.signIn(pin, chosen.id)
       setEmployee(employee)
+      /* Written here, and only here: the server is the authority on who this
+         token belongs to, and its id is what a reload restores. */
+      rememberEmployeeId(employee?.id ?? chosen.id)
     } catch (e) {
-      setError(e?.reason === 'invalid_credentials' ? 'That PIN did not work.' : 'Could not sign in. Try again.')
+      setError(
+        {
+          invalid_credentials: 'That PIN did not work.',
+          too_many_attempts: 'Too many attempts. Wait a few minutes and try again.',
+          invalid_employee: 'That account is not active.',
+        }[e?.reason] ?? 'Could not sign in. Try again.',
+      )
     } finally {
       setBusy(false)
     }
