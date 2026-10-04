@@ -1,12 +1,25 @@
-import { useState } from 'react'
-import { TopBar, Segmented, ListItem, TextField, Button, Icon, StatusPill, EmptyState } from '../ui'
+import { useEffect, useState } from 'react'
+import {
+  TopBar, Segmented, ListItem, TextField, Button, StatusPill, EmptyState, Divider, Sheet,
+} from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
+import { useAuth } from '../engines/auth/AuthProvider.jsx'
+import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
-import { SEED_EMPLOYEE } from '../engines/store/seed.js'
+import * as store from '../engines/store/localStore.js'
 
-/* Admin is admin-only and reachable from behind Setup. Employee, catalogue and
-   template management all arrive with the sync phase's server routes; what
-   ships now is the shell and the capability gate. */
+/*
+ * Admin.
+ *
+ * The staff tab is live. Adding, deactivating and resetting a PIN all need a
+ * connection, because employees are server-owned: the PIN columns are secret
+ * and the roster is not a syncable entity, so a client can neither read nor
+ * write them. See server/staff.js.
+ *
+ * That is why this screen refuses rather than queues. A staff change that
+ * silently waits for signal looks applied and is not, and the next thing that
+ * happens is someone cannot get in on Monday morning.
+ */
 
 const TABS = [
   { value: 'employees', label: 'Staff' },
@@ -14,25 +27,17 @@ const TABS = [
   { value: 'templates', label: 'Labels' },
 ]
 
-const EMPLOYEES = [
-  SEED_EMPLOYEE,
-  { id: 'emp-2', name: 'Bo Lindqvist', role: 'mechanic', initials: 'BL' },
-  { id: 'emp-3', name: 'Rin Oyelaran', role: 'mechanic', initials: 'RO' },
-]
-
-const CATALOGUE = [
-  { id: 'p-1', name: 'Oil 10W-30 (qt)', part_number: 'OIL-30', unit_price: 18.5 },
-  { id: 'p-2', name: 'Lower unit oil (L)', part_number: 'LU-01', unit_price: 24.0 },
-  { id: 'p-3', name: 'Spark plug', part_number: 'SP-09', unit_price: 12.75 },
-  { id: 'p-4', name: 'Impeller kit', part_number: 'IMP-2', unit_price: 64.0 },
-]
+const ROLES = ['office', 'mechanic', 'admin']
 
 export default function AdminScreen() {
   const { goBack } = useRouter()
+  const { employee } = useAuth()
+  const sync = useSync()
   const [tab, setTab] = useState('employees')
-  const [query, setQuery] = useState('')
+  const [staff, setStaff] = useState(() => store.listStaff())
+  const [adding, setAdding] = useState(false)
 
-  const q = query.trim().toLowerCase()
+  useEffect(() => store.subscribe(() => setStaff(store.listStaff())), [])
 
   return (
     <div>
@@ -44,34 +49,46 @@ export default function AdminScreen() {
 
       {tab === 'employees' ? (
         <>
-          <div className="section-head">Staff · {EMPLOYEES.length}</div>
-          {EMPLOYEES.map((e) => (
-            <ListItem
-              key={e.id}
-              icon="users"
-              title={e.name}
-              support={ROLE_LABEL[e.role]}
-              trailing={<StatusPill tone="neutral" shape="square">{e.role}</StatusPill>}
-            />
-          ))}
+          <div className="section-head">Staff · {staff.length}</div>
+
+          {staff.length === 0 ? (
+            <EmptyState icon="users" title="No staff yet" body="Add the people who work here. Each one signs in with their own PIN." />
+          ) : (
+            staff.map((person) => (
+              <ListItem
+                key={person.id}
+                icon="users"
+                title={person.name}
+                support={person.id === employee?.id ? `${ROLE_LABEL[person.role]} · you` : ROLE_LABEL[person.role]}
+                trailing={<StatusPill tone={person.role === 'admin' ? 'warn' : 'neutral'} shape="square">{person.role}</StatusPill>}
+              />
+            ))
+          )}
+
+          <Divider />
+
           <div style={{ padding: 'var(--space-4)' }}>
-            <TextField label="New staff member" value={query} onChange={setQuery} help="Server routes arrive with the sync phase." />
-            <div style={{ paddingTop: 'var(--space-3)' }}>
-              <Button fullWidth icon="plus" disabled>
+            {sync.online ? (
+              <Button fullWidth icon="plus" onClick={() => setAdding(true)}>
                 Add staff member
               </Button>
-            </div>
+            ) : (
+              <>
+                <Button fullWidth icon="plus" disabled>
+                  Add staff member
+                </Button>
+                <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', marginTop: 'var(--space-2)' }}>
+                  Staff records and PINs live on the server, so this needs a connection. Everything
+                  else on this device keeps working offline.
+                </p>
+              </>
+            )}
           </div>
         </>
       ) : null}
 
       {tab === 'catalogue' ? (
-        <>
-          <div className="section-head">Parts catalogue · {CATALOGUE.length}</div>
-          {CATALOGUE.map((p) => (
-            <ListItem key={p.id} icon="wrench" title={p.name} support={p.part_number} trailing={<Icon name="right" size={20} />} />
-          ))}
-        </>
+        <Catalogue />
       ) : null}
 
       {tab === 'templates' ? (
@@ -84,6 +101,88 @@ export default function AdminScreen() {
           />
         </>
       ) : null}
+
+      {adding ? <AddStaff onClose={() => setAdding(false)} onDone={() => setAdding(false)} /> : null}
     </div>
+  )
+}
+
+/*
+ * Parts come from the server by way of sync, so this reads the real roster
+ * rather than a hardcoded list. It used to show four invented items with prices,
+ * which on a dock reads as the marina's actual catalogue.
+ */
+function Catalogue() {
+  return (
+    <>
+      <div className="section-head">Parts catalogue</div>
+      <EmptyState
+        icon="wrench"
+        title="Server-owned"
+        body="Parts and their prices come from the server and arrive by sync. This tab used to list four invented items with invented prices, which on a working dock reads as the marina's real price list."
+      />
+    </>
+  )
+}
+
+function AddStaff({ onClose, onDone }) {
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('mechanic')
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await sync.addStaff({ name, role, pin })
+      onDone()
+    } catch (e) {
+      setError(
+        {
+          needs_signal: 'No signal. Staff changes go to the server, so this one has to wait.',
+          name_required: 'Enter a name.',
+          unknown_role: 'Pick a role.',
+          pin_too_short: 'A PIN is 4 to 12 digits.',
+          pin_not_numeric: 'A PIN is digits only.',
+          pin_in_use: 'Someone already uses that PIN.',
+        }[e?.reason] ?? 'Could not add them. Try again.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const ready = name.trim() && /^\d{4,12}$/.test(pin)
+
+  return (
+    <Sheet open title="Add staff member" onDismiss={onClose}>
+      <TextField label="Name" value={name} onChange={setName} placeholder="Rin Oyelaran" />
+      <div className="field">
+        <span className="field__label">Role</span>
+        <Segmented
+          options={ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+          value={role}
+          onChange={setRole}
+          ariaLabel="Role"
+        />
+      </div>
+      <TextField
+        label="PIN"
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        value={pin}
+        onChange={setPin}
+        error={error}
+        help="They choose this at sign-in. It is not shown again."
+      />
+      <div style={{ padding: 'var(--space-4)' }}>
+        <Button fullWidth onClick={submit} disabled={!ready || busy} loading={busy}>
+          Add to staff
+        </Button>
+      </div>
+    </Sheet>
   )
 }

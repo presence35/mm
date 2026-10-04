@@ -8,6 +8,7 @@ import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertP
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
 import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
+import { listStaff, createStaff, setStaffActive, resetPin, changeOwnPin } from './staff.js'
 import { T } from './entities.js'
 
 const upload = multer({
@@ -232,7 +233,16 @@ export async function createServer({ db, quiet = false } = {}) {
 
     const generic = () => res.status(404).json({ error: 'not_found' })
 
-    if (!/^[A-Za-z0-9_-]{16,64}$/.test(req.params.token)) return generic()
+    /* Eight characters is the floor, and it is set by the oldest real token rather
+     than by taste: the legacy app issued 8-character tokens ('VPrVMcbv') and
+     those cards exist. Requiring 16 meant every migrated card and every seeded
+     card returned 404 — the customer view had never worked for a single card,
+     which is why it looked unreachable rather than broken.
+
+     Unguessability is carried by the indistinguishable 404 below, not by the
+     length: base32 over 8 characters is ~40 bits, and a caller cannot tell a
+     miss from a wrong shape. New cards get 33-character tokens from newId(). */
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(req.params.token)) return generic()
 
     const card = await database.get(
       `SELECT c.id, c.boat_id, c.work_order_no, c.season_year, c.status, c.updated_at, c.is_fake
@@ -265,6 +275,80 @@ export async function createServer({ db, quiet = false } = {}) {
       updated_at: card.updated_at,
       fake: !!card.is_fake,
     })
+  })
+
+  /* Admin-only, declared next to authenticate so no route can reach an
+     admin action without it. */
+  function adminOnly(req, res, next) {
+    if (req.employee.role !== 'admin') {
+      res.status(403).json({ error: 'admin_only' })
+      return
+    }
+    next()
+  }
+
+  /* ---------------------------------------------------------------- staff */
+
+  /* Writes the employees row directly, never through sync: the PIN columns are
+     secret and employees is not a syncable entity. All of it needs a live
+     connection — see server/staff.js for why that is the right trade. */
+
+  app.get('/api/employees', authenticate, async (req, res) => {
+    res.json({ employees: await listStaff(database) })
+  })
+
+  app.post('/api/employees', authenticate, adminOnly, async (req, res) => {
+    const out = await createStaff(database, {
+      name: req.body?.name,
+      role: req.body?.role,
+      pin: req.body?.pin,
+      actorId: req.employee.employee_id,
+    })
+    if (!out.ok) {
+      res.status(out.status).json({ error: out.reason })
+      return
+    }
+    res.status(201).json(out)
+  })
+
+  app.post('/api/employees/:id/active', authenticate, adminOnly, async (req, res) => {
+    const out = await setStaffActive(database, {
+      id: req.params.id,
+      active: req.body?.active === true,
+      actorId: req.employee.employee_id,
+    })
+    if (!out.ok) {
+      res.status(out.status).json({ error: out.reason })
+      return
+    }
+    res.json(out)
+  })
+
+  app.post('/api/employees/:id/pin', authenticate, adminOnly, async (req, res) => {
+    const out = await resetPin(database, {
+      id: req.params.id,
+      pin: req.body?.pin,
+      actorId: req.employee.employee_id,
+    })
+    if (!out.ok) {
+      res.status(out.status).json({ error: out.reason })
+      return
+    }
+    res.json(out)
+  })
+
+  /* Available to anyone signed in, not just admins. Your own PIN is yours. */
+  app.post('/api/auth/pin', authenticate, async (req, res) => {
+    const out = await changeOwnPin(database, {
+      employeeId: req.employee.employee_id,
+      currentPin: req.body?.current_pin,
+      newPin: req.body?.new_pin,
+    })
+    if (!out.ok) {
+      res.status(out.status).json({ error: out.reason })
+      return
+    }
+    res.json({ ok: true })
   })
 
   /* ------------------------------------------------------------- version */

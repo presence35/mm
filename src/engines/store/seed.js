@@ -9,6 +9,19 @@
 
 export const SEED_EMPLOYEE = { id: 'emp-1', name: 'Dana Whitfield', role: 'office', initials: 'DW' }
 
+/*
+ * The roster a fresh install starts with.
+ *
+ * One person, and it is the same one the server seeds. Anything else is a name
+ * that does not exist there: picking them at sign-in fails, which reads as a
+ * broken app rather than a placeholder. The server's real roster replaces this
+ * on the first sync and everyone is offered from then on.
+ *
+ * It exists because the alternative is a sign-in picker with nobody in it, and
+ * you cannot sync until you have signed in.
+ */
+export const SEED_STAFF = [{ id: 'emp-admin', name: 'Admin', role: 'admin', initials: 'AD', active: 1 }]
+
 export const SEED_STORAGE_LAYOUT = {
   buildings: ['Metal 1', 'Metal 2', 'Metal 3', 'Metal 4'],
   boathouse_count: 8,

@@ -1,4 +1,4 @@
-import { ALL_TABLES, columnsFor, isKnown, T } from './entities.js'
+import { ALL_TABLES, syncColumnsFor, isKnown, T } from './entities.js'
 import { randomUUID } from 'node:crypto'
 
 /*
@@ -34,7 +34,9 @@ const ROLE_CAN_WRITE = {
 
 export function rowToPayload(entity, row) {
   const out = {}
-  for (const c of columnsFor(entity)) out[c] = normaliseRead(entity, c, row[c])
+  /* syncColumnsFor, not columnsFor: this is the function that decides what leaves
+     the server, so it is where a secret column stops. */
+  for (const c of syncColumnsFor(entity)) out[c] = normaliseRead(entity, c, row[c])
   return out
 }
 
@@ -114,7 +116,9 @@ async function applyOp(db, ctx) {
 
 async function applyUpsert(db, { deviceId, actorId, op }) {
   const spec = ALL_TABLES[op.entity]
-  const columns = columnsFor(op.entity)
+  /* Also the write side: a client cannot set a PIN by pushing a row, which would
+     otherwise be privilege escalation from any signed-in device. */
+  const columns = syncColumnsFor(op.entity)
   const existing = await db.get(`SELECT * FROM ${T(spec.table)} WHERE ${spec.pk} = ?`, [op.entity_id])
   const now = new Date().toISOString()
 

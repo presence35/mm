@@ -15,6 +15,7 @@ import { statusMeta, nextStatuses, progressPercent, CARD_STATUS } from '../../do
 import { locationSummary, STORAGE_TYPES } from '../../domain/storageLocation.js'
 import { SEED_RECEIVED_ITEMS, SEED_AUTHORIZED_WORK, SEED_CONDITIONS } from '../../engines/store/seed.js'
 import ConditionEditor, { summarise } from './ConditionEditor.jsx'
+import CustomerQrSheet from './CustomerQrSheet.jsx'
 import { ReceivedItems, AuthorizedWork, WrapControl } from './TaskList.jsx'
 import LogComposer, { LogList } from './LogComposer.jsx'
 import PhotoStrip from './PhotoStrip.jsx'
@@ -27,6 +28,7 @@ const RECEIVED_LABELS = Object.fromEntries(SEED_RECEIVED_ITEMS.map((k) => [k, k.
 export default function CardDetail({ record, embedded, selected, onBack, onDirtyChange, actions }) {
   const [statusSheet, setStatusSheet] = useState(false)
   const [conditionSheet, setConditionSheet] = useState(false)
+  const [qrSheet, setQrSheet] = useState(false)
 
   if (!record) {
     // Nothing chosen yet is not an error — it is the empty detail pane.
@@ -181,10 +183,20 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
             Invoice
           </Button>
         ) : null}
-        <Button variant="text" fullWidth icon="qr" onClick={actions.onCopyCustomerLink}>
+        <Button variant="text" fullWidth icon="qr" onClick={() => setQrSheet(true)}>
           Customer link
         </Button>
       </div>
+
+      <CustomerQrSheet
+        open={Boolean(qrSheet)}
+        url={actions.customerUrl}
+        name={customer?.name}
+        boatName={boat?.name ?? boat?.model}
+        workOrderNo={card.work_order_no}
+        onDismiss={() => setQrSheet(false)}
+        onCopy={actions.onCopyCustomerLink}
+      />
 
       <Sheet open={conditionSheet} title="Condition assessment" onDismiss={() => setConditionSheet(false)}>
         <ConditionEditor

@@ -22,10 +22,15 @@ export function configureTransport({ base }) {
 }
 
 export class TransportError extends Error {
-  constructor(message, { offline = false, unauthorized = false } = {}) {
+  constructor(message, { offline = false, unauthorized = false, reason = null, status = 0 } = {}) {
     super(message)
     this.offline = offline
     this.unauthorized = unauthorized
+    /* The server's machine-readable reason, so a screen can say something
+       specific instead of "something went wrong". Without this every caller's
+       error mapping was dead code. */
+    this.reason = reason
+    this.status = status
   }
 }
 
@@ -50,8 +55,21 @@ async function call(path, { method = 'GET', body, token, signal } = {}) {
     throw new TransportError(e.message, { offline: true })
   }
 
-  if (res.status === 401) throw new TransportError('unauthenticated', { unauthorized: true })
-  if (!res.ok) throw new TransportError(`${method} ${path} failed: ${res.status}`)
+  if (res.status === 401) {
+    const body = await res.json().catch(() => ({}))
+    throw new TransportError('unauthenticated', {
+      unauthorized: true,
+      status: 401,
+      reason: body?.error ?? null,
+    })
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new TransportError(`${method} ${path} failed: ${res.status}`, {
+      status: res.status,
+      reason: body?.error ?? null,
+    })
+  }
   return res.json()
 }
 
@@ -60,6 +78,32 @@ async function call(path, { method = 'GET', body, token, signal } = {}) {
 export async function login(pin, employeeId) {
   const { token, employee } = await call('/auth/login', { method: 'POST', body: { pin, employee_id: employeeId } })
   return { token, employee }
+}
+
+/* --------------------------------------------------------------- staff --
+ * Online only. Employees are server-owned: pin_salt and pin_hash are secret
+ * columns and the roster is not a syncable entity, so there is nothing to queue
+ * and nothing a client could usefully do offline. Callers must say so plainly
+ * rather than optimistically pretending the change is saved. */
+
+export async function listStaff(token) {
+  return call('/employees', { token })
+}
+
+export async function addStaff(token, { name, role, pin }) {
+  return call('/employees', { method: 'POST', token, body: { name, role, pin } })
+}
+
+export async function setStaffActive(token, id, active) {
+  return call(`/employees/${id}/active`, { method: 'POST', token, body: { active } })
+}
+
+export async function resetStaffPin(token, id, pin) {
+  return call(`/employees/${id}/pin`, { method: 'POST', token, body: { pin } })
+}
+
+export async function changeOwnPin(token, { currentPin, newPin }) {
+  return call('/auth/pin', { method: 'POST', token, body: { current_pin: currentPin, new_pin: newPin } })
 }
 
 export async function me(token) {

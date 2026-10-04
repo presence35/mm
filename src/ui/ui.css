@@ -406,6 +406,57 @@
   display: flex;
 }
 
+/* ------------------------------------------------------------------- qr -- */
+/* The customer's code. Black on white regardless of theme: a QR is read by a
+   camera, not by us, and inverting it to suit a dark UI makes it unscannable on
+   some readers. Everything around it is themed, the code itself is not. */
+.qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.qr__code {
+  width: min(280px, 78vw);
+  aspect-ratio: 1;
+  background: #fff;
+  border-radius: var(--corner-s);
+  padding: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr__code svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.qr__code--failed {
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.qr__meta {
+  font: var(--label-m);
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+
+/* Always shown. A phone camera failing to focus in salt spray is an ordinary
+   Tuesday, and a customer who can read the link aloud is not stuck. */
+.qr__url {
+  font: var(--body-s);
+  color: var(--on-surface-variant);
+  text-align: center;
+  word-break: break-all;
+  user-select: all;
+}
+
 /* ------------------------------------------------------------- TextField -- */
 
 .field {

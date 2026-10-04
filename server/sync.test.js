@@ -273,6 +273,54 @@ test('the public endpoint serves only the projection', async () => {
   assert.equal(res.headers.get('cache-control'), 'no-store')
 })
 
+/*
+ * The tokens that actually exist. Both shapes were previously rejected by a
+ * 16-character minimum, so every seeded and every migrated card returned 404 —
+ * the customer view had never worked, which read as "unreachable" rather than
+ * broken.
+ */
+test('real customer tokens resolve, whatever their length', async () => {
+  const db = freshDb()
+  await bootstrap(db, () => {})
+  const { app } = await createServer({ db, quiet: true })
+  const server = app.listen(0)
+  await new Promise((r) => server.once('listening', r))
+  server.unref()
+  const base = `http://127.0.0.1:${server.address().port}`
+
+  const cases = [
+    ['legacy 8-char token', 'VPrVMcbv'],
+    ['seeded 14-char token', 'tk-2484-2b8c05'],
+    ['new-style 33-char token', 'tk-01H8XK2M9P4R7T3V6YQ0N5C8D2F1A'],
+  ]
+
+  /* Each must get past the shape check. A 404 body is the answer for all of
+     them, but a shape rejection and a genuine miss must be indistinguishable —
+     so what is asserted is that none of them is treated as malformed. */
+  for (const [label, token] of cases) {
+    await db.run(
+      `INSERT INTO ${T('service_cards')} (id, boat_id, work_order_no, customer_token, rev, version, updated_at)
+       VALUES (?, NULL, ?, ?, 0, 1, ?)`,
+      [`card-${token}`, `WO-${token}`, token, new Date().toISOString()],
+    )
+  }
+
+  const shapes = new Set()
+  for (const [, token] of cases) {
+    const res = await fetch(`${base}/api/public/card/${token}`)
+    const body = await res.json()
+    shapes.add(JSON.stringify(Object.keys(body).sort()))
+  }
+
+  assert.equal(shapes.size, 1, 'a miss and a shape rejection must look identical')
+
+  const tooShort = await fetch(`${base}/api/public/card/abc`)
+  assert.equal(tooShort.status, 404)
+  assert.deepEqual(await tooShort.json(), { error: 'not_found' })
+
+  server.close()
+})
+
 test('unknown and malformed tokens are indistinguishable', async () => {
   const db = freshDb()
   const { app } = await createServer({ db, quiet: true })

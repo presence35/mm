@@ -133,6 +133,14 @@ export default function SetupScreen() {
 
       <div className="section-head">Account</div>
       <ListItem icon="users" title={employee.name} support={ROLE_LABEL[employee.role]} />
+      {/* Your own PIN, so it is not gated behind being an admin. */}
+      <ListItem
+        icon="pin"
+        title="Change my PIN"
+        support={sync.online ? 'Needs your current PIN' : 'Requires a network connection'}
+        onClick={() => navigate('change-pin')}
+        trailing={<Icon name="right" size={20} />}
+      />
       {may(CAPABILITIES.MANAGE_EMPLOYEES) ? (
         <ListItem
           icon="tune"

@@ -14,7 +14,7 @@
  */
 
 import * as idb from './idb.js'
-import { SEED_CARDS, SEED_BOATS, SEED_CUSTOMERS } from './seed.js'
+import { SEED_CARDS, SEED_BOATS, SEED_CUSTOMERS, SEED_STAFF } from './seed.js'
 
 const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customers' }
 
@@ -45,7 +45,7 @@ const childId = {
   invoice_items: (cardId, i) => `ii-${cardId}-${i}`,
 }
 
-let db = { cards: [], boats: [], customers: [], children: {} }
+let db = { cards: [], boats: [], customers: [], employees: [], children: {} }
 
 function emptyChildren() {
   return Object.fromEntries(CHILD_ENTITIES.map((e) => [e, []]))
@@ -79,13 +79,17 @@ export function hydrate() {
 
   hydratePromise = (async () => {
     try {
-      const [cards, boats, customers, ...childRows] = await Promise.all([
+      const [cards, boats, customers, employees, ...childRows] = await Promise.all([
         idb.all('service_cards'),
         idb.all('boats'),
         idb.all('customers'),
+        idb.getReference('employees'),
         ...CHILD_ENTITIES.map((e) => idb.all(e)),
       ])
       const children = Object.fromEntries(CHILD_ENTITIES.map((e, i) => [e, childRows[i]]))
+
+      /* Never empty: see below. */
+      const roster = employees.length ? employees : SEED_STAFF
 
       if (!cards.length && !customers.length) {
         /* Queued, not just stored. A brand-new server has nothing, so this
@@ -153,10 +157,11 @@ export function hydrate() {
           cards: SEED_CARDS.map(({ received_items, authorized_work, condition, logs, photos, ...c }) => ({ ...c, version: 0, local_pending: true })),
           boats: SEED_BOATS.map((b) => ({ ...b, version: 0, local_pending: true })),
           customers: SEED_CUSTOMERS.map((c) => ({ ...c, version: 0, local_pending: true })),
+          employees: roster.map((e) => ({ ...e, version: 0, local_pending: true })),
           children: seededChildren,
         }
       } else {
-        db = { cards, boats, customers, children }
+        db = { cards, boats, customers, employees: roster, children }
       }
     } catch (e) {
       /* Storage is unavailable — private mode, or a browser that refuses. Say
@@ -167,6 +172,7 @@ export function hydrate() {
         cards: SEED_CARDS,
         boats: SEED_BOATS,
         customers: SEED_CUSTOMERS,
+        employees: SEED_STAFF,
         children: emptyChildren(),
       }
     }
@@ -251,6 +257,13 @@ function withChildren(card) {
 
 export function listCustomers() {
   return db.customers
+}
+
+/* Active staff, in the order they should be offered at sign-in. Deactivated
+     accounts are excluded here rather than at the call sites, so no screen can
+     forget. */
+export function listStaff() {
+  return db.employees.filter((e) => Number(e.active) === 1 && !e.deleted_at)
 }
 
 export function getCustomer(id) {

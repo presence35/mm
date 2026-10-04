@@ -124,6 +124,13 @@ export const REFERENCE = {
     /* Explicit allow-list. pin_salt and pin_hash stay on the server — the
        same discipline as the public card endpoint. */
     expose: ['id', 'name', 'role', 'initials', 'active'],
+    /* Columns that exist on the server and must never travel. Two jobs, not
+       one: the public endpoint's `expose` covers /api/public, and this covers
+       sync. Without it the generic payload writer put pin_hash into change_log,
+       which is precisely what gets pushed to every phone and written to
+       IndexedDB — where a 4-digit PIN plus its salt is a 10,000-candidate
+       brute force away from every credential on the island. */
+    secret: ['pin_salt', 'pin_hash'],
   },
 }
 
@@ -149,13 +156,31 @@ export const ALL_TABLES = { ...ENTITIES, ...REFERENCE }
 export const PREFIX = process.env.DB_PREFIX ?? 'mm_'
 
 export const T = (name) => `${PREFIX}${name}`
+/* Every column, including secret ones. For server-side writes only: the legacy
+   import carries real PIN hashes and they have to land somewhere.
 
-/* Includes the primary key: an insert without it silently produces a row with
+   Includes the primary key: an insert without it silently produces a row with
    a NULL id, which then cannot be read back. */
 export function columnsFor(entity) {
   const spec = ALL_TABLES[entity]
   if (!spec) throw new Error(`Unknown entity: ${entity}`)
   return [spec.pk, ...spec.columns.filter((c) => c !== spec.pk), ...META]
+}
+
+/*
+ * What the sync engine is allowed to touch.
+ *
+ * This is the only list applyUpsert and rowToPayload use, which is what makes
+ * it the right place to stop credentials: a secret column cannot be written by
+ * a client, cannot be echoed back inside a conflict, and cannot be logged.
+ *
+ * Setting a PIN therefore cannot go through sync at all - it needs a dedicated
+ * authenticated route that writes the row directly. That is the intent, not a
+ * limitation to work around.
+ */
+export function syncColumnsFor(entity) {
+  const secret = new Set(ALL_TABLES[entity]?.secret ?? [])
+  return columnsFor(entity).filter((c) => !secret.has(c))
 }
 
 export function isKnown(entity) {

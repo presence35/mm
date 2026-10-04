@@ -302,6 +302,53 @@ export function SyncProvider({ children }) {
     [ensureSession],
   )
 
+  /*
+   * Staff and credentials. Online only — the roster is server-owned and the PIN
+   * columns are secret, so there is nothing to queue. Each one refuses loudly
+   * when offline rather than reporting a success that never happened.
+   */
+  const requireSignal = () => {
+    if (token.current) return null
+    /* Carries `reason` like a TransportError does, so a screen's error mapping
+       can actually match it. A bare Error made every mapping dead code. */
+    const err = new Error('needs_signal')
+    err.reason = 'needs_signal'
+    err.offline = true
+    return err
+  }
+
+  const addStaff = useCallback(async (fields) => {
+    const problem = requireSignal()
+    if (problem) throw problem
+    const out = await transport.addStaff(token.current, fields)
+    /* Pull so the roster on this device reflects the change immediately rather
+       than at the next cycle. */
+    setState('syncing')
+    return out
+  }, [])
+
+  const setStaffActive = useCallback(async (id, active) => {
+    const problem = requireSignal()
+    if (problem) throw problem
+    const out = await transport.setStaffActive(token.current, id, active)
+    setState('syncing')
+    return out
+  }, [])
+
+  const resetStaffPin = useCallback(async (id, pin) => {
+    const problem = requireSignal()
+    if (problem) throw problem
+    const out = await transport.resetStaffPin(token.current, id, pin)
+    setState('syncing')
+    return out
+  }, [])
+
+  const changeOwnPin = useCallback(async ({ currentPin, newPin }) => {
+    const problem = requireSignal()
+    if (problem) throw problem
+    return transport.changeOwnPin(token.current, { currentPin, newPin })
+  }, [])
+
   const value = useMemo(
     () => ({
       state,
@@ -316,6 +363,10 @@ export function SyncProvider({ children }) {
       signIn,
       signOut,
       resolve,
+      addStaff,
+      setStaffActive,
+      resetStaffPin,
+      changeOwnPin,
       retry: () => {
         attempts.current = 0
         lastAttempt.current = 0
@@ -323,7 +374,7 @@ export function SyncProvider({ children }) {
       },
       syncNow: () => setState('syncing'),
     }),
-    [state, pending, conflicts, lastSyncedAt, online, forceOffline, hasCachedSession, failure, signIn, signOut, resolve],
+    [state, pending, conflicts, lastSyncedAt, online, forceOffline, hasCachedSession, failure, signIn, signOut, resolve, addStaff, setStaffActive, resetStaffPin, changeOwnPin],
   )
 
   return <SyncCtx.Provider value={value}>{children}</SyncCtx.Provider>

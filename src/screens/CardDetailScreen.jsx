@@ -23,17 +23,19 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
     navigate('invoice', { id: params.id })
   }, [may, refuseReason, navigate, params.id])
 
+  const customerUrl = api.record?.card?.customer_token
+    ? `${window.location.origin}/?wo=${encodeURIComponent(api.record.card.customer_token)}`
+    : null
+
   const copyCustomerLink = useCallback(async () => {
-    const token = api.record?.card?.customer_token
-    if (!token) return
-    const url = `${window.location.origin}/?wo=${encodeURIComponent(token)}`
+    if (!customerUrl) return
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(customerUrl)
       setToast('Customer link copied')
     } catch {
-      setToast(url)
+      setToast(customerUrl)
     }
-  }, [api.record])
+  }, [customerUrl])
 
   return (
     <>
@@ -55,6 +57,7 @@ export default function CardDetailScreen({ params = {}, embedded = false, select
           onRetryUpload: () => sync.syncNow(),
           onOpenInvoice: openInvoice,
           onCopyCustomerLink: copyCustomerLink,
+          customerUrl,
           conflictedIds: conflicts.filter((c) => c.entity_id === params.id).map((c) => c.entity_id),
           onResolveConflicts: () => navigate('conflicts'),
         }}
