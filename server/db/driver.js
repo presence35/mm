@@ -38,6 +38,66 @@ export function sqliteDriver(file) {
   }
 }
 
+/*
+ * Splits a SQL script into individual statements.
+ *
+ * Quote-aware, because a semicolon inside a string literal or a backticked
+ * identifier is not a statement boundary. Getting that wrong would hand MySQL
+ * half a statement, which fails loudly rather than silently — but a schema that
+ * will not build is not a thing to discover from a deploy log twice.
+ *
+ * MySQL does not use backslash escapes unless NO_BACKSLASH_ESCAPES is off, which
+ * it is by default, so both forms are handled: '' doubling and \\'.
+ */
+export function splitStatements(sql) {
+  const out = []
+  let cur = ''
+  let quote = null
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]
+
+    if (quote) {
+      cur += ch
+      if (ch === '\\' && quote !== '`') {
+        /* An escaped character: take the next one verbatim and keep going. */
+        if (i + 1 < sql.length) {
+          cur += sql[i + 1]
+          i++
+        }
+        continue
+      }
+      if (ch === quote) {
+        /* A doubled quote is a literal quote, not the end of the string. */
+        if (sql[i + 1] === quote) {
+          cur += sql[i + 1]
+          i++
+          continue
+        }
+        quote = null
+      }
+      continue
+    }
+
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+      cur += ch
+      continue
+    }
+
+    if (ch === ';') {
+      if (cur.trim()) out.push(cur.trim())
+      cur = ''
+      continue
+    }
+
+    cur += ch
+  }
+
+  if (cur.trim()) out.push(cur.trim())
+  return out
+}
+
 export function mysqlDriver(config) {
   const pool = mysql.createPool({
     ...config,
@@ -69,8 +129,28 @@ export function mysqlDriver(config) {
       const [r] = await wrap((c) => c.query(toMySQL(sql), params))
       return { changes: r.affectedRows, lastId: r.insertId }
     },
+    /*
+     * MySQL sends one statement per query unless multipleStatements is on, and
+     * turning it on would let a single injected parameter run arbitrary extra
+     * statements. SQLite's exec takes the whole script happily; this is the
+     * dialect difference the driver exists to absorb, so the split lives here
+     * rather than in every caller.
+     */
     async exec(sql) {
-      await wrap((c) => c.query(toMySQL(sql)))
+      const statements = splitStatements(toMySQL(sql))
+      await wrap(async (c) => {
+        for (const statement of statements) {
+          try {
+            await c.query(statement)
+          } catch (e) {
+            /* MySQL has no CREATE INDEX IF NOT EXISTS, and DDL is not
+               transactional, so a half-applied schema is the normal state to
+               retry from. A duplicate index is the schema already being right. */
+            if (e?.errno === 1061 || e?.code === 'ER_DUP_KEYNAME') continue
+            throw e
+          }
+        }
+      })
     },
     async tx(fn) {
       const conn = await pool.getConnection()
