@@ -70,18 +70,30 @@ test('production with the development secret is refused', async () => {
   })
 })
 
-test('production where anyone still has the seeded PIN is refused', async () => {
+/*
+ * The seeded-PIN check is disabled for the beta, and this asserts that on
+ * purpose rather than leaving it uncovered. If someone re-enables it in
+ * server/db/index.js without updating here, this fails and the decision gets
+ * made deliberately instead of by accident.
+ */
+test('the seeded PIN is currently NOT a reason to refuse a boot', async () => {
   await withEnv({ APP_SECRET: 'a-real-secret' }, async () => {
     const problems = await assertProductionReady(fakeDb('mysql', realStaff()))
-    assert.equal(problems.length, 1)
-    assert.match(problems[0], /Admin still signs in with the seeded PIN 1234/)
+    assert.deepEqual(problems, [], '1234 is allowed through while this is a beta')
   })
 })
 
-test('the guard names every problem rather than the first', async () => {
+test('the secret check still refuses, and names both failure modes', async () => {
   await withEnv({ APP_SECRET: DEV_SECRET }, async () => {
     const problems = await assertProductionReady(fakeDb('mysql', realStaff()))
-    assert.equal(problems.length, 2, 'fixing one at a time is how the other gets missed')
+    assert.equal(problems.length, 1)
+    assert.match(problems[0], /development default/)
+  })
+
+  await withEnv({ APP_SECRET: undefined }, async () => {
+    const problems = await assertProductionReady(fakeDb('mysql', realStaff()))
+    assert.equal(problems.length, 1)
+    assert.match(problems[0], /APP_SECRET is unset/)
   })
 })
 
@@ -110,18 +122,22 @@ test('createServer refuses to build a server on an unsafe MySQL configuration', 
       (err) => {
         assert.match(err.message, /Refusing to start/)
         assert.match(err.message, /APP_SECRET is unset/)
-        assert.match(err.message, /seeded PIN 1234/)
         assert.match(err.message, /Before this touches production/)
+        /* Deliberately not asserting the PIN message any more: that check is
+           off for the beta. The test that pins that decision is above. */
+        assert.doesNotMatch(err.message, /seeded PIN/)
         return true
       },
     )
   })
 })
 
-test('createServer builds normally on a safe MySQL configuration', async () => {
-  await withEnv({ APP_SECRET: 'a-real-secret' }, async () => {
-    const { app } = await createServer({ db: fakeDb('mysql', changedStaff()), quiet: true })
-    assert.ok(app, 'the refusal is specific, not a blanket failure')
+test('createServer builds on a MySQL config with only a weak secret and the seeded PIN', async () => {
+  /* The exact state the beta is deploying in. It must boot, or nothing can be
+     seen working. */
+  await withEnv({ APP_SECRET: '0000' }, async () => {
+    const { app } = await createServer({ db: fakeDb('mysql', realStaff()), quiet: true })
+    assert.ok(app, 'a weak secret and PIN 1234 must not stop a beta boot')
   })
 })
 

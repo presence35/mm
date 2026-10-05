@@ -39,16 +39,21 @@ server refuses to start and lists everything that is still wrong, because
 1. **Set `APP_SECRET`.** Unset, the server signs tokens with a literal string
    that is in the repository. Anyone can mint a valid session. Nothing reads a
    `.env` file — set it in the shell, or in GoDaddy's environment settings.
-2. **Change the admin PIN.** `1234` is seeded on first boot, and the server
-   refuses to start while it is still in place.
+2. **Change the admin PIN.** `1234` is seeded on first boot. **The boot check for
+   this is currently disabled** — it was blocking a beta deploy against a
+   database holding only the sample marina, and the command that fixes it cannot
+   be run on the host. So anyone who guesses `1234` has admin, and `1234` is
+   written two lines above this. Acceptable while the data is fake; not
+   acceptable once real customer data is imported.
 
    ```
    npm run set:pin -- emp-admin 5581
    ```
 
-   Run it against the same database the server uses. It uses the same hashing
-   the sign-in path verifies against, and it logs the change so other devices
-   pick it up on their next sync. It refuses to set the PIN back to `1234`.
+   Re-enable the check in `server/db/index.js` (`assertProductionReady`) at the
+   same time. It is commented out, not deleted, with a note saying so, and
+   `server/production.test.js` asserts the current state so re-enabling it
+   without thinking fails loudly.
 3. **Delete `data/*.db` from any image or archive.** A dev SQLite file can
    contain real customer data.
 

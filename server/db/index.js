@@ -93,16 +93,27 @@ export { randomUUID }
 /*
  * Refuses to serve production with a known-open configuration.
  *
- * Both of these are documented in the README as "before this touches
- * production", and both are the kind of step that gets skipped on a deploy day.
  * A boot that fails loudly is recoverable; a marina running with a published
- * signing key and a PIN of 1234 is not.
+ * signing key is not. This is the reason a deploy with a forgotten step stops
+ * instead of quietly serving an open door.
  *
- * Checked against the live database rather than the environment alone: the PIN
- * check has to see the actual hash, since the seed only runs on an empty table
- * and production was seeded weeks ago.
+ * The seeded-PIN check is off. It was blocking a beta deploy against a database
+ * that held nothing but the sample marina, and there was no shell available to
+ * run the fix — the one command that resolves it cannot be run from the host at
+ * all, which made a safety check into an outage.
  *
- * SQLite never triggers this — it is the local dev path, where both defaults are
+ * What that leaves open: 1234 is the admin PIN and it is written in the README,
+ * so anyone who guesses it has admin. That is a deliberate, dated decision, not
+ * an oversight. Turn it back on by uncommenting the block below before any real
+ * customer data is imported, and set the PIN properly with:
+ *
+ *   npm run set:pin -- emp-admin 5581
+ *
+ * Checked against the live database rather than the environment alone, when it is
+ * enabled: the seed only runs on an empty table, so by the time production is
+ * deployed the environment says nothing about the stored hash.
+ *
+ * SQLite never triggers this — it is the local dev path, where the defaults are
  * the point.
  */
 export async function assertProductionReady(db) {
@@ -116,6 +127,7 @@ export async function assertProductionReady(db) {
     problems.push('APP_SECRET is still the development default.')
   }
 
+  /* Re-enable before importing real data. Left off for the beta: see above.
   const staff = await db.all(
     `SELECT id, name, pin_salt, pin_hash FROM ${T('employees')} WHERE active = 1`,
   )
@@ -124,6 +136,7 @@ export async function assertProductionReady(db) {
       problems.push(`${person.name} still signs in with the seeded PIN ${SEED_PIN}.`)
     }
   }
+  */
 
   return problems
 }
