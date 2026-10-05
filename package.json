@@ -14,7 +14,8 @@
     "test:client": "node --test server/client-sync.test.js",
     "test": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js",
     "import:legacy": "node server/legacy/import.js",
-    "inspect:legacy": "node server/legacy/inspect-db.js"
+    "inspect:legacy": "node server/legacy/inspect-db.js",
+    "set:pin": "node server/set-pin.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
