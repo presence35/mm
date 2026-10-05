@@ -185,6 +185,91 @@ test('a long value still fits in a key column', async () => {
   await db.close?.()
 })
 
+/*
+ * MySQL's rules about TEXT, checked together.
+ *
+ * Three deploys in a row failed on a different one of these, each found by
+ * reading a log rather than by knowing the rules. They are known now, so they are
+ * asserted together: an unbounded TEXT column cannot be indexed, cannot carry a
+ * DEFAULT, and cannot be UNIQUE. Anything "long" belongs in TEXT; anything with
+ * any of those three properties must say how long it is.
+ *
+ * Deliberately a rules list rather than a per-column fix, because the next
+ * failure was always going to be a column nobody thought about.
+ */
+/*
+ * The rule engine, so the check and its own falsification run the same code.
+ *
+ * The first version of this test reimplemented the rule inline to prove the rule
+ * worked, which proves nothing about the rule — it proves the copy works. Both
+ * tests call this.
+ */
+function textRuleViolations(statements) {
+  const found = { indexed: [], defaulted: [], unique: [] }
+
+  const columnsOf = (table) =>
+    statements
+      .find((s) => new RegExp(`EXISTS\\s+${table}\\b`).test(s))
+      ?.split('\n')
+      .map((line) => line.match(/^\s*(\w+)\s+([A-Z]+(?:\(\d+\))?)\b(.*)$/i))
+      .filter(Boolean)
+      .filter(([, column]) => !/^(PRIMARY|UNIQUE|FOREIGN|KEY|CONSTRAINT)$/i.test(column)) ?? []
+
+  for (const statement of statements) {
+    if (/^CREATE TABLE/i.test(statement)) {
+      const table = statement.match(/EXISTS\s+(\w+)/)?.[1] ?? 'unknown'
+      for (const [, column, type, rest] of columnsOf(table)) {
+        if (!/^TEXT$/i.test(type)) continue
+        if (/DEFAULT/i.test(rest)) found.defaulted.push(`${table}.${column}`)
+        if (/UNIQUE/i.test(rest)) found.unique.push(`${table}.${column}`)
+      }
+    }
+
+    if (/^CREATE INDEX/i.test(statement)) {
+      const on = statement.match(/ON\s+(\w+)\s*\(([^)]*)\)/i)
+      if (!on) continue
+      const declared = new Map(columnsOf(on[1]).map(([, c, t]) => [c, t]))
+      for (const column of on[2].split(',').map((c) => c.trim())) {
+        if (/^TEXT$/i.test(declared.get(column) ?? '')) found.indexed.push(`${on[1]}.${column}`)
+      }
+    }
+  }
+
+  return found
+}
+
+test('no MySQL column breaks the TEXT rules', () => {
+  const found = textRuleViolations(splitStatements(dialectDDL('mysql', FULL_DDL)))
+  assert.deepEqual(found.defaulted, [], 'a TEXT column cannot carry a DEFAULT')
+  assert.deepEqual(found.unique, [], 'a TEXT column cannot be UNIQUE')
+  assert.deepEqual(found.indexed, [], 'a TEXT column cannot be indexed')
+})
+
+test('the rule engine actually fires on each mistake', () => {
+  /* Multi-line, shaped like the generated DDL, because that is what the engine
+     parses — a one-line fixture would fail for the wrong reason. */
+  const table = (columnLine) => splitStatements(`CREATE TABLE IF NOT EXISTS mm_t (\n  a VARCHAR(255) PRIMARY KEY,\n${columnLine}\n);`)
+
+  assert.deepEqual(
+    textRuleViolations(table(`  s TEXT NOT NULL DEFAULT 'open',`)).defaulted,
+    ['mm_t.s'],
+    'a DEFAULT on TEXT must be caught',
+  )
+  assert.deepEqual(textRuleViolations(table('  s TEXT UNIQUE,')).unique, ['mm_t.s'], 'a UNIQUE TEXT must be caught')
+
+  const indexed = splitStatements(
+    'CREATE TABLE IF NOT EXISTS mm_t (\n  a VARCHAR(255) PRIMARY KEY,\n  s TEXT\n);\nCREATE INDEX mm_i ON mm_t(s);',
+  )
+  assert.deepEqual(textRuleViolations(indexed).indexed, ['mm_t.s'], 'an indexed TEXT must be caught')
+
+  /* And it stays quiet on the healthy form, or it would be noise. */
+  assert.deepEqual(textRuleViolations(table('  s VARCHAR(255) NOT NULL DEFAULT \'open\',')), {
+    indexed: [],
+    defaulted: [],
+    unique: [],
+  })
+})
+
 test('the MySQL driver refuses to be constructed without a host', () => {
   /* Not a connection test — there is no MySQL to connect to. It asserts the
      driver is reachable and shaped like the other one, so the two stay

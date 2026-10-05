@@ -124,7 +124,10 @@ CREATE TABLE IF NOT EXISTS ${T('card_conflicts')} (
   server_payload   TEXT NOT NULL,
   local_rev        INTEGER NOT NULL,
   server_version   INTEGER NOT NULL,
-  status           TEXT NOT NULL DEFAULT 'open',
+  /* VARCHAR, not TEXT: MySQL refuses a DEFAULT on a TEXT column. The default is
+     what makes an unrouted conflict open rather than invisible, so the type
+     gives way, not the default. */
+  status           VARCHAR(255) NOT NULL DEFAULT 'open',
   resolution       TEXT,
   resolved_payload TEXT,
   detected_at      TEXT NOT NULL,
