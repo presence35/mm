@@ -17,3 +17,5 @@ uploads/
 data/uploads/
 data/vite.log
 data/*.txt
+data/*.log
+data/*.err

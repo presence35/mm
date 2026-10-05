@@ -21,8 +21,9 @@ same change, never let the two drift.
 
 ```
 npm install
-npm run server          # API on :3000, SQLite in ./data/marina.db
-npm run dev             # app on :5173, proxies /api to :3000
+npm run dev             # node server/main.js — API and app on :3000
+npm run dev:vite        # Vite on :5173, proxies /api to :3000 (needs dev above too)
+npm run server          # same as dev; kept as an explicit alias
 npm test                # 25 protocol + integration tests
 ```
 
@@ -59,7 +60,13 @@ produces plausible data instead of an error.
 
 ## Deploying to GoDaddy
 
-GoDaddy auto-builds and does **not** go live from a preview. The full sequence:
+GoDaddy auto-builds and does **not** go live from a preview.
+
+`dev` and `start` both run `node server/main.js`, and Vite is `dev:vite`. The host
+picks one of `start`/`dev` and must get the Node server — when `dev` was Vite,
+GoDaddy tried to bind 5173 and the deploy failed with `EACCES`.
+
+The full sequence:
 
 1. **Pull to Preview** — GoDaddy pulls the repo and builds the preview.
 2. **Publish to Live** — promote the preview.
