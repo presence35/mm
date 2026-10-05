@@ -95,6 +95,96 @@ test('the SQLite driver is unaffected by the split', async () => {
   await db.close?.()
 })
 
+/*
+ * MySQL will not index an unbounded TEXT column. It rejects the table outright
+ * with ER_WRONG_KEY_SPECIFICATION, so this is not a warning — the schema does not
+ * build.
+ *
+ * Asserted by parsing the generated DDL rather than grepping it, because a regex
+ * over a statement chunk matched a comment last time and reported a failure that
+ * was not there. A guard that cries wolf is worse than no guard.
+ */
+test('no key or index names an unbounded TEXT column, in either dialect', () => {
+  for (const dialect of ['sqlite', 'mysql']) {
+    const statements = splitStatements(dialectDDL(dialect, FULL_DDL))
+
+    /* Column name to declared type, for every table. */
+    const types = new Map()
+    const primaryKeys = []
+
+    for (const statement of statements) {
+      if (!/^CREATE TABLE/i.test(statement)) continue
+      const table = statement.match(/EXISTS\s+(\w+)/)?.[1] ?? 'unknown'
+
+      for (const line of statement.split('\n')) {
+        const inline = line.match(/^\s*(\w+)\s+([A-Z]+(?:\(\d+\))?)(.*)$/i)
+        if (!inline) continue
+        const [, column, type, rest] = inline
+        if (/^(PRIMARY|UNIQUE|FOREIGN|KEY|CONSTRAINT)$/i.test(column)) continue
+        types.set(`${table}.${column}`, type.toUpperCase())
+        if (/PRIMARY KEY/i.test(rest)) primaryKeys.push({ table, columns: [column], label: line.trim() })
+      }
+
+      /* A table-level PRIMARY KEY (a, b) names columns declared above it. */
+      const composite = statement.match(/PRIMARY KEY\s*\(([^)]*)\)/i)
+      if (composite) {
+        const columns = composite[1].split(',').map((c) => c.trim())
+        if (!primaryKeys.some((p) => p.table === table && p.columns.length === columns.length)) {
+          primaryKeys.push({ table, columns, label: `PRIMARY KEY (${composite[1]})` })
+        }
+      }
+    }
+
+    for (const { table, columns, label } of primaryKeys) {
+      for (const column of columns) {
+        assert.notEqual(types.get(`${table}.${column}`), 'TEXT', `${dialect}: ${table}.${column} is a TEXT primary key (${label})`)
+      }
+    }
+
+    for (const statement of statements.filter((s) => /^CREATE INDEX/i.test(s))) {
+      const on = statement.match(/ON\s+(\w+)\s*\(([^)]*)\)/i)
+      assert.ok(on, `could not read the index target: ${statement}`)
+      for (const column of on[2].split(',').map((c) => c.trim())) {
+        assert.notEqual(types.get(`${on[1]}.${column}`), 'TEXT', `${dialect}: ${on[1]}.${column} is indexed but unbounded`)
+      }
+    }
+  }
+})
+
+test('the bounded key type still behaves as text in SQLite', async () => {
+  /* VARCHAR(255) is deliberate: SQLite accepts it and gives it TEXT affinity, so
+     one declaration serves both engines. If that stopped being true the schema
+     would need a dialect rewrite again, which is what let this reach a deploy. */
+  const db = sqliteDriver(':memory:')
+  await db.exec(dialectDDL('sqlite', FULL_DDL))
+
+  await db.run(`INSERT INTO ${T('customers')} (id, name, updated_at, rev, version) VALUES (?, ?, ?, 0, 1)`, [
+    'a-26-character-ulid-value',
+    'Marcus Reyes',
+    new Date().toISOString(),
+  ])
+  const row = await db.get(`SELECT id, name FROM ${T('customers')} WHERE id = ?`, ['a-26-character-ulid-value'])
+  assert.equal(row.name, 'Marcus Reyes', 'a bounded key still stores and matches text')
+  await db.close?.()
+})
+
+test('a long value still fits in a key column', async () => {
+  const db = sqliteDriver(':memory:')
+  await db.exec(dialectDDL('sqlite', FULL_DDL))
+
+  /* 64 characters: the longest token the public endpoint accepts. Well inside
+     255, and the point is that the bound is not the old 26-character id. */
+  const long = 't'.repeat(64)
+  await db.run(`INSERT INTO ${T('customers')} (id, name, updated_at, rev, version) VALUES (?, ?, ?, 0, 1)`, [
+    long,
+    'x',
+    new Date().toISOString(),
+  ])
+  const row = await db.get(`SELECT id FROM ${T('customers')} WHERE id = ?`, [long])
+  assert.equal(row.id, long)
+  await db.close?.()
+})
+
 test('the MySQL driver refuses to be constructed without a host', () => {
   /* Not a connection test — there is no MySQL to connect to. It asserts the
      driver is reachable and shaped like the other one, so the two stay

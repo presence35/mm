@@ -26,9 +26,26 @@ const META_DDL = `
    type, and the wrong affinity is what produced the "3.0" readings. */
 export const REBUILD_IF_TYPE_WRONG = ['boathouse_no', 'slip_no', 'storage_row', 'season_year']
 
+/*
+ * The type for a column that may end up in a key or an index.
+ *
+ * Bounded on purpose, and bounded in the source rather than corrected afterwards
+ * by a dialect rewrite. MySQL refuses to index a TEXT column without a key
+ * length (ER_WRONG_KEY_SPECIFICATION), so every primary key and every indexed
+ * column has to say how long it is.
+ *
+ * SQLite accepts VARCHAR(255) and gives it TEXT affinity, so one declaration
+ * serves both engines and the schema stops needing to be rewritten per dialect —
+ * which is the arrangement that let this reach a deploy unnoticed.
+ *
+ * 255 is far above what any id here needs: ULIDs are 26 characters, a UUID is
+ * 36, a customer token is 33.
+ */
+const KEY_TEXT = 'VARCHAR(255)'
+
 function columnDdl(name) {
   const n = name.toLowerCase()
-  if (n === 'id') return '  id           TEXT PRIMARY KEY'
+  if (n === 'id') return `  id           ${KEY_TEXT} PRIMARY KEY`
   if (n.endsWith('_at') || n === 'log_date' || n === 'date_in' || n === 'date_out' || n === 'changed_at' || n === 'completed_at')
     return `  ${name.padEnd(12)} TEXT`
   if (['created_by', 'completed_by', 'employee_id', 'uploaded_by', 'assigned_by', 'customer_id', 'boat_id', 'card_id', 'work_log_id'].includes(n))
@@ -56,13 +73,23 @@ export function domainDdl() {
   return out.join('\n\n')
 }
 
-/* SQLite and MySQL both accept this verbatim. */
+/*
+ * SQLite and MySQL both accept this verbatim.
+ *
+ * Every column that is a key, or that an index names, is VARCHAR(255) rather
+ * than TEXT. MySQL will not index an unbounded TEXT column, and two of these
+ * were easy to miss: login_attempts declares its primary key separately from the
+ * columns, and the index on change_log names entity and entity_id rather than
+ * declaring them. Both are bounded now, and driver.test.js asserts the property
+ * rather than trusting that nobody adds another one.
+ */
 export const SYNC_DDL = `
 CREATE TABLE IF NOT EXISTS ${T('change_log')} (
   seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   op_id      TEXT NOT NULL,
-  entity     TEXT NOT NULL,
-  entity_id  TEXT NOT NULL,
+  /* Both are indexed below, so both must be bounded. */
+  entity     VARCHAR(255) NOT NULL,
+  entity_id  VARCHAR(255) NOT NULL,
   op         TEXT NOT NULL,
   version    INTEGER NOT NULL,
   payload    TEXT,
@@ -74,13 +101,13 @@ CREATE TABLE IF NOT EXISTS ${T('change_log')} (
 CREATE INDEX IF NOT EXISTS ${T('idx_change_entity')} ON ${T('change_log')}(entity, entity_id);
 
 CREATE TABLE IF NOT EXISTS ${T('sync_ops')} (
-  op_id      TEXT PRIMARY KEY,
+  op_id      VARCHAR(255) PRIMARY KEY,
   result     TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ${T('sync_devices')} (
-  device_id    TEXT PRIMARY KEY,
+  device_id    VARCHAR(255) PRIMARY KEY,
   label        TEXT NOT NULL,
   platform     TEXT NOT NULL,
   employee_id  TEXT NOT NULL,
@@ -90,7 +117,7 @@ CREATE TABLE IF NOT EXISTS ${T('sync_devices')} (
 );
 
 CREATE TABLE IF NOT EXISTS ${T('card_conflicts')} (
-  id               TEXT PRIMARY KEY,
+  id               VARCHAR(255) PRIMARY KEY,
   entity           TEXT NOT NULL,
   entity_id        TEXT NOT NULL,
   local_payload    TEXT NOT NULL,
@@ -106,15 +133,15 @@ CREATE TABLE IF NOT EXISTS ${T('card_conflicts')} (
 );
 
 CREATE TABLE IF NOT EXISTS ${T('sessions')} (
-  token      TEXT PRIMARY KEY,
+  token      VARCHAR(255) PRIMARY KEY,
   employee_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ${T('login_attempts')} (
-  employee_id TEXT NOT NULL,
-  source      TEXT NOT NULL,
+  employee_id VARCHAR(255) NOT NULL,
+  source      VARCHAR(255) NOT NULL,
   count       INTEGER NOT NULL DEFAULT 0,
   last_at     TEXT NOT NULL,
   PRIMARY KEY (employee_id, source)
