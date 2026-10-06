@@ -4,12 +4,12 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createServer } from './index.js'
+import { createServer, makePinThrottle } from './index.js'
 import { bootstrap } from './db/index.js'
 import { sqliteDriver } from './db/driver.js'
 import { FULL_DDL } from './schema.js'
 import { T } from './entities.js'
-import { validatePin } from './staff.js'
+import { validatePin, createStaff } from './staff.js'
 
 /*
  * Staff and credentials.
@@ -21,11 +21,11 @@ import { validatePin } from './staff.js'
 
 const ADMIN_PIN = '1234'
 
-async function boot() {
+async function boot(options = {}) {
   const db = sqliteDriver(join(mkdtempSync(join(tmpdir(), 'mm-staff-')), 't.db'))
   db.exec(FULL_DDL)
   await bootstrap(db, () => {})
-  const { app } = await createServer({ db, quiet: true })
+  const { app } = await createServer({ db, quiet: true, ...options })
   const server = app.listen(0)
   await new Promise((r) => server.once('listening', r))
   server.unref()
@@ -95,6 +95,65 @@ test('anyone signed in can change their own PIN', async () => {
   })
   assert.equal(fresh.status, 200, 'the new one does')
 
+  server.close()
+  await db.close?.()
+})
+
+/* The throttle is per person, not per connection, and it clears itself. Both
+   properties are the fix for a lockout that had no window and was keyed on IP:
+   twenty-one misses then a long wait, and one person's misses never touching
+   anyone else's allowance. */
+test('wrong PINs are throttled per person, and the window clears itself', async () => {
+  let clock = 1_000_000
+  const throttle = makePinThrottle({ now: () => clock })
+  const { base, server, db, login } = await boot({ throttle })
+
+  for (let i = 0; i < 21; i += 1) {
+    const miss = await login('9999', 'emp-admin')
+    assert.equal(miss.status, 401, `guess ${i + 1} is a plain rejection`)
+  }
+
+  const throttled = await login('9999', 'emp-admin')
+  assert.equal(throttled.status, 429, 'the twenty-second guess in the window is refused')
+  assert.ok(throttled.body.error)
+
+  /* Someone else signing in is unaffected: this is the shared-proxy case that
+     locked the whole crew out. */
+  const added = await createStaff(db, {
+    name: 'Sam Reyes',
+    role: 'mechanic',
+    pin: '4477',
+    actorId: 'emp-admin',
+  })
+  assert.equal(added.ok, true, added.reason)
+  const other = await login('4477', added.employee.id)
+  assert.equal(other.status, 200, "another person's allowance is their own")
+
+  clock += 420_000
+  const afterWindow = await login(ADMIN_PIN, 'emp-admin')
+  assert.equal(afterWindow.status, 200, 'the window clears itself, correct PIN and all')
+
+  server.close()
+  await db.close?.()
+})
+
+test('a success clears the rest of the window', () => {
+  const throttle = makePinThrottle({ now: () => 0 })
+  for (let i = 0; i < 20; i += 1) assert.equal(throttle.take('emp-admin'), true)
+  assert.equal(throttle.take('emp-admin'), true, 'twenty-one is still allowed')
+  assert.equal(throttle.take('emp-admin'), false)
+
+  throttle.clear('emp-admin')
+  assert.equal(throttle.take('emp-admin'), true, 'signing in resets the count')
+})
+
+test('signing in leaves no attempt row behind', async () => {
+  const { base, server, db, login } = await boot()
+  await login('9999', 'emp-admin')
+  const right = await login(ADMIN_PIN, 'emp-admin')
+  assert.equal(right.status, 200)
+  const rows = await db.all(`SELECT * FROM ${T('login_attempts')} WHERE employee_id = ?`, ['emp-admin'])
+  assert.deepEqual(rows, [])
   server.close()
   await db.close?.()
 })

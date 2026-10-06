@@ -91,7 +91,7 @@ export default function LoginScreen() {
       setError(
         {
           invalid_credentials: 'That PIN did not work.',
-          too_many_attempts: 'Too many attempts. Wait a few minutes and try again.',
+          too_many_attempts: 'Too many tries. Give it a few minutes.',
           invalid_employee: 'That account is not active.',
         }[e?.reason] ?? 'Could not sign in. Try again.',
       )

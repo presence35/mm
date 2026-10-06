@@ -19,11 +19,53 @@ const upload = multer({
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 
-const PIN_MAX_ATTEMPTS = 5
-const PIN_WINDOW_MS = 15 * 60 * 1000
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000
+const PIN_MAX_ATTEMPTS = 21
+const PIN_WINDOW_MS = 420 * 1000
 
-export async function createServer({ db, quiet = false } = {}) {
+/*
+ * Brute-force throttle, counted per person rather than per connection.
+ *
+ * GoDaddy puts every phone in the marina behind one shared address, so a
+ * per-IP limit is a per-marina limit: 21 wrong guesses by anyone pauses sign-in
+ * for the whole crew. That is the lockout this replaced, only seven minutes
+ * instead of forever.
+ *
+ * The allowance is high enough that a person who fumbles a PIN twice still gets
+ * in, and it clears on its own. `now` is injected so the window can be tested
+ * without waiting seven minutes for it.
+ *
+ * The counter is in memory on purpose. It is a rate limit, not an audit trail:
+ * a deploy or restart resetting it costs an attacker a fresh allowance and loses
+ * nothing worth keeping, and it keeps sign-in from taking a write on the failure
+ * path.
+ */
+export function makePinThrottle({ max = PIN_MAX_ATTEMPTS, windowMs = PIN_WINDOW_MS, now = Date.now } = {}) {
+  const hits = new Map()
+
+  return {
+    /* true when this person may try again. Records the attempt when they may,
+       so the count starts at one rather than at zero. */
+    take(employeeId) {
+      const at = now()
+      const rec = hits.get(employeeId)
+      if (!rec || at >= rec.reset) {
+        hits.set(employeeId, { count: 1, reset: at + windowMs })
+        return true
+      }
+      if (rec.count >= max) return false
+      rec.count += 1
+      return true
+    },
+    /* A success clears the person's history, so a legit user who fat-fingered
+       the first two digits is not serving out the rest of the window. */
+    clear(employeeId) {
+      hits.delete(employeeId)
+    },
+  }
+}
+
+export async function createServer({ db, quiet = false, throttle = makePinThrottle() } = {}) {
   const database = db ?? createDb()
   if (!db) await bootstrap(database, quiet ? () => {} : console.log)
 
@@ -56,9 +98,12 @@ export async function createServer({ db, quiet = false } = {}) {
     next()
   }
 
+  /* Wrong PINs are throttled per person, not locked out per account. The window
+     clears on its own and a success clears it immediately, so a mechanic who
+     fumbles a digit twice is never stuck. `login_attempts` is left in the schema
+     so a row written by the old lockout is inert rather than a failed migration. */
   app.post('/api/auth/login', async (req, res) => {
     const { pin, employee_id: employeeId } = req.body ?? {}
-    const source = req.ip ?? 'unknown'
 
     if (!pin) {
       res.status(400).json({ error: 'pin_required' })
@@ -74,23 +119,18 @@ export async function createServer({ db, quiet = false } = {}) {
       return
     }
 
-    const attempt = await database.get(`SELECT * FROM ${T('login_attempts')} WHERE employee_id = ? AND source = ?`, [employee.id, source])
-    if (attempt && attempt.count >= PIN_MAX_ATTEMPTS) {
+    if (!throttle.take(employee.id)) {
+      res.set('Retry-After', String(Math.ceil(PIN_WINDOW_MS / 1000)))
       res.status(429).json({ error: 'too_many_attempts' })
       return
     }
 
     if (!verifyPin(pin, employee.pin_salt, employee.pin_hash)) {
-      await database.run(
-        `INSERT INTO ${T('login_attempts')} (employee_id, source, count, last_at) VALUES (?, ?, 1, ?)
-         ON CONFLICT (employee_id, source) DO UPDATE SET count = count + 1, last_at = ?`,
-        [employee.id, source, new Date().toISOString(), new Date().toISOString()],
-      )
       res.status(401).json({ error: 'invalid_credentials' })
       return
     }
 
-    await database.run(`DELETE FROM ${T('login_attempts')} WHERE employee_id = ? AND source = ?`, [employee.id, source])
+    throttle.clear(employee.id)
     const token = issueToken({ employee_id: employee.id, role: employee.role }, SESSION_TTL_MS)
 
     res.json({

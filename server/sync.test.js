@@ -495,8 +495,9 @@ test('the MySQL dialect rewrite is prefix-safe', () => {
 
 /*
  * MySQL is not reachable from here, so the translation is asserted instead of
- * executed. These are the exact statements in the running code — if a call site
- * changes its conflict target, this fails rather than the deployment.
+ * executed. sync_devices is a live call site; the multi-column form is still
+ * covered here because toMySQL still supports it, and the count of live call
+ * sites is asserted separately below.
  */
 test('SQLite upserts are translated to MySQL, and only when provably portable', () => {
   assert.equal(
@@ -524,8 +525,10 @@ test('SQLite upserts are translated to MySQL, and only when provably portable', 
 })
 
 test('the upserts in the running code are ones toMySQL can translate', async () => {
-  /* Guards the two hand-listed call sites above against drift: if a third
-     upsert appears with a non-primary-key target, this is where it shows up. */
+  /* Guards the hand-listed call sites above against drift: if a second upsert
+     appears with a non-primary-key target, this is where it shows up. Only one
+     remains — sync_devices. The login_attempts upsert went with the lockout it
+     belonged to, which had no time window and could therefore never clear. */
   const { readFileSync, readdirSync } = await import('node:fs')
   const sources = readdirSync(new URL('.', import.meta.url))
     .filter((f) => f.endsWith('.js') && !f.endsWith('.test.js'))
@@ -535,7 +538,7 @@ test('the upserts in the running code are ones toMySQL can translate', async () 
   /* Require DO UPDATE: `async function conflict(db, op, ...)` is a function
      declaration that merely starts with the token, not a statement. */
   const targets = [...sources.matchAll(/ON CONFLICT\s*\(([^)]*)\)\s*DO UPDATE/gi)].map((m) => m[1])
-  assert.ok(targets.length >= 2, `expected the two known upserts, found ${targets.length}`)
+  assert.ok(targets.length >= 1, `expected the known upsert, found ${targets.length}`)
   for (const cols of targets) {
     assert.doesNotThrow(() => toMySQL(`ON CONFLICT (${cols}) DO UPDATE SET x = 1`), cols)
   }
