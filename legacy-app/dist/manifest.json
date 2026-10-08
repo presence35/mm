@@ -1,0 +1,16 @@
+{
+  "name": "Marina Manager",
+  "short_name": "Marina",
+  "description": "Campbell's Landing Marina — Service & Storage Management",
+  "start_url": "/legacy/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a4f6e",
+  "theme_color": "#0a4f6e",
+  "permissions": ["geolocation"],
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/legacy/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/legacy/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
