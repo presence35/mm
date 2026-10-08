@@ -1,5 +1,6 @@
 import express from 'express'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import multer from 'multer'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -435,6 +436,19 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
     uploadsRoot: join(ROOT, 'uploads'),
     log,
   })
+
+  /* Legacy app (the previous marina manager) mounted at /legacy. It reads
+     the same shared MySQL database through its unprefixed tables; our own
+     API, client, and sync are untouched. Must precede the static section so
+     our catch-all does not swallow its routes. */
+  try {
+    const requireLegacy = createRequire(import.meta.url)
+    const createLegacyApp = requireLegacy('../legacy-app/server.js')
+    app.use('/legacy', await createLegacyApp())
+    log('legacy app mounted at /legacy')
+  } catch (e) {
+    log(`legacy app NOT mounted: ${e?.message}`)
+  }
 
   /* ------------------------------------------------------------- static */
 
