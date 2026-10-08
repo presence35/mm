@@ -10,6 +10,8 @@ import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
 import { listStaff, createStaff, setStaffActive, resetPin, changeOwnPin } from './staff.js'
 import { T } from './entities.js'
+/* TEMPORARY legacy import over HTTP — delete with server/legacy/import-live.js after the one production import. */
+import { registerLegacyImportRoutes } from './legacy/import-live.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -423,6 +425,15 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       return
     }
     res.json(await collectGarbage(database))
+  })
+
+  /* TEMPORARY legacy import over HTTP — delete with server/legacy/import-live.js after the one production import. */
+  registerLegacyImportRoutes(app, {
+    database,
+    authenticate,
+    adminOnly,
+    uploadsRoot: join(ROOT, 'uploads'),
+    log,
   })
 
   /* ------------------------------------------------------------- static */

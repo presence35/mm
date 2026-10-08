@@ -47,6 +47,152 @@ function PalettePicker({ palette, onChange }) {
   )
 }
 
+/* TEMPORARY legacy import — delete with server/legacy/import-live.js after
+   the one production import. Plans from the live legacy tables sharing this
+   database, shows the dry-run report, then applies once. Admin-only. */
+function LegacyImportPanel() {
+  const [photosDir, setPhotosDir] = useState('/private/data/photos')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [report, setReport] = useState(null)
+  const [result, setResult] = useState(null)
+  const [confirmApply, setConfirmApply] = useState(false)
+
+  const token = () => {
+    try {
+      return localStorage.getItem('mm.token') ?? ''
+    } catch {
+      return ''
+    }
+  }
+
+  const planImport = async () => {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    setReport(null)
+    setResult(null)
+    try {
+      const res = await fetch('/api/admin/legacy-import/plan', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ photos_dir: photosDir }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.detail || body.error || `plan failed: ${res.status}`)
+      setReport(body)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyImport = async () => {
+    if (!report || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/legacy-import/apply', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ id: report.id }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.detail || body.error || `apply failed: ${res.status}`)
+      setResult(body)
+      setReport(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+      setConfirmApply(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="section-head">Legacy import (temporary)</div>
+      <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+        <input
+          type="text"
+          value={photosDir}
+          onChange={(e) => setPhotosDir(e.target.value)}
+          aria-label="Legacy photos directory on the server"
+          placeholder="/private/data/photos"
+          style={{ font: 'var(--body-m)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--corner-s)', border: '1px solid var(--outline)' }}
+        />
+        <Button fullWidth variant="tonal" onClick={planImport} disabled={busy} loading={busy}>
+          Plan from live tables
+        </Button>
+        {error ? (
+          <div className="offline-bar offline-bar--conflict" role="alert">
+            <Icon name="alert" size={18} />
+            {error}
+          </div>
+        ) : null}
+        {report ? (
+          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
+            <div>
+              <strong>{report.rows} rows</strong> across {report.entities.length} entities
+              {report.targetHasCustomers ? (
+                <span> — target already holds {report.targetHasCustomers} customers, apply will refuse</span>
+              ) : null}
+            </div>
+            <div>
+              Photos from {report.photosDir}: {report.photosToCopy} to copy, {report.photosMissingTotal} without a file
+              {report.photosDirFound ? null : ' (directory not readable on the server)'}
+            </div>
+            {report.notes.map((n) => (
+              <div key={n} style={{ color: 'var(--on-surface-variant)' }}>
+                {n}
+              </div>
+            ))}
+            {report.warnings.map((w) => (
+              <div key={w}>! {w}</div>
+            ))}
+            {report.warningTotal > report.warnings.length ? <div>…and {report.warningTotal - report.warnings.length} more</div> : null}
+            <Button fullWidth variant="destructive" onClick={() => setConfirmApply(true)} disabled={busy}>
+              Apply import
+            </Button>
+          </div>
+        ) : null}
+        {result ? (
+          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
+            <div>
+              <strong>Import {result.ok ? 'complete' : 'finished with problems'}.</strong> Photos copied: {result.copied}
+            </div>
+            {Object.entries(result.counts ?? {}).map(([entity, n]) => (
+              <div key={entity}>
+                {entity}: {n}
+              </div>
+            ))}
+            {(result.problems ?? []).map((p) => (
+              <div key={p}>! {p}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <Dialog
+        open={confirmApply}
+        title="Apply legacy import?"
+        body="Every legacy row is inserted into the live database once. This cannot be undone — a second run is refused, so a partial failure needs manual repair."
+        onDismiss={() => setConfirmApply(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmApply(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={applyImport}>
+              Apply
+            </Button>
+          </>
+        }
+      />
+    </div>
+  )
+}
+
 export default function SetupScreen() {
   const { palette, setPalette, mode, setMode } = useTheme()
   const sync = useSync()
@@ -151,6 +297,9 @@ export default function SetupScreen() {
         />
       ) : null}
       <ListItem icon="logout" title="Sign out" support="Requires a network connection" />
+
+      {/* TEMPORARY legacy import — delete with server/legacy/import-http.js after the one production import. */}
+      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}
 
       <Dialog
         open={confirmReset}

@@ -8,11 +8,12 @@
     "dev": "node server/main.js",
     "dev:vite": "vite",
     "build": "vite build",
+    "prebuild": "npm test",
     "preview": "vite preview",
     "server": "node server/main.js",
     "test:sync": "node --test server/sync.test.js",
     "test:client": "node --test server/client-sync.test.js",
-    "test": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js",
+    "test": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/engines/auth/permissions.test.js",
     "import:legacy": "node server/legacy/import.js",
     "inspect:legacy": "node server/legacy/inspect-db.js",
     "set:pin": "node server/set-pin.js"

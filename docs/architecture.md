@@ -303,9 +303,12 @@ src/
              idb.js (IndexedDB), seed.js
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
-    auth/    AuthProvider.jsx, permissions.js
+    auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
     media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js — pure, deterministic
+              cardStatus.test.js, storageLocation.test.js — beat tests pinning
+              the lifecycle, the unrepresentable-combination rule and the
+              label+tone+shape pairing (oko ThreatEngineTest pattern)
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js

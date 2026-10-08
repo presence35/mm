@@ -1,6 +1,13 @@
 import { useId } from 'react'
 import Icon from './Icon'
 
+/*
+ * `ref` reaches the input rather than this component. React 19 passes it as an
+ * ordinary prop, so no forwardRef wrapper is needed, and it is destructured here
+ * so it cannot also land in `...rest` and be applied twice. Callers that need to
+ * focus or measure the control — the PIN box on sign-in — ask for it here instead
+ * of reaching around the field with a DOM query.
+ */
 export function TextField({
   label,
   value,
@@ -12,6 +19,7 @@ export function TextField({
   help,
   autoComplete,
   inputMode,
+  ref,
   ...rest
 }) {
   const id = useId()
@@ -27,6 +35,7 @@ export function TextField({
       <div className="field__control">
         <Tag
           id={id}
+          ref={ref}
           className="field__input"
           value={value}
           onChange={(e) => onChange(e.target.value)}

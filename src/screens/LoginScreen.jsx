@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, TextField, ListItem, Divider, Icon } from '../ui'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
@@ -32,11 +32,22 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const pinRef = useRef(null)
 
   useEffect(() => {
     const off = store.subscribe(() => setStaff(store.listStaff()))
     return off
   }, [])
+
+  /*
+   * The PIN box takes the caret as soon as it is on screen, so a mechanic on the
+   * dock can type their PIN without first tapping the field. `chosen` is the
+   * trigger, not `pin`: it changes when someone is picked or switched away from,
+   * which is exactly when this field is about to be mounted.
+   */
+  useEffect(() => {
+    if (chosen && !picking) pinRef.current?.focus()
+  }, [chosen, picking])
 
   /* Offline with no cached session: nothing can unlock this device. */
   if (!sync.online && !sync.hasCachedSession) {
@@ -143,6 +154,7 @@ export default function LoginScreen() {
 
         <div style={{ marginTop: 'var(--space-6)' }}>
           <TextField
+            ref={pinRef}
             label="PIN"
             type="password"
             inputMode="numeric"
