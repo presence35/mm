@@ -1,4 +1,4 @@
-# Marina Manager — agent instructions
+# Marina Manager — agent instructions 
 
 Greenfield rebuild of the marina service-card app. Mobile-first, Material Design 3, **local-first / offline-capable**.
 
