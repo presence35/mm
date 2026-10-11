@@ -155,6 +155,8 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
           return (
             <figure
               key={key}
+              onClick={url ? () => window.open(url, '_blank', 'noopener') : undefined}
+              title={url ? 'Open full photo in a new tab' : undefined}
               style={{
                 margin: 0,
                 minWidth: 132,
@@ -167,6 +169,7 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
                 color: 'var(--on-surface-variant)',
                 overflow: 'hidden',
                 position: 'relative',
+                cursor: url ? 'pointer' : 'default',
               }}
             >
               {url ? (
@@ -182,12 +185,12 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
                 </>
               )}
               {confirmingId === key ? (
-                <span style={{ position: 'absolute', top: 2, right: 2, display: 'flex', gap: 2 }}>
+                <span style={{ position: 'absolute', top: 2, right: 2, display: 'flex', gap: 2 }} onClick={(e) => e.stopPropagation()}>
                   <IconButton icon="close" label="Keep photo" onClick={() => setConfirmingId(null)} />
                   <IconButton icon="trash" label="Confirm delete photo" onClick={() => { setConfirmingId(null); remove(p) }} />
                 </span>
               ) : (
-                <span style={{ position: 'absolute', top: 2, right: 2 }}>
+                <span style={{ position: 'absolute', top: 2, right: 2 }} onClick={(e) => e.stopPropagation()}>
                   <IconButton icon="trash" label="Delete photo" onClick={() => setConfirmingId(key)} />
                 </span>
               )}
