@@ -1,34 +1,50 @@
-import { createServer } from './index.js'
-import { collectGarbage } from './sync.js'
+/* Entry point. Every import is dynamic so a failure anywhere in the graph
+   still lands in the catch below and is served as JSON over HTTP —
+   Plesk's access log only shows a bare 500, which hides the cause. */
 
 const port = Number(process.env.PORT ?? 3000)
-const { app, db } = await createServer()
+/* GoDaddy denies binding the wildcard address; set HOST=127.0.0.1 there.
+   Default stays 0.0.0.0 for hosts that proxy from another interface. */
+const host = process.env.HOST || '0.0.0.0'
 
-app.listen(port, () => {
-  console.log(`marina server on http://localhost:${port}`)
-})
+try {
+  await import('./env.js')
+  const { createServer } = await import('./index.js')
+  const { collectGarbage } = await import('./sync.js')
+  const { app, db } = await createServer()
 
-/*
- * The change log grows forever unless something trims it. The admin endpoint
- * existed but nothing called it, so it never ran.
- *
- * Scheduled here rather than left to a cron job because GoDaddy does not
- * guarantee one, and a deploy that silently stops garbage-collecting is exactly
- * the kind of thing that is only noticed months later. collectGarbage protects
- * any device that has not yet seen a change, so running it more often than the
- * GC floor requires is safe — it deletes nothing a dark device still needs.
- */
-const GC_INTERVAL_MS = Number(process.env.GC_INTERVAL_MS ?? 60 * 60 * 1000)
+  app.listen(port, host, () => {
+    console.log(`marina server on http://localhost:${port}`)
+  })
 
-const timer = setInterval(async () => {
-  try {
-    const result = await collectGarbage(db)
-    if (result.deleted) console.log(`gc: removed ${result.deleted} change_log rows`)
-  } catch (err) {
-    /* Never let housekeeping take the process down. */
-    console.error('gc failed:', err?.message)
+  const GC_INTERVAL_MS = Number(process.env.GC_INTERVAL_MS ?? 60 * 60 * 1000)
+  const timer = setInterval(async () => {
+    try {
+      const result = await collectGarbage(db)
+      if (result.deleted) console.log(`gc: removed ${result.deleted} change_log rows`)
+    } catch (err) {
+      console.error('gc failed:', err?.message)
+    }
+  }, GC_INTERVAL_MS)
+  timer.unref?.()
+} catch (err) {
+  const detail = {
+    code: err?.code ?? err?.name ?? 'BOOT_FAILED',
+    message: (err?.message ?? String(err)).slice(0, 500),
+    env: {
+      APP_SECRET: process.env.APP_SECRET ? 'set' : 'MISSING',
+      DB_HOST: process.env.DB_HOST ?? 'MISSING',
+      DB_NAME: process.env.DB_NAME ?? 'MISSING',
+      DB_USER: process.env.DB_USER ?? 'MISSING',
+      DB_PASSWORD: process.env.DB_PASSWORD ? 'set' : 'MISSING',
+    },
   }
-}, GC_INTERVAL_MS)
-
-/* The timer must not be the reason the process stays alive on its own. */
-timer.unref?.()
+  console.error('BOOT FAILED:', detail.code, '-', detail.message)
+  const { default: express } = await import('express')
+  const fallback = express()
+  fallback.use((req, res) => res.status(500).json({ bootFailed: true, ...detail }))
+  fallback.listen(port, host, () => {
+    console.log('marina server (boot-failed fallback) listening')
+  })
+  await new Promise(() => {})
+}

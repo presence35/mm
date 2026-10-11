@@ -35,7 +35,7 @@ test.after(() => {
 
 test('setup: server up, session in', async () => {
   const { app } = await createServer({ quiet: true })
-  server = app.listen(0)
+  server = app.listen(0, '127.0.0.1')
   await new Promise((r) => server.once('listening', r))
   /* Without this the listening socket holds the event loop open and the test
      runner never exits. */

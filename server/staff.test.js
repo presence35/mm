@@ -26,7 +26,7 @@ async function boot(options = {}) {
   db.exec(FULL_DDL)
   await bootstrap(db, () => {})
   const { app } = await createServer({ db, quiet: true, ...options })
-  const server = app.listen(0)
+  const server = app.listen(0, '127.0.0.1')
   await new Promise((r) => server.once('listening', r))
   server.unref()
   const base = `http://127.0.0.1:${server.address().port}`

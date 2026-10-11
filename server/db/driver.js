@@ -4,10 +4,20 @@
  * knows which one it is talking to.
  */
 
-import Database from 'better-sqlite3'
+import { createRequire } from 'node:module'
 import mysql from 'mysql2/promise'
 
+const requireOptional = createRequire(import.meta.url)
+
 export function sqliteDriver(file) {
+  /* Loaded lazily so production (MySQL) never needs the native module
+     installed: better-sqlite3 is a devDependency and --production skips it. */
+  let Database
+  try {
+    Database = requireOptional('better-sqlite3')
+  } catch {
+    throw new Error('sqliteDriver needs better-sqlite3 (a devDependency — install without --production)')
+  }
   const db = new Database(file)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = OFF')

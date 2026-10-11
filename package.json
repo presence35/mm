@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node server/main.js",
+    "start": "node app.js",
     "dev": "node server/main.js",
     "dev:vite": "vite",
     "build": "vite build",
@@ -16,20 +16,21 @@
     "test": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/engines/auth/permissions.test.js",
     "import:legacy": "node server/legacy/import.js",
     "inspect:legacy": "node server/legacy/inspect-db.js",
+    "diag": "node server/diag.js",
     "set:pin": "node server/set-pin.js"
   },
   "dependencies": {
     "archiver": "^8.0.0",
-    "better-sqlite3": "^12.11.1",
     "express": "^4.22.3",
     "multer": "^2.4.0",
     "mysql2": "^3.24.5",
-    "qrcode": "^1.5.4",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
+    "better-sqlite3": "^12.11.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "vite": "^8.0.16",
     "vite-plugin-pwa": "^1.3.0"
   }

@@ -1,4 +1,5 @@
 node_modules
+mm-deploy.zip
 dist
 !legacy-app/dist/
 dev-dist
@@ -25,3 +26,5 @@ legacy-app/data/
 legacy-app/backup/
 boot*.log
 err*.log
+# Local legacy export crate (92MB, never commit)
+mm-data/
