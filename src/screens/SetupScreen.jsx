@@ -241,7 +241,7 @@ function LegacyImportPanel() {
 export default function SetupScreen() {
   const { palette, setPalette, mode, setMode } = useTheme()
   const sync = useSync()
-  const { employee, may } = useAuth()
+  const { employee, may, signOut } = useAuth()
   const { navigate } = useRouter()
   const [showOfflineHelp, setShowOfflineHelp] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -341,7 +341,13 @@ export default function SetupScreen() {
           trailing={<Icon name="right" size={20} />}
         />
       ) : null}
-      <ListItem icon="logout" title="Sign out" support="Requires a network connection" />
+      <ListItem
+        icon="logout"
+        title="Sign out"
+        support="Forget this device"
+        onClick={signOut}
+        trailing={<Icon name="right" size={20} />}
+      />
 
       {/* TEMPORARY legacy import — delete with server/legacy/import-http.js after the one production import. */}
       {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}

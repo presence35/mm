@@ -354,3 +354,25 @@ test('the transport reports offline rather than failing a write', async () => {
 function toOp(o) {
   return { op_id: o.op_id, entity: o.entity, entity_id: o.entity_id, op: o.op, rev: o.rev, payload: o.payload, conflict_id: o.conflict_id }
 }
+
+test('an employees change arrives via the reference store and does not wedge the pull', async () => {
+  /* Regression: reference entities (employees, products, templates) have no
+     store of their own. Routing them to idb.put threw, aborted the page
+     before the cursor advanced, and hid every later change — including all
+     service cards. The cursor must advance past the whole page regardless. */
+  await transport.addStaff(token, { name: 'Pull Probe', role: 'mechanic', pin: '90210' })
+  await idb.putAndQueue('customers', { id: 'c-pull-probe', name: 'Probe Customer', city: 'Comox', version: 0 })
+  await transport.drain(token, await idb.deviceId(), new Date())
+
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  const out = await transport.pullAll(token, await idb.deviceId(), new Date())
+
+  assert.deepEqual(out.applyErrors, [])
+  const roster = await idb.getReference('employees')
+  const probe = roster.find((s) => s.name === 'Pull Probe')
+  assert.ok(probe, 'staffer arrived via the reference store')
+  assert.ok(!('pin_hash' in (probe ?? {})), 'no credential travels')
+  assert.ok(await idb.get('customers', 'c-pull-probe'), 'later entities still land')
+  assert.ok(Number(await idb.getMeta('cursor', 0)) > 0, 'cursor advanced past the page')
+})

@@ -213,6 +213,10 @@ export async function drain(token, deviceId, now = new Date()) {
 export async function pullAll(token, deviceId, now = new Date()) {
   const cursor = Number(await idb.getMeta('cursor', 0)) || 0
   const res = await pull(token, cursor, deviceId)
+  /* One poison row must never wedge the cursor again: a failed row is
+     recorded and skipped, and the cursor still advances past it. Losing one
+     row with a logged warning beats losing every later change in silence. */
+  const applyErrors = []
 
   if (res.full_sync) {
     await idb.wipe()
@@ -222,39 +226,59 @@ export async function pullAll(token, deviceId, now = new Date()) {
       ;(grouped[change.entity] ??= []).push({ ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
     }
     for (const [entity, rows] of Object.entries(grouped)) {
-      if (rows.length) await idb.putMany(entity, rows)
+      try {
+        if (idb.REFERENCE_ENTITIES.has(entity)) {
+          if (rows.length) await idb.putReference({ [entity]: rows })
+        } else if (rows.length) {
+          await idb.putMany(entity, rows)
+        }
+      } catch (e) {
+        applyErrors.push({ entity, error: e?.message ?? String(e) })
+      }
     }
     await idb.setMeta('cursor', res.cursor)
-    return { applied: res.changes.length, full: true }
+    if (applyErrors.length) console.warn('pull skipped rows:', applyErrors)
+    return { applied: res.changes.length, full: true, applyErrors }
   }
 
   let applied = 0
   for (const change of res.changes) {
-    if (change.op === 'delete') {
-      await idb.removeLocal(change.entity, change.entity_id)
-    } else {
-      const queued = await idb.pendingOps()
-      const pendingHere = queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)
-      /* Never clobber a row with unsynced local edits. */
-      if (!pendingHere) {
-        await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+    try {
+      if (idb.REFERENCE_ENTITIES.has(change.entity)) {
+        if (change.op === 'delete') await idb.removeReferenceRow(change.entity, change.entity_id)
+        else await idb.putReferenceRow(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
         applied += 1
+        continue
+      }
+      if (change.op === 'delete') {
+        await idb.removeLocal(change.entity, change.entity_id)
       } else {
-        /* The server may already hold this edit — a second device seeding the
-           same bootstrap snapshot, for instance. Drop the duplicate rather
-           than pushing it into a conflict with ourselves. */
-        const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
-        if (dropped && !pendingHere) {
+        const queued = await idb.pendingOps()
+        const pendingHere = queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)
+        /* Never clobber a row with unsynced local edits. */
+        if (!pendingHere) {
           await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
           applied += 1
+        } else {
+          /* The server may already hold this edit — a second device seeding the
+             same bootstrap snapshot, for instance. Drop the duplicate rather
+             than pushing it into a conflict with ourselves. */
+          const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
+          if (dropped && !pendingHere) {
+            await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+            applied += 1
+          }
         }
       }
+    } catch (e) {
+      applyErrors.push({ entity: change.entity, entity_id: change.entity_id, error: e?.message ?? String(e) })
     }
   }
   await idb.setMeta('cursor', res.cursor)
   await idb.setMeta('last_pull_at', new Date(now).toISOString())
   await idb.attachServerPayloads()
-  return { applied, full: false }
+  if (applyErrors.length) console.warn('pull skipped rows:', applyErrors)
+  return { applied, full: false, applyErrors }
 }
 
 export { MAX_ATTEMPTS }

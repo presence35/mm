@@ -300,6 +300,36 @@ export async function putReference(snapshot) {
   }
 }
 
+/* Server-owned reference entities live here, never in a store of their own.
+   Kept as a literal (not imported from server/entities.js, which reads
+   process.env and is not browser-safe); server/legacy.test.js asserts parity.
+   Sync routes these here; a row for any of them hitting idb.put would throw
+   and wedge the pull cursor, hiding every later change. */
+export const REFERENCE_ENTITIES = new Set([
+  'employees',
+  'products',
+  'service_item_templates',
+  'storage_layout',
+  'checklist_templates',
+])
+
+const referenceKey = (entity, rowOrId) =>
+  `${entity}:${typeof rowOrId === 'object' ? (rowOrId.id ?? rowOrId.item_key ?? rowOrId.value) : rowOrId}`
+
+export async function putReferenceRow(entity, row) {
+  const db = await open()
+  await tx(db, ['reference'], 'readwrite', (t) => {
+    t.objectStore('reference').put({ id: referenceKey(entity, row), entity, row })
+  })
+}
+
+export async function removeReferenceRow(entity, id) {
+  const db = await open()
+  await tx(db, ['reference'], 'readwrite', (t) => {
+    t.objectStore('reference').delete(referenceKey(entity, id))
+  })
+}
+
 export async function getReference(entity) {
   const db = await open()
   const rows = await tx(db, ['reference'], 'readonly', (t) => reqp(t.objectStore('reference').getAll()))

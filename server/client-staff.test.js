@@ -7,6 +7,14 @@ installIndexedDB()
 
 const idb = await import('../src/engines/store/idb.js')
 const store = await import('../src/engines/store/localStore.js')
+const { REFERENCE: SERVER_REFERENCE } = await import('./entities.js')
+
+test('client reference set matches the server roster', () => {
+  /* The pull routes these entities to the reference store by name. A name
+     added server-side without its client twin would throw mid-page and wedge
+     the cursor again — so drift fails loudly here, not silently in sync. */
+  assert.deepEqual(new Set(idb.REFERENCE_ENTITIES), new Set(Object.keys(SERVER_REFERENCE)))
+})
 
 /*
  * The staff roster in the client store.
