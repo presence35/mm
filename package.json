@@ -17,7 +17,8 @@
     "import:legacy": "node server/legacy/import.js",
     "inspect:legacy": "node server/legacy/inspect-db.js",
     "diag": "node server/diag.js",
-    "set:pin": "node server/set-pin.js"
+    "set:pin": "node server/set-pin.js",
+    "test:unit": "node --test server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/client-staff.test.js server/session.test.js server/driver.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/engines/auth/permissions.test.js"
   },
   "dependencies": {
     "archiver": "^8.0.0",
