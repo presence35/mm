@@ -415,6 +415,56 @@ test('a photo for a card that does not exist is refused', async () => {
   assert.equal(res.status, 404)
 })
 
+test('an uploaded photo downloads byte-identical, and a missing one is a 404', async () => {
+  const db = freshDb()
+  await bootstrap(db, () => {})
+  const { app } = await createServer({ db, quiet: true })
+  const { server, base } = await listenTest(app)
+  server.unref()
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '1234' }),
+  })
+  const { token } = await login.json()
+  const auth = { authorization: `Bearer ${token}` }
+
+  await push(db, {
+    ...ADMIN,
+    ops: [
+      customer('c-1'),
+      { op_id: 'op-b', entity: 'boats', entity_id: 'b-1', op: 'upsert', rev: 0, payload: { id: 'b-1', customer_id: 'c-1', name: 'Sea Jay' } },
+      { op_id: 'op-k', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-1' } },
+    ],
+  })
+
+  const png = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+    'base64',
+  )
+  const form = new FormData()
+  form.append('photo', new Blob([png], { type: 'image/jpeg' }), 'shot.jpg')
+  form.append('card_id', 'k-1')
+  form.append('device_id', 'dev-photo')
+  const up = await fetch(`${base}/api/photos`, { method: 'POST', headers: auth, body: form })
+  const { photo } = await up.json()
+  assert.equal(up.status, 200)
+
+  /* Filenames are legacy originals, not ids — the bytes live under the card. */
+  const down = await fetch(`${base}/api/photos/k-1/${photo.filename}`, { headers: auth })
+  assert.equal(down.status, 200)
+  assert.match(down.headers.get('content-type') ?? '', /image\/jpeg/)
+  assert.deepEqual(Buffer.from(await down.arrayBuffer()), png)
+
+  const missing = await fetch(`${base}/api/photos/k-1/no-such-file.jpg`, { headers: auth })
+  assert.equal(missing.status, 404)
+
+  const anon = await fetch(`${base}/api/photos/k-1/${photo.filename}`)
+  assert.equal(anon.status, 401)
+  server.close()
+})
+
 /*
  * The new app shares a MySQL schema with the legacy app during cutover. A SQL
  * site that forgot T() would not fail loudly — CREATE TABLE IF NOT EXISTS would

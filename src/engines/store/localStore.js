@@ -36,6 +36,7 @@ const CHILD_ENTITIES = [
   'work_logs',
   'invoice_items',
   'status_history',
+  'photos',
 ]
 
 const childId = {
@@ -251,6 +252,12 @@ function withChildren(card) {
       unit_price: r.unit_price,
       total: r.total,
       sort_order: r.sort_order,
+    })),
+    photos: children('photos', card.id).map((r) => ({
+      id: r.id,
+      filename: r.filename,
+      caption: r.caption,
+      uploaded_at: r.uploaded_at,
     })),
   }
 }

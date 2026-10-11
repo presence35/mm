@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Icon, StatusPill, EmptyState, Divider } from '../../ui'
 import { useSync } from '../../engines/sync/SyncProvider.jsx'
 import { pickPhoto, uploadPhoto } from '../../engines/media/photos.js'
@@ -24,6 +24,47 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
   const [busy, setBusy] = useState(false)
   const [blocked, setBlocked] = useState(null)
   const [saved, setSaved] = useState(null)
+  /* Photo bytes need the session (an <img> cannot send a Bearer header), so
+     each row is fetched with the token and shown as an object URL. A row
+     without a file — 60 of them after the legacy import — renders as a tile
+     that says so, never a broken image. */
+  const [urls, setUrls] = useState({})
+  const [missing, setMissing] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    const created = []
+    const token = tokenOf()
+    ;(async () => {
+      const entries = await Promise.all(
+        photos.map(async (p) => {
+          const key = p.id ?? p.filename
+          try {
+            const res = await fetch(
+              `/api/photos/${encodeURIComponent(cardId)}/${encodeURIComponent(p.filename)}`,
+              { headers: token ? { authorization: `Bearer ${token}` } : {} },
+            )
+            if (!res.ok) return [key, null]
+            const url = URL.createObjectURL(await res.blob())
+            created.push(url)
+            return [key, url]
+          } catch {
+            return [key, null]
+          }
+        }),
+      )
+      if (cancelled) {
+        created.forEach((u) => URL.revokeObjectURL(u))
+        return
+      }
+      setUrls(Object.fromEntries(entries))
+      setMissing(entries.filter(([, u]) => !u).map(([k]) => k))
+    })()
+    return () => {
+      cancelled = true
+      created.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [cardId, photos])
 
   const add = async () => {
     const file = await pickPhoto()
@@ -85,29 +126,47 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
       <div className="section-head">Photos</div>
 
       <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', padding: 'var(--space-2) var(--space-4)' }}>
-        {photos.map((p) => (
-          <figure
-            key={p.id ?? p.filename}
-            style={{
-              margin: 0,
-              minWidth: 132,
-              height: 100,
-              borderRadius: 'var(--corner-m)',
-              background: 'var(--surface-container-highest)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--on-surface-variant)',
-            }}
-          >
-            <Icon name="camera" size={28} />
-            {p.caption ? (
-              <figcaption style={{ position: 'absolute', font: 'var(--label-s)', color: 'var(--on-surface-variant)', marginTop: 120, whiteSpace: 'nowrap' }}>
-                {p.caption}
-              </figcaption>
-            ) : null}
-          </figure>
-        ))}
+        {photos.map((p) => {
+          const key = p.id ?? p.filename
+          const url = urls[key]
+          const gone = missing.includes(key)
+          return (
+            <figure
+              key={key}
+              style={{
+                margin: 0,
+                minWidth: 132,
+                height: 100,
+                borderRadius: 'var(--corner-m)',
+                background: 'var(--surface-container-highest)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--on-surface-variant)',
+                overflow: 'hidden',
+                position: 'relative',
+              }}
+            >
+              {url ? (
+                <img src={url} alt={p.caption || 'Boat photo'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <>
+                  <Icon name="camera" size={28} />
+                  {gone ? (
+                    <span style={{ position: 'absolute', bottom: 4, font: 'var(--label-s)', padding: '0 4px' }}>
+                      No image file
+                    </span>
+                  ) : null}
+                </>
+              )}
+              {p.caption ? (
+                <figcaption style={{ position: 'absolute', font: 'var(--label-s)', color: 'var(--on-surface-variant)', marginTop: 120, whiteSpace: 'nowrap' }}>
+                  {p.caption}
+                </figcaption>
+              ) : null}
+            </figure>
+          )
+        })}
       </div>
 
       {busy ? (

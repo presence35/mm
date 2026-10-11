@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import multer from 'multer'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, basename } from 'node:path'
 
 import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertProductionReady } from './db/index.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
@@ -265,6 +265,26 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       return
     }
     res.json({ photo: out.photo })
+  })
+
+  /* Bytes for what the photo rows describe, including the legacy import's
+     copies. Authenticated: a signed-in worker may already open any card, so
+     this grants nothing new. Filenames are legacy originals rather than ids,
+     so both segments are validated, not trusted — and a row without a file
+     (60 of them after the import) is a 404 the client renders as a tile. */
+  app.get('/api/photos/:cardId/:filename', authenticate, async (req, res) => {
+    if (!/^[A-Za-z0-9_-]+$/.test(req.params.cardId ?? '')) {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    const name = basename(req.params.filename ?? '')
+    if (!name || name === '.' || name === '..') {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    res.sendFile(name, { root: join(ROOT, 'uploads', req.params.cardId) }, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: 'not_found' })
+    })
   })
 
   /* ------------------------------------------------------------- public */
