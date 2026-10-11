@@ -36,6 +36,7 @@ export default function AdminScreen() {
   const [tab, setTab] = useState('employees')
   const [staff, setStaff] = useState(() => store.listStaff())
   const [adding, setAdding] = useState(false)
+  const [selected, setSelected] = useState(null)
 
   useEffect(() => store.subscribe(() => setStaff(store.listStaff())), [])
 
@@ -60,6 +61,7 @@ export default function AdminScreen() {
                 icon="users"
                 title={person.name}
                 support={person.id === employee?.id ? `${ROLE_LABEL[person.role]} · you` : ROLE_LABEL[person.role]}
+                onClick={() => setSelected(person)}
                 trailing={<StatusPill tone={person.role === 'admin' ? 'warn' : 'neutral'} shape="square">{person.role}</StatusPill>}
               />
             ))
@@ -103,6 +105,14 @@ export default function AdminScreen() {
       ) : null}
 
       {adding ? <AddStaff onClose={() => setAdding(false)} onDone={() => setAdding(false)} /> : null}
+      {selected ? (
+        <StaffMember
+          person={selected}
+          isSelf={selected.id === employee?.id}
+          onClose={() => setSelected(null)}
+          onDone={() => setSelected(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -122,6 +132,97 @@ function Catalogue() {
         body="Parts and their prices come from the server and arrive by sync. This tab used to list four invented items with invented prices, which on a working dock reads as the marina's real price list."
       />
     </>
+  )
+}
+
+function StaffMember({ person, isSelf, onClose, onDone }) {
+  /* Resetting a PIN and deactivating both need a connection, like adding:
+     employees are server-owned. Refuse rather than queue, for the same
+     Monday-morning reason as AddStaff. Deactivation is one-way from here —
+     the roster lists active staff only — so it asks twice. */
+  const sync = useSync()
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+
+  const explain = (fallback) => (e) =>
+    setError(
+      {
+        needs_signal: 'No signal. Staff changes go to the server, so this one has to wait.',
+        not_found: 'They are no longer on staff. Sync and try again.',
+        pin_too_short: 'A PIN is 4 to 12 digits.',
+        pin_not_numeric: 'A PIN is digits only.',
+      }[e?.reason] ?? fallback,
+    )
+
+  const reset = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await sync.resetStaffPin(person.id, pin)
+      sync.syncNow()
+      onDone()
+    } catch (e) {
+      explain('Could not set the PIN. Try again.')(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deactivate = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await sync.setStaffActive(person.id, false)
+      sync.syncNow()
+      onDone()
+    } catch (e) {
+      explain('Could not deactivate them. Try again.')(e)
+    } finally {
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
+
+  const ready = /^\d{4,12}$/.test(pin)
+
+  return (
+    <Sheet open title={person.name} onDismiss={onClose}>
+      <TextField
+        label="New PIN"
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        value={pin}
+        onChange={setPin}
+        error={error}
+        help="They sign in with this next. It is not shown again."
+      />
+      <div style={{ padding: 'var(--space-4)' }}>
+        <Button fullWidth onClick={reset} disabled={!ready || busy} loading={busy}>
+          Set PIN
+        </Button>
+      </div>
+      {!isSelf ? (
+        <div style={{ padding: 'var(--space-4)', paddingTop: 0 }}>
+          {confirming ? (
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <Button fullWidth variant="text" onClick={() => setConfirming(false)}>
+                Keep
+              </Button>
+              <Button fullWidth variant="destructive" onClick={deactivate} disabled={busy} loading={busy}>
+                Confirm deactivate
+              </Button>
+            </div>
+          ) : (
+            <Button fullWidth variant="destructive" onClick={() => setConfirming(true)} disabled={busy}>
+              Deactivate
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </Sheet>
   )
 }
 
