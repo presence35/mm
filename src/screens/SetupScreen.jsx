@@ -57,6 +57,7 @@ function LegacyImportPanel() {
   const [report, setReport] = useState(null)
   const [result, setResult] = useState(null)
   const [confirmApply, setConfirmApply] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const token = () => {
     try {
@@ -86,6 +87,29 @@ function LegacyImportPanel() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const resetAndReplan = async () => {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    setConfirmReset(false)
+    try {
+      const res = await fetch('/api/admin/legacy-import/reset', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ reset: 'mm-tables' }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.detail || body.error || `reset failed: ${res.status}`)
+      setResult(null)
+    } catch (e) {
+      setError(e.message)
+      setBusy(false)
+      return
+    }
+    setBusy(false)
+    await planImport()
   }
 
   const applyImport = async () => {
@@ -155,6 +179,11 @@ function LegacyImportPanel() {
             <Button fullWidth variant="destructive" onClick={() => setConfirmApply(true)} disabled={busy}>
               Apply import
             </Button>
+            {report.targetHasCustomers ? (
+              <Button fullWidth variant="tonal" onClick={() => setConfirmReset(true)} disabled={busy}>
+                Reset mm tables ({report.targetHasCustomers} seed customers) & re-plan
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {result ? (
@@ -173,6 +202,22 @@ function LegacyImportPanel() {
           </div>
         ) : null}
       </div>
+      <Dialog
+        open={confirmReset}
+        title="Reset mm tables?"
+        body="Drops every mm_ table (seed rows only — legacy tables are untouched) and re-plans the import against the clean target. This cannot be undone."
+        onDismiss={() => setConfirmReset(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmReset(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={resetAndReplan}>
+              Reset & re-plan
+            </Button>
+          </>
+        }
+      />
       <Dialog
         open={confirmApply}
         title="Apply legacy import?"

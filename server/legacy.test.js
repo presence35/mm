@@ -10,6 +10,8 @@ import { readTables, splitRows, splitValues, unquote, readInsertBlocks } from '.
 import { plan, legacyId, toIso, ORDER } from './legacy/plan.js'
 import { applyPlan, verify } from './legacy/apply.js'
 import { importInto } from './legacy/import.js'
+import { resetMmTables } from './legacy/import-live.js'
+import { bootstrap } from './db/index.js'
 import { pull, push } from './sync.js'
 import { T } from './entities.js'
 
@@ -293,6 +295,27 @@ test('a second import is refused rather than duplicating every row', async () =>
   /* Refused means nothing was written, not half-written. */
   const cards = await db.get(`SELECT COUNT(*) AS n FROM ${T('service_cards')}`)
   assert.equal(Number(cards.n), 2)
+})
+
+test('reset drops only prefixed tables and re-seeds the admin', async () => {
+  const db = freshDb()
+  await bootstrap(db, () => {})
+  /* Seed-like rows under our own tables, plus a legacy table alongside. */
+  await db.run(
+    `INSERT INTO ${T('customers')} (id, name, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?)`,
+    ['c-seed', 'Seed Customer', NOW, NOW, 1],
+  )
+  db.exec('CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT)')
+  db.run('INSERT INTO customers (id, name) VALUES (1, ?)', ['legacy row'])
+
+  const dropped = await resetMmTables(db)
+
+  assert.ok(dropped.includes(T('customers')))
+  assert.ok(!dropped.includes('customers'))
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('customers')}`)).n), 0)
+  /* Legacy source data is untouched and the admin is seeded again. */
+  assert.equal((await db.get('SELECT name AS n FROM customers WHERE id = 1')).n, 'legacy row')
+  assert.ok(await db.get(`SELECT id FROM ${T('employees')} WHERE id = 'emp-admin'`))
 })
 
 test('a legacy database full of legacy rows is not mistaken for an imported one', async () => {

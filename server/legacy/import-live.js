@@ -15,7 +15,8 @@ import { readdir } from 'node:fs/promises'
 import { plan, ORDER } from './plan.js'
 import { planPhotoCopies } from './photos.js'
 import { importInto } from './import.js'
-import { T } from '../entities.js'
+import { bootstrap } from '../db/index.js'
+import { PREFIX, T } from '../entities.js'
 
 export const DEFAULT_PHOTOS_DIR = '/private/data/photos'
 
@@ -54,12 +55,15 @@ function toDumpText(value, table, column, warnings) {
   return `'${String(value).replace(/'/g, "''")}'`
 }
 
+async function listTables(database) {
+  return database.dialect === 'mysql'
+    ? (await database.all('SELECT table_name AS n FROM information_schema.tables WHERE table_schema = DATABASE()')).map((r) => r.n)
+    : (await database.all(`SELECT name AS n FROM sqlite_master WHERE type = 'table'`)).map((r) => r.n)
+}
+
 async function readLiveTables(database, warnings) {
   const tables = new Map()
-  const names =
-    database.dialect === 'mysql'
-      ? (await database.all('SELECT table_name AS n FROM information_schema.tables WHERE table_schema = DATABASE()')).map((r) => r.n)
-      : (await database.all(`SELECT name AS n FROM sqlite_master WHERE type = 'table'`)).map((r) => r.n)
+  const names = await listTables(database)
   for (const name of names) {
     const rows = await database.all(`SELECT * FROM \`${name}\``)
     const columns = rows.length ? Object.keys(rows[0]) : []
@@ -95,6 +99,28 @@ async function photosDirExists(dir) {
   } catch {
     return false
   }
+}
+
+/*
+ * Drops every table under our own prefix and re-bootstraps the schema, so a
+ * blocked first import (seed/sample rows tripping already_imported) can
+ * restart clean. Legacy tables never start with the prefix, so the source
+ * data is unreachable by construction — the filter below is the whole safety
+ * argument, plus admin-only routing and a UI confirm. Exported for testing.
+ */
+export async function resetMmTables(database, log = () => {}) {
+  const names = (await listTables(database)).filter((n) => n.startsWith(PREFIX))
+  if (database.dialect === 'mysql') await database.exec('SET FOREIGN_KEY_CHECKS=0')
+  try {
+    for (const name of names) {
+      await database.exec(`DROP TABLE IF EXISTS \`${name}\``)
+    }
+  } finally {
+    if (database.dialect === 'mysql') await database.exec('SET FOREIGN_KEY_CHECKS=1')
+  }
+  log(`legacy-import reset: dropped ${names.length} tables`)
+  await bootstrap(database, () => {})
+  return names
 }
 
 export function registerLegacyImportRoutes(app, { database, authenticate, adminOnly, uploadsRoot, log }) {
@@ -139,6 +165,22 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
     } catch (e) {
       log(`legacy-import plan failed: ${e?.message}`)
       res.status(500).json({ error: 'plan_failed', detail: e?.message ?? 'unknown' })
+    }
+  })
+
+  app.post('/api/admin/legacy-import/reset', authenticate, adminOnly, async (req, res) => {
+    try {
+      if (req.body?.reset !== 'mm-tables') {
+        res.status(400).json({ error: 'confirm_required' })
+        return
+      }
+      /* Staged plans reference pre-reset ids; force a fresh plan afterwards. */
+      SESSIONS.clear()
+      const dropped = await resetMmTables(database, log)
+      res.json({ ok: true, dropped: dropped.length, tables: dropped })
+    } catch (e) {
+      log(`legacy-import reset failed: ${e?.message}`)
+      res.status(500).json({ error: 'reset_failed', detail: e?.message ?? 'unknown' })
     }
   })
 
