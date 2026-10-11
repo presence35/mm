@@ -8,6 +8,7 @@ import { createServer, makePinThrottle } from './index.js'
 import { bootstrap } from './db/index.js'
 import { sqliteDriver } from './db/driver.js'
 import { FULL_DDL } from './schema.js'
+import { listenTest } from './test-listen.js'
 import { T } from './entities.js'
 import { validatePin, createStaff } from './staff.js'
 
@@ -26,10 +27,8 @@ async function boot(options = {}) {
   db.exec(FULL_DDL)
   await bootstrap(db, () => {})
   const { app } = await createServer({ db, quiet: true, ...options })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
+  const { server, base } = await listenTest(app)
   server.unref()
-  const base = `http://127.0.0.1:${server.address().port}`
 
   /* employee_id is required in practice. Without it the server authenticates
      the first active employee on file, which means only one person could ever

@@ -10,6 +10,7 @@ import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.
 import { createServer } from './index.js'
 import { T, PREFIX, ALL_TABLES } from './entities.js'
 import { bootstrap } from './db/index.js'
+import { listenTest } from './test-listen.js'
 
 function freshDb() {
   const file = join(mkdtempSync(join(tmpdir(), 'mm-')), 't.db')
@@ -254,9 +255,7 @@ test('the public endpoint serves only the projection', async () => {
     { op_id: 'op-card', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-2481', season_year: 2026, status: 'intake', customer_token: 'tok-abcdefghijklmnop', other_work: 'SECRET internal note', remarks: 'SECRET remarks' } },
   ] })
 
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
-  const base = `http://127.0.0.1:${server.address().port}`
+  const { server, base } = await listenTest(app)
 
   const res = await fetch(`${base}/api/public/card/tok-abcdefghijklmnop`)
   const body = await res.json()
@@ -283,10 +282,8 @@ test('real customer tokens resolve, whatever their length', async () => {
   const db = freshDb()
   await bootstrap(db, () => {})
   const { app } = await createServer({ db, quiet: true })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
+  const { server, base } = await listenTest(app)
   server.unref()
-  const base = `http://127.0.0.1:${server.address().port}`
 
   const cases = [
     ['legacy 8-char token', 'VPrVMcbv'],
@@ -324,9 +321,7 @@ test('real customer tokens resolve, whatever their length', async () => {
 test('unknown and malformed tokens are indistinguishable', async () => {
   const db = freshDb()
   const { app } = await createServer({ db, quiet: true })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
-  const base = `http://127.0.0.1:${server.address().port}`
+  const { server, base } = await listenTest(app)
 
   const unknown = await fetch(`${base}/api/public/card/aaaaaaaaaaaaaaaa`)
   const malformed = await fetch(`${base}/api/public/card/short`)
@@ -343,10 +338,8 @@ test('a photo uploads, is written with metadata, and reaches the change log', as
      as. Auth is exactly what this test is about, so seed it. */
   await bootstrap(db, () => {})
   const { app } = await createServer({ db, quiet: true })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
+  const { server, base } = await listenTest(app)
   server.unref()
-  const base = `http://127.0.0.1:${server.address().port}`
 
   const login = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
@@ -399,10 +392,8 @@ test('a photo for a card that does not exist is refused', async () => {
   const db = freshDb()
   await bootstrap(db, () => {})
   const { app } = await createServer({ db, quiet: true })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
+  const { server, base } = await listenTest(app)
   server.unref()
-  const base = `http://127.0.0.1:${server.address().port}`
 
   const login = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
@@ -547,9 +538,7 @@ test('the upserts in the running code are ones toMySQL can translate', async () 
 test('sync routes require a session', async () => {
   const db = freshDb()
   const { app } = await createServer({ db, quiet: true })
-  const server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
-  const base = `http://127.0.0.1:${server.address().port}`
+  const { server, base } = await listenTest(app)
 
   const pull = await fetch(`${base}/api/sync/pull?cursor=0`)
   const pushRes = await fetch(`${base}/api/sync/push`, { method: 'POST', body: '{}' })

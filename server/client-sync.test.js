@@ -14,6 +14,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installIndexedDB } from './shim-indexeddb.js'
+import { listenTest } from './test-listen.js'
 
 installIndexedDB()
 
@@ -35,12 +36,10 @@ test.after(() => {
 
 test('setup: server up, session in', async () => {
   const { app } = await createServer({ quiet: true })
-  server = app.listen(0, '127.0.0.1')
-  await new Promise((r) => server.once('listening', r))
+  ;({ server, base } = await listenTest(app))
   /* Without this the listening socket holds the event loop open and the test
      runner never exits. */
   server.unref()
-  base = `http://127.0.0.1:${server.address().port}`
   transport.configureTransport({ base: `${base}/api` })
 
   const res = await fetch(`${base}/api/auth/login`, {
