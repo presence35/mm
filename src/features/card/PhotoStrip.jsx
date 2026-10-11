@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, StatusPill, EmptyState, Divider } from '../../ui'
+import { Button, Icon, IconButton, StatusPill, EmptyState, Divider } from '../../ui'
 import { useSync } from '../../engines/sync/SyncProvider.jsx'
 import { pickPhoto, uploadPhoto } from '../../engines/media/photos.js'
 import * as idb from '../../engines/store/idb.js'
+import * as store from '../../engines/store/localStore.js'
 
 /*
  * Photos.
@@ -30,6 +31,7 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
      that says so, never a broken image. */
   const [urls, setUrls] = useState({})
   const [missing, setMissing] = useState([])
+  const [confirmingId, setConfirmingId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -85,12 +87,32 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
         deviceId: await idb.deviceId(),
         signal: online,
       })
+      /* Project the row now instead of waiting for the next pull — the server
+         already stored it, and the strip reads from the local projection. */
+      await idb.put('photos', { ...result.photo, version: 1, updated_at: result.photo.uploaded_at ?? new Date().toISOString() })
+      await store.reload()
       setSaved(`${(result.bytes / 1024).toFixed(0)} KB · uploaded`)
       setTimeout(() => setSaved(null), 4000)
     } catch (e) {
       setBlocked({ reason: e.offline ? 'offline' : 'failed', name: file.name })
     } finally {
       setBusy(false)
+    }
+  }
+
+  const remove = async (photo) => {
+    const token = tokenOf()
+    try {
+      const res = await fetch(`/api/photos/${encodeURIComponent(photo.id)}`, {
+        method: 'DELETE',
+        headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' },
+        body: JSON.stringify({ device_id: await idb.deviceId() }),
+      })
+      if (!res.ok) throw new Error(`delete failed: ${res.status}`)
+      await idb.removeLocal('photos', photo.id)
+      await store.reload()
+    } catch {
+      setBlocked({ reason: 'failed', name: photo.caption || photo.filename })
     }
   }
 
@@ -158,6 +180,16 @@ export default function PhotoStrip({ cardId, photos, onRetryUpload }) {
                     </span>
                   ) : null}
                 </>
+              )}
+              {confirmingId === key ? (
+                <span style={{ position: 'absolute', top: 2, right: 2, display: 'flex', gap: 2 }}>
+                  <IconButton icon="close" label="Keep photo" onClick={() => setConfirmingId(null)} />
+                  <IconButton icon="trash" label="Confirm delete photo" onClick={() => { setConfirmingId(null); remove(p) }} />
+                </span>
+              ) : (
+                <span style={{ position: 'absolute', top: 2, right: 2 }}>
+                  <IconButton icon="trash" label="Delete photo" onClick={() => setConfirmingId(key)} />
+                </span>
               )}
               {p.caption ? (
                 <figcaption style={{ position: 'absolute', font: 'var(--label-s)', color: 'var(--on-surface-variant)', marginTop: 120, whiteSpace: 'nowrap' }}>

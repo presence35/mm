@@ -1,7 +1,9 @@
 import express from 'express'
 import { readFileSync } from 'node:fs'
+import { unlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import multer from 'multer'
+import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 
@@ -282,9 +284,41 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       res.status(404).json({ error: 'not_found' })
       return
     }
+    /* A tombstoned row must stop serving even if its file lingers. */
+    const row = await database.get(
+      `SELECT id FROM ${T('photos')} WHERE card_id = ? AND filename = ? AND deleted_at IS NULL`,
+      [req.params.cardId, name],
+    )
+    if (!row) {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
     res.sendFile(name, { root: join(ROOT, 'uploads', req.params.cardId) }, (err) => {
       if (err && !res.headersSent) res.status(404).json({ error: 'not_found' })
     })
+  })
+
+  /* Tombstone, never a hard delete — other devices drop the row by delta pull.
+     The file is unlinked best-effort; the row above stops serving regardless. */
+  app.delete('/api/photos/:id', authenticate, async (req, res) => {
+    const row = await database.get(`SELECT * FROM ${T('photos')} WHERE id = ? AND deleted_at IS NULL`, [req.params.id])
+    if (!row) {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    const now = new Date().toISOString()
+    const version = Number(row.version) + 1
+    await database.run(
+      `UPDATE ${T('photos')} SET deleted_at = ?, version = ?, updated_at = ?, updated_by = ?, device_id = ? WHERE id = ?`,
+      [now, version, now, req.employee.employee_id, req.body?.device_id ?? null, row.id],
+    )
+    await unlink(join(ROOT, 'uploads', row.card_id, row.filename)).catch(() => {})
+    await database.run(
+      `INSERT INTO ${T('change_log')} (op_id, entity, entity_id, op, version, payload, changed_at, updated_by, device_id)
+       VALUES (?, 'photos', ?, 'delete', ?, NULL, ?, ?, ?)`,
+      [randomUUID(), row.id, version, now, req.employee.employee_id, req.body?.device_id ?? null],
+    )
+    res.json({ ok: true })
   })
 
   /* ------------------------------------------------------------- public */

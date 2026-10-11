@@ -97,3 +97,23 @@ test('a fresh device with no reference data still has someone to offer', async (
   assert.ok(staff.length >= 1)
   assert.equal(store.storageProblem(), null)
 })
+
+test('synced photo rows project into the card view', async () => {
+  /* The rows arrived by pull long before any UI read them: withChildren never
+     mapped them, so every card showed "No photos yet" with a full photo table. */
+  const created = await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-PHOTO', season_year: 2026 })
+  await idb.put('photos', {
+    id: 'ph-1',
+    card_id: created.id,
+    filename: '1790096896456-215885214.jpg',
+    caption: 'Transom damage',
+    uploaded_at: '2026-10-03T12:00:00.000Z',
+    version: 1,
+  })
+  await store.reload()
+
+  const photos = store.getCard(created.id).card.photos
+  assert.equal(photos.length, 1)
+  assert.equal(photos[0].filename, '1790096896456-215885214.jpg')
+  assert.equal(photos[0].caption, 'Transom damage')
+})

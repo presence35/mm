@@ -465,6 +465,66 @@ test('an uploaded photo downloads byte-identical, and a missing one is a 404', a
   server.close()
 })
 
+test('deleting a photo tombstones the row, unlinks the file, and notifies other devices', async () => {
+  const db = freshDb()
+  await bootstrap(db, () => {})
+  const { app } = await createServer({ db, quiet: true })
+  const { server, base } = await listenTest(app)
+  server.unref()
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: '1234' }),
+  })
+  const { token } = await login.json()
+  const auth = { authorization: `Bearer ${token}` }
+
+  await push(db, {
+    ...ADMIN,
+    ops: [
+      customer('c-1'),
+      { op_id: 'op-b', entity: 'boats', entity_id: 'b-1', op: 'upsert', rev: 0, payload: { id: 'b-1', customer_id: 'c-1', name: 'Sea Jay' } },
+      { op_id: 'op-k', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-1' } },
+    ],
+  })
+
+  const png = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+    'base64',
+  )
+  const form = new FormData()
+  form.append('photo', new Blob([png], { type: 'image/jpeg' }), 'shot.jpg')
+  form.append('card_id', 'k-1')
+  form.append('device_id', 'dev-photo')
+  const up = await fetch(`${base}/api/photos`, { method: 'POST', headers: auth, body: form })
+  const { photo } = await up.json()
+  assert.equal(up.status, 200)
+
+  const gone = await fetch(`${base}/api/photos/${photo.id}`, {
+    method: 'DELETE',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ device_id: 'dev-photo' }),
+  })
+  assert.equal(gone.status, 200)
+
+  /* Serves nothing afterwards, even though the URL is unchanged. */
+  const after = await fetch(`${base}/api/photos/k-1/${photo.filename}`, { headers: auth })
+  assert.equal(after.status, 404)
+
+  const row = await db.get(`SELECT deleted_at FROM ${T('photos')} WHERE id = ?`, [photo.id])
+  assert.ok(row.deleted_at, 'tombstone, not a hard delete')
+  const changes = await pull(db, { cursor: 0 })
+  const tombstone = changes.changes.filter((c) => c.entity === 'photos' && c.entity_id === photo.id).at(-1)
+  assert.equal(tombstone?.op, 'delete')
+
+  const second = await fetch(`${base}/api/photos/${photo.id}`, { method: 'DELETE', headers: auth })
+  assert.equal(second.status, 404)
+  const anon = await fetch(`${base}/api/photos/${photo.id}`, { method: 'DELETE' })
+  assert.equal(anon.status, 401)
+  server.close()
+})
+
 /*
  * The new app shares a MySQL schema with the legacy app during cutover. A SQL
  * site that forgot T() would not fail loudly — CREATE TABLE IF NOT EXISTS would
