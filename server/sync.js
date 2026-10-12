@@ -25,10 +25,12 @@ const PULL_LIMIT_CAP = 1000
 const GC_FLOOR_DAYS = 90
 
 /* behaviours-auth.md constraint 5: only mechanic card work queues offline, so
-   these never accept a write from a client that cannot prove a live session. */
+   these never accept a write from a client that cannot prove a live session.
+   Appointments are absent from `mechanic` on purpose: a booking is an office
+   action, and two phones off the network must not both take the ramp. */
 const ROLE_CAN_WRITE = {
   admin: new Set(Object.keys(ALL_TABLES)),
-  office: new Set(['customers', 'boats', 'boat_serials', 'service_cards', 'received_items', 'authorized_work', 'invoice_items', 'status_history', 'work_logs', 'parts_used']),
+  office: new Set(['customers', 'boats', 'boat_serials', 'service_cards', 'received_items', 'authorized_work', 'invoice_items', 'status_history', 'work_logs', 'parts_used', 'appointments']),
   mechanic: new Set(['received_items', 'authorized_work', 'condition_assessment', 'checklist_completions', 'work_logs', 'parts_used', 'photos']),
 }
 
@@ -43,11 +45,18 @@ export function rowToPayload(entity, row) {
 /* SQLite refuses booleans, and undefined. The client speaks JS; the wire
    speaks SQL. Anything that is not a bindable scalar is stored as JSON text
    rather than crashing the process — a malformed write must not take the
-   server down. */
-function bindable(value) {
+   server down.
+
+   Column-aware, because truncating a REAL is how 24.5 ft became 24 ft: the
+   schema declared `length_ft` REAL while this function silently floored it on
+   every write. */
+function bindable(name, value) {
   if (value === null || value === undefined) return null
   if (typeof value === 'boolean') return value ? 1 : 0
-  if (typeof value === 'number') return Number.isInteger(value) ? value : Math.trunc(value)
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null
+    return INTEGER_COLUMNS.has(name) ? Math.trunc(value) : value
+  }
   if (typeof value === 'string') return value
   if (value instanceof Date) return value.toISOString()
   return JSON.stringify(value)
@@ -58,15 +67,30 @@ function bindable(value) {
    pulls it and keeps reproducing itself. */
 function normaliseRead(entity, name, value) {
   if (value === null || value === undefined) return null
-  if (NUMERIC_COLUMNS.has(name)) {
+  if (INTEGER_COLUMNS.has(name)) {
     const n = Number(value)
     return Number.isFinite(n) ? Math.trunc(n) : null
+  }
+  if (REAL_COLUMNS.has(name)) {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
   }
   if (typeof value === 'boolean') return value ? 1 : 0
   return value
 }
 
-const NUMERIC_COLUMNS = new Set(['boathouse_no', 'slip_no', 'storage_row', 'season_year', 'length_ft', 'tax_rate', 'unit_price', 'total', 'quantity', 'gps_lat', 'gps_lng'])
+/* The two sets mirror schema.js columnDdl exactly. A column declared INTEGER
+   there and REAL here (or the reverse) round-trips wrong in both directions. */
+const INTEGER_COLUMNS = new Set([
+  'version', 'rev', 'sort_order', 'quantity', 'total', 'active', 'is_fake', 'is_scanned',
+  'wrap_required', 'unwrap_done', 'authorized', 'completed', 'present',
+  'boathouse_no', 'slip_no', 'storage_row', 'season_year',
+])
+
+const REAL_COLUMNS = new Set([
+  'length_ft', 'width_ft', 'height_front_ft', 'height_back_ft',
+  'tax_rate', 'unit_price', 'gps_lat', 'gps_lng',
+])
 
 /* ------------------------------------------------------------------ push */
 
@@ -140,7 +164,7 @@ async function applyUpsert(db, { deviceId, actorId, op }) {
     if (c === 'updated_by') return actorId
     if (c === 'device_id') return deviceId
     if (c === 'deleted_at') return existing?.deleted_at ?? null
-    return bindable(payload[c] ?? existing?.[c] ?? null)
+    return bindable(c, payload[c] ?? existing?.[c] ?? null)
   })
 
   const placeholders = columns.map(() => '?').join(', ')

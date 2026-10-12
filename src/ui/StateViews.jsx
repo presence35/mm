@@ -95,17 +95,3 @@ export function OfflineBar({ state, pending }) {
     </div>
   )
 }
-
-export function ProgressLinear({ value, indeterminate }) {
-  return (
-    <div
-      className={`progress-linear ${indeterminate ? 'progress-linear--indeterminate' : ''}`}
-      role="progressbar"
-      aria-valuenow={indeterminate ? undefined : value}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <div className="progress-linear__bar" style={{ width: indeterminate ? undefined : `${value}%` }} />
-    </div>
-  )
-}

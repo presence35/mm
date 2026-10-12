@@ -12,8 +12,108 @@
  * we say so plainly instead of uploading a silent failure.
  */
 
+import * as idb from '../store/idb.js'
+import * as store from '../store/localStore.js'
+
 const MAX_EDGE = 1600
 const QUALITY = 0.82
+
+/*
+ * `photo_type` is a closed set.
+ *
+ * It is what the gallery filters on and what a worker tags at the moment of
+ * capture, so it cannot be free text — a typo would create a category with one
+ * photo in it and no way to find it again. Adding a value is a change here and
+ * in docs/behaviors-sync.md, not a change in a screen.
+ */
+export const PHOTO_TYPES = [
+  { value: 'general', label: 'General' },
+  { value: 'intake', label: 'Intake' },
+  { value: 'damage', label: 'Damage' },
+  { value: 'received_item', label: 'Item received' },
+  { value: 'condition', label: 'Condition' },
+  { value: 'work', label: 'Work in progress' },
+  { value: 'completed', label: 'Completed' },
+]
+
+const PHOTO_TYPE_LABEL = Object.fromEntries(PHOTO_TYPES.map((t) => [t.value, t.label]))
+
+export function photoTypeLabel(value) {
+  return PHOTO_TYPE_LABEL[value] ?? 'General'
+}
+
+const TOKEN_KEY = 'mm.token'
+
+/* An <img> cannot send an Authorization header, so the bytes are fetched with
+   the token and handed to the caller as an object URL. The caller owns revoking
+   it. Returns null when the row has no file behind it — 60 of them after the
+   legacy import — which the gallery renders as a stated tile rather than a
+   broken image. */
+export async function fetchPhotoObjectUrl({ cardId, filename, token }) {
+  try {
+    const res = await fetch(`/api/photos/${encodeURIComponent(cardId)}/${encodeURIComponent(filename)}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) return null
+    return URL.createObjectURL(await res.blob())
+  } catch {
+    return null
+  }
+}
+
+export function storedToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+/*
+ * Capture, tag, upload, project.
+ *
+ * Everything a photo needs that is not rendering lives here, so the strip is a
+ * display component and the offline decision has exactly one home. Throws
+ * UploadBlocked when there is no signal: the shutter must never look like a
+ * successful save.
+ */
+export async function captureAndUpload({ cardId, token, deviceId, signal, photoType, workLogId, caption }) {
+  if (!signal) {
+    throw new UploadBlocked('Photos need a connection. Everything else you wrote is already saved.', { pending: 0 })
+  }
+
+  const file = await pickPhoto()
+  if (!file) return null
+
+  const result = await uploadPhoto({ cardId, file, token, deviceId, caption, photoType, workLogId, signal })
+
+  /* Project the row now rather than waiting for the next pull: the server
+     already stored it, and the gallery reads from the local projection. */
+  const row = {
+    ...result.photo,
+    photo_type: result.photo.photo_type ?? photoType ?? 'general',
+    version: 1,
+    updated_at: result.photo.uploaded_at ?? new Date().toISOString(),
+  }
+  await idb.put('photos', row)
+  await store.reload()
+  return result
+}
+
+/* Deleting a photo is a server call and then a local projection, in that
+   order: if the server refuses, the row must not vanish from the device and
+   leave a photo on the server nobody can see. */
+export async function deletePhoto({ photo, deviceId, token }) {
+  const res = await fetch(`/api/photos/${encodeURIComponent(photo.id)}`, {
+    method: 'DELETE',
+    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' },
+    body: JSON.stringify({ device_id: deviceId }),
+  })
+  if (!res.ok) throw new Error(`delete failed: ${res.status}`)
+
+  await idb.removeLocal('photos', photo.id)
+  await store.reload()
+}
 
 export class UploadBlocked extends Error {
   constructor(message, { pending = 0 } = {}) {

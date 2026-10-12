@@ -14,7 +14,7 @@
  */
 
 import * as idb from './idb.js'
-import { SEED_CARDS, SEED_BOATS, SEED_CUSTOMERS, SEED_STAFF } from './seed.js'
+import { SEED_CARDS, SEED_BOATS, SEED_CUSTOMERS, SEED_STAFF, SEED_APPOINTMENTS, SEED_STORAGE_POSITIONS } from './seed.js'
 
 const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customers' }
 
@@ -46,7 +46,7 @@ const childId = {
   invoice_items: (cardId, i) => `ii-${cardId}-${i}`,
 }
 
-let db = { cards: [], boats: [], customers: [], employees: [], children: {} }
+let db = { cards: [], boats: [], customers: [], employees: [], storageLayout: [], children: {} }
 
 function emptyChildren() {
   return Object.fromEntries(CHILD_ENTITIES.map((e) => [e, []]))
@@ -80,11 +80,13 @@ export function hydrate() {
 
   hydratePromise = (async () => {
     try {
-      const [cards, boats, customers, employees, ...childRows] = await Promise.all([
+      const [cards, boats, customers, employees, storageLayout, appointments, ...childRows] = await Promise.all([
         idb.all('service_cards'),
         idb.all('boats'),
         idb.all('customers'),
         idb.getReference('employees'),
+        idb.getReference('storage_layout'),
+        idb.all('appointments'),
         ...CHILD_ENTITIES.map((e) => idb.all(e)),
       ])
       const children = Object.fromEntries(CHILD_ENTITIES.map((e, i) => [e, childRows[i]]))
@@ -152,17 +154,26 @@ export function hydrate() {
         await Promise.all([
           ...SEED_CUSTOMERS.map((c) => idb.putAndQueue('customers', { ...c, version: 0, updated_at: now })),
           ...SEED_BOATS.map((b) => idb.putAndQueue('boats', { ...b, version: 0, updated_at: now })),
+          ...SEED_APPOINTMENTS.map((a) => idb.putAndQueue('appointments', { ...a, version: 0, updated_at: now })),
         ])
+
+        /* Reference data is server-owned, but a device that has never synced
+           still has to render a map. This is the bootstrap snapshot
+           (architecture.md §Reference data), written once and replaced by the
+           server's version on the first successful pull. */
+        await idb.putReference({ storage_layout: SEED_STORAGE_POSITIONS })
 
         db = {
           cards: SEED_CARDS.map(({ received_items, authorized_work, condition, logs, photos, ...c }) => ({ ...c, version: 0, local_pending: true })),
           boats: SEED_BOATS.map((b) => ({ ...b, version: 0, local_pending: true })),
           customers: SEED_CUSTOMERS.map((c) => ({ ...c, version: 0, local_pending: true })),
           employees: roster.map((e) => ({ ...e, version: 0, local_pending: true })),
+          storageLayout: SEED_STORAGE_POSITIONS,
+          appointments: SEED_APPOINTMENTS.map((a) => ({ ...a, version: 0, local_pending: true })),
           children: seededChildren,
         }
       } else {
-        db = { cards, boats, customers, employees: roster, children }
+        db = { cards, boats, customers, employees: roster, storageLayout, appointments, children }
       }
     } catch (e) {
       /* Storage is unavailable — private mode, or a browser that refuses. Say
@@ -174,6 +185,8 @@ export function hydrate() {
         boats: SEED_BOATS,
         customers: SEED_CUSTOMERS,
         employees: SEED_STAFF,
+        storageLayout: SEED_STORAGE_POSITIONS,
+        appointments: SEED_APPOINTMENTS,
         children: emptyChildren(),
       }
     }
@@ -257,6 +270,8 @@ function withChildren(card) {
       id: r.id,
       filename: r.filename,
       caption: r.caption,
+      photo_type: r.photo_type,
+      work_log_id: r.work_log_id,
       uploaded_at: r.uploaded_at,
     })),
   }
@@ -288,6 +303,44 @@ export function cardsForCustomer(customerId) {
 
 export function cardByToken(token) {
   return db.cards.find((c) => c.customer_token === token) ?? null
+}
+
+/* Server-owned storage positions. Read synchronously like everything else —
+   a screen must never await. Hydrated at boot and after a sync reload. */
+export function listStorageLayout() {
+  return db.storageLayout
+}
+
+/* ----------------------------------------------------------------- schedule */
+
+export function listAppointments({ cardId = null } = {}) {
+  return cardId ? db.appointments.filter((a) => a.card_id === cardId) : [...db.appointments]
+}
+
+/*
+ * Create or update an appointment.
+ *
+ * This is the write half of scheduling, and it is deliberately NOT reachable
+ * offline: the caller refuses before getting here (constraint 15). Nothing in
+ * this function queues a booking that a second phone could also make.
+ */
+export function putAppointment(fields) {
+  const existing = fields.id ? db.appointments.find((a) => a.id === fields.id) : null
+  const base = existing ?? {
+    status: 'proposed',
+    notes: null,
+    assigned_employee_id: null,
+    card_id: null,
+    boat_id: null,
+    customer_id: null,
+    version: 0,
+  }
+  const row = { ...base, ...fields, id: existing?.id ?? fields.id ?? idb.newId('ap'), local_pending: true }
+
+  db.appointments = existing ? db.appointments.map((a) => (a.id === row.id ? row : a)) : [...db.appointments, row]
+  idb.putAndQueue('appointments', row).catch(() => {})
+  notify()
+  return row
 }
 
 /* ----------------------------------------------------------------- writes */
@@ -532,7 +585,7 @@ export async function clearPendingFlags() {
 
 /* Generic entity access for the conflict resolver, which deals in whatever
    entity a conflict happened to be on rather than cards specifically. */
-const LISTS = { service_cards: 'cards', boats: 'boats', customers: 'customers' }
+const LISTS = { service_cards: 'cards', boats: 'boats', customers: 'customers', appointments: 'appointments' }
 
 export function getEntity(entity, id) {
   if (CHILD_ENTITIES.includes(entity)) {

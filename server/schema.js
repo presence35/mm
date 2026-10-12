@@ -59,7 +59,7 @@ function columnDdl(name) {
    "BH 3.0" and, once pulled onto a client, keeps re-seeding that value. */
   if (['version', 'sort_order', 'quantity', 'total', 'active', 'is_fake', 'is_scanned', 'wrap_required', 'unwrap_done', 'authorized', 'completed', 'present', 'boathouse_no', 'slip_no', 'storage_row', 'season_year'].includes(n))
     return `  ${name.padEnd(12)} INTEGER DEFAULT 0`
-  if (['length_ft', 'tax_rate', 'unit_price', 'gps_lat', 'gps_lng'].includes(n))
+  if (['length_ft', 'width_ft', 'height_front_ft', 'height_back_ft', 'tax_rate', 'unit_price', 'gps_lat', 'gps_lng'].includes(n))
     return `  ${name.padEnd(12)} REAL`
   return `  ${name.padEnd(12)} TEXT`
 }

@@ -73,9 +73,9 @@ Exactly three.
 
 | Role | Capabilities |
 |---|---|
-| `admin` | Everything: employees, catalogue, templates, backup. |
-| `office` | Create/edit customers, boats, cards. Build and issue invoices. No employees, no catalogue. |
-| `mechanic` | Work on cards: tasks, checklists, condition, logs, photos. No customer creation, no invoicing, no Setup. |
+| `admin` | Everything: employees, catalogue, templates, backup, scheduling. |
+| `office` | Create/edit customers, boats, cards. Build and issue invoices. Book appointments. No employees, no catalogue. |
+| `mechanic` | Work on cards: tasks, checklists, condition, logs, photos. View the schedule for today. No customer creation, no invoicing, no Setup, **no booking**. |
 
 The old `constants.js` defined five (`cleaner`, `wrapper`). Those are gone — cleaning and wrapping are *tasks on a card*, not jobs someone holds.
 

@@ -912,32 +912,6 @@ select.field__input { cursor: pointer; }
 .offline-bar--syncing { background: var(--primary-container); color: var(--on-primary-container); }
 .offline-bar--conflict { background: var(--error-container); color: var(--on-error-container); }
 
-/* --------------------------------------------------------------- Progress -- */
-
-.progress-linear {
-  height: 4px;
-  border-radius: var(--corner-full);
-  background: var(--surface-container-highest);
-  overflow: hidden;
-}
-
-.progress-linear__bar {
-  height: 100%;
-  background: var(--primary);
-  border-radius: var(--corner-full);
-  transition: width var(--duration-medium-2) var(--easing-standard);
-}
-
-.progress-linear--indeterminate .progress-linear__bar {
-  width: 40%;
-  animation: indeterminate 1.4s var(--easing-standard) infinite;
-}
-
-@keyframes indeterminate {
-  0% { margin-left: -40%; }
-  100% { margin-left: 100%; }
-}
-
 .progress-circular {
   width: 32px;
   height: 32px;
@@ -1043,4 +1017,151 @@ select.field__input { cursor: pointer; }
 @media (max-width: 839px) {
   .split { flex-direction: column; }
   .split__list { width: 100%; border-right: 0; }
+}
+/* ----------------------------------------------------------- Stage strip -- */
+
+/* One row, horizontally scrollable. Nine stages will not fit on a phone, and
+   wrapping them into a wall of capsules costs more vertical space than the bar
+   it replaced. */
+.stage-strip {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  list-style: none;
+  margin: 0;
+}
+
+.stage-strip::-webkit-scrollbar { display: none; }
+.stage-strip__item { flex: 0 0 auto; }
+
+.stage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--corner-full);
+  font: var(--label-m);
+  white-space: nowrap;
+  position: relative;
+  isolation: isolate;
+  transition: box-shadow var(--duration-short-3) var(--easing-standard);
+}
+
+/* The 48px target lives outside the 32px capsule, so the strip stays dense
+   without shrinking the hit area under a glove. */
+.stage::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--target-min);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.stage__mark {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--corner-full);
+  border: 2px solid currentColor;
+  flex-shrink: 0;
+}
+
+/* Done: success is carried by a tick, so greyscale still reads as done. */
+.stage--done {
+  background: var(--success-container);
+  color: var(--on-success-container);
+}
+
+/* Current: the only filled, outlined capsule in the row. */
+.stage--current {
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.stage--current .stage__mark { background: currentColor; }
+
+/* Future: outlined and dimmed, so it cannot be mistaken for a filled capsule. */
+.stage--future {
+  background: transparent;
+  color: var(--on-surface-variant);
+  box-shadow: inset 0 0 0 1px var(--outline-variant);
+  opacity: 0.7;
+}
+
+/* Optional: dashed, because a positional done here does not mean the work was
+   performed. */
+.stage--optional { border: 1px dashed var(--outline); }
+.stage--optional.stage--done { border-color: var(--on-success-container); }
+
+.stage:not(button) { cursor: default; }
+.stage[disabled] { opacity: 0.38; }
+
+/* ------------------------------------------------------------ Collapsible -- */
+
+.collapsible__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target-min);
+  padding: 0 var(--space-4);
+  text-align: left;
+  color: var(--on-surface-variant);
+  font: var(--label-l);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.collapsible__chevron { flex-shrink: 0; }
+.collapsible__title { flex-shrink: 0; }
+
+/* The count answers "is there anything in here" without opening the section. */
+.collapsible__count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 0 var(--space-1);
+  border-radius: var(--corner-full);
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font: var(--label-s);
+  text-align: center;
+}
+
+/* One line when closed. Truncates rather than wrapping, so a long summary
+   cannot push the next section down the page. */
+.collapsible__summary {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0;
+  font: var(--body-s);
+  color: var(--on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapsible__panel[hidden] { display: none; }
+/* Count riding on a filter chip. Answers "is this filter worth opening"
+   without opening it. */
+.chip__count {
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--corner-full);
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+  font: var(--label-s);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.chip[aria-pressed='true'] .chip__count {
+  background: var(--on-secondary-container);
+  color: var(--secondary-container);
 }

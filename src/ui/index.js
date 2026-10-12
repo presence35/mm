@@ -4,11 +4,12 @@ export { Card, Divider, ListItem, StatusPill, Badge, KeyValue } from './Surface'
 export { Chip, ChipRow, Segmented } from './Chip'
 export { TextField, SelectField, SearchBar } from './TextField'
 export { Snackbar, Dialog, Sheet, TopBar } from './Feedback'
+export { default as StageStrip } from './StageStrip'
+export { default as Collapsible } from './Collapsible'
 export {
   Skeleton,
   LoadingList,
   EmptyState,
   ErrorState,
   OfflineBar,
-  ProgressLinear,
 } from './StateViews'

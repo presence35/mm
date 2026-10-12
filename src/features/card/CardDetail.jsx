@@ -8,10 +8,11 @@ import {
   Sheet,
   StatusPill,
   KeyValue,
-  ProgressLinear,
   Divider,
+  Collapsible,
+  StageStrip,
 } from '../../ui'
-import { statusMeta, nextStatuses, progressPercent, CARD_STATUS } from '../../domain/cardStatus.js'
+import { STAGES, stagePhase, canTransition } from '../../domain/cardStatus.js'
 import { locationSummary, STORAGE_TYPES } from '../../domain/storageLocation.js'
 import { SEED_RECEIVED_ITEMS, SEED_AUTHORIZED_WORK, SEED_CONDITIONS } from '../../engines/store/seed.js'
 import ConditionEditor, { summarise } from './ConditionEditor.jsx'
@@ -26,7 +27,6 @@ import PhotoStrip from './PhotoStrip.jsx'
 const RECEIVED_LABELS = Object.fromEntries(SEED_RECEIVED_ITEMS.map((k) => [k, k.replace(/_/g, ' ')]))
 
 export default function CardDetail({ record, embedded, selected, onBack, onDirtyChange, actions }) {
-  const [statusSheet, setStatusSheet] = useState(false)
   const [conditionSheet, setConditionSheet] = useState(false)
   const [qrSheet, setQrSheet] = useState(false)
 
@@ -51,12 +51,24 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   }
 
   const { card, boat, customer } = record
-  const meta = statusMeta(card.status)
-  const options = nextStatuses(card.status)
   const storageLabel = STORAGE_TYPES.find((t) => t.value === card.storage_type)?.label ?? '—'
   const conflicted = actions.conflictedIds?.includes(card.id)
 
+  /* One stage control, one derivation. The legacy app showed the stage as a
+     tracker strip AND a prev/next stepper; this rebuild had grown a third, a
+     progress bar. They were the same fact stated three ways. */
+  const stages = STAGES.map((s) => ({
+    ...s,
+    phase: stagePhase(card.status, s.key),
+    selectable: canTransition(card.status, s.key),
+  }))
+  const canMove = stages.some((s) => s.selectable)
+
+  const received = card.received_items ?? []
+  const authorized = (card.authorized_work ?? []).filter((w) => w.authorized)
   const conditionSummary = summarise(card.condition, SEED_CONDITIONS.length)
+  const photos = card.photos ?? []
+  const logs = card.logs ?? []
 
   return (
     <div>
@@ -64,9 +76,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         <TopBar
           title={card.work_order_no}
           onBack={onBack}
-          actions={
-            <IconButton icon="dots" label="More actions" />
-          }
+          actions={<IconButton icon="dots" label="More actions" />}
         />
       ) : null}
 
@@ -82,29 +92,30 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         </div>
       ) : null}
 
-      <header style={{ padding: 'var(--space-4)' }}>
-        <div className="row" style={{ gap: 'var(--space-2)' }}>
-          <StatusPill tone={meta.tone} shape={meta.shape}>
-            {meta.label}
-          </StatusPill>
-          {card.is_scanned ? (
+      <header style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
+        {card.is_scanned ? (
+          <div className="row" style={{ gap: 'var(--space-2)' }}>
             <StatusPill tone="neutral" shape="square">
               Scanned
             </StatusPill>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
-        <h2 style={{ font: 'var(--headline-s)', marginTop: 'var(--space-3)' }}>
+        <h2 style={{ font: 'var(--headline-s)', marginTop: card.is_scanned ? 'var(--space-3)' : 0 }}>
           {boat?.name || boat?.model || 'Unnamed boat'}
         </h2>
         <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)' }}>
           {[customer?.name, boat?.motor_type, boat?.licence].filter(Boolean).join(' · ')}
         </p>
-
-        <div style={{ marginTop: 'var(--space-4)' }}>
-          <ProgressLinear value={Math.round(progressPercent(card.status) * 100)} />
-        </div>
       </header>
+
+      {/* The stage control is also the way forward and back. Legal targets are
+          the only ones rendered as buttons, and legality lives in
+          domain/cardStatus.js, not here. */}
+      <StageStrip stages={stages} onSelect={(key) => actions.patch({ status: key })} />
+      <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4)' }}>
+        {canMove ? 'Tap the next stage to move this card on.' : 'This card is archived. Nothing further to do.'}
+      </p>
 
       <Divider />
 
@@ -123,64 +134,75 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         ]}
       />
 
-      <Divider />
+      <Collapsible
+        title="Items received at intake"
+        count={received.length}
+        summary={`${received.length} of ${SEED_RECEIVED_ITEMS.length} accounted for`}
+      >
+        <ReceivedItems
+          items={SEED_RECEIVED_ITEMS}
+          selected={received}
+          onToggle={actions.toggleReceivedItem}
+          onPhotograph={(item) => actions.capturePhoto({ photoType: 'received_item', caption: RECEIVED_LABELS[item] })}
+        />
+      </Collapsible>
 
-      <ReceivedItems
-        items={Object.keys(RECEIVED_LABELS)}
-        selected={card.received_items ?? []}
-        onToggle={actions.toggleReceivedItem}
-      />
+      <Collapsible title="Authorized work" count={authorized.length} summary={`${authorized.length} of ${SEED_AUTHORIZED_WORK.length} authorized`}>
+        <AuthorizedWork
+          work={(card.authorized_work ?? []).map((w) => ({
+            ...w,
+            key: w.key,
+            label: SEED_AUTHORIZED_WORK.find((s) => s.key === w.key)?.label ?? w.key,
+          }))}
+          onToggleAuthorized={actions.toggleAuthorized}
+          onToggleCompleted={actions.toggleCompleted}
+        />
+      </Collapsible>
 
-      <AuthorizedWork
-        work={(card.authorized_work ?? []).map((w) => ({
-          ...w,
-          key: w.key,
-          label: SEED_AUTHORIZED_WORK.find((s) => s.key === w.key)?.label ?? w.key,
-        }))}
-        onToggleAuthorized={actions.toggleAuthorized}
-        onToggleCompleted={actions.toggleCompleted}
-      />
+      <Collapsible title="Condition assessment" summary={conditionSummary}>
+        <ListItem
+          icon="alert"
+          title="Rate condition"
+          support={conditionSummary}
+          onClick={() => setConditionSheet(true)}
+          trailing={<Icon name="right" size={20} />}
+        />
+      </Collapsible>
 
-      <Divider />
+      <Collapsible title="Storage prep" summary={card.wrap_required ? 'Wrapping required' : 'No wrap'}>
+        <WrapControl wrapRequired={card.wrap_required} unwrapDone={card.unwrap_done} onChange={actions.patch} />
+      </Collapsible>
 
-      <div className="section-head">Condition assessment</div>
-      <ListItem
-        icon="alert"
-        title="Rate condition"
-        support={conditionSummary}
-        onClick={() => setConditionSheet(true)}
-        trailing={<Icon name="right" size={20} />}
-      />
+      <Collapsible title="Photos" count={photos.length} summary={photos.length ? `${photos.length} on this card` : 'None yet'}>
+        <PhotoStrip
+          cardId={card.id}
+          photos={photos}
+          online={actions.online}
+          onCapture={actions.capturePhoto}
+          onDelete={actions.deletePhoto}
+          onRetryUpload={actions.onRetryUpload}
+        />
+      </Collapsible>
 
-      <Divider />
+      <Collapsible title="Work log" count={logs.length} summary={logs.length ? `${logs.length} entries` : 'No entries yet'}>
+        <LogList
+          logs={logs}
+          cardId={card.id}
+          photos={photos}
+          onAddPhoto={(log) => actions.capturePhoto({ photoType: 'work', workLogId: log.id })}
+        />
+        <LogComposer onSave={actions.addLog} onDirtyChange={onDirtyChange} />
+      </Collapsible>
 
-      <WrapControl
-        wrapRequired={card.wrap_required}
-        unwrapDone={card.unwrap_done}
-        onChange={actions.patch}
-      />
-
-      <Divider />
-
-      <PhotoStrip cardId={card.id} photos={card.photos ?? []} onRetryUpload={actions.onRetryUpload} />
-
-      <Divider />
-
-      <div className="section-head">Work log</div>
-      <LogList logs={card.logs ?? []} />
-      <LogComposer onSave={actions.addLog} onDirtyChange={onDirtyChange} />
-
-      {/* One dominant action per screen: move the card forward. */}
-      <div style={{ padding: '0 var(--space-4) var(--space-3)' }}>
-        <Button fullWidth onClick={() => setStatusSheet(true)} iconAfter="down" disabled={!options.length}>
-          Move to…
-        </Button>
-      </div>
-
-      <div style={{ padding: '0 var(--space-4) var(--space-6)', display: 'flex', gap: 'var(--space-2)' }}>
+      <div style={{ padding: 'var(--space-4)', display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {actions.onOpenInvoice ? (
           <Button variant="outlined" fullWidth icon="receipt" onClick={actions.onOpenInvoice}>
             Invoice
+          </Button>
+        ) : null}
+        {actions.onOpenSchedule ? (
+          <Button variant="outlined" fullWidth icon="calendar" onClick={actions.onOpenSchedule}>
+            Schedule
           </Button>
         ) : null}
         <Button variant="text" fullWidth icon="qr" onClick={() => setQrSheet(true)}>
@@ -211,30 +233,6 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
           </Button>
         </div>
       </Sheet>
-
-      <Sheet open={statusSheet} title="Change status" onDismiss={() => setStatusSheet(false)}>
-        {options.length ? (
-          options.map((s) => (
-            <Button
-              key={s}
-              fullWidth
-              variant="text"
-              style={{ justifyContent: 'flex-start' }}
-              onClick={() => {
-                actions.patch({ status: s })
-                setStatusSheet(false)
-              }}
-            >
-              {CARD_STATUS[s].label}
-            </Button>
-          ))
-        ) : (
-          <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)' }}>
-            This card is archived. Nothing further to do.
-          </p>
-        )}
-      </Sheet>
     </div>
   )
 }
-

@@ -17,6 +17,7 @@ import ChangePinScreen from '../screens/ChangePinScreen.jsx'
 import PublicCardScreen from '../screens/PublicCardScreen.jsx'
 import ConflictsScreen from '../screens/ConflictsScreen.jsx'
 import LoginScreen from '../screens/LoginScreen.jsx'
+import ScheduleScreen from '../screens/ScheduleScreen.jsx'
 
 const NAV = [
   { key: 'cards', label: 'Cards', icon: 'cards' },
@@ -39,6 +40,7 @@ const SCREENS = {
   admin: AdminScreen,
   'change-pin': ChangePinScreen,
   conflicts: ConflictsScreen,
+  schedule: ScheduleScreen,
 }
 
 function NavBar({ active, onSelect }) {
@@ -103,7 +105,16 @@ export default function AppShell() {
   // the split layout and the nav highlight both survive navigation into it.
   const onCards = current.screen === 'cards' || current.screen === 'card'
   const split = windowClass === 'expanded' && onCards
-  const activeTab = onCards ? 'cards' : NAV.some((n) => n.key === current.screen) ? current.screen : null
+  /* Schedule adopts the Cards destination for highlighting, but not the split
+     layout: it is its own screen, not a supporting pane beside the card list. */
+  const activeTab =
+    current.screen === 'schedule'
+      ? 'cards'
+      : onCards
+        ? 'cards'
+        : NAV.some((n) => n.key === current.screen)
+          ? current.screen
+          : null
 
   const offline = <OfflineBar state={sync.state} pending={sync.pending} />
 

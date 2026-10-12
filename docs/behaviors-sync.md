@@ -173,6 +173,16 @@ Delivered through the same sync stream, not bundled — except a bootstrap snaps
 
 Client behaviour when offline: the camera stays available — a worker must never lose the ability to *look at* a boat — but the shutter produces a clear, non-dismissible **`Waiting for signal`** state with the pending count and a manual retry. It must not resemble a successful save.
 
+`photo_type` is a closed set, not free text, because it is what the client filters and groups on and what a worker tags at the moment of capture. A new value is a schema change here first, on both sides. Capture is offered **where the work happens** — inside a log entry, a condition row, a received item — and the tag travels with the photo from that context rather than being chosen later on a separate screen.
+
+## Appointments
+
+`appointments` is an ordinary syncable entity: same row metadata, same delta pull, same conflict rules. Nothing about it is special on the wire.
+
+What is special is the write path. Scheduling is an `office`/`admin` action, so it **does not queue offline** (architecture.md constraint 15). An appointment write from a client without a live session is refused with `unauthorized_role`, not queued and drained later. This is deliberate: two phones off the network could otherwise both believe they hold the one ramp.
+
+Capacity is a client-side legality check in `domain/schedule.js` and is advisory on the server. The server does not enforce a booking grid — it has no clock trust and no resource model — so the check exists to stop an honest mistake, not a determined one.
+
 ## Retention
 
 Device-local retention: entities this device has touched, plus anything changed in the last 30 days. Older untouched records are evicted from the local store, never from the server. Eviction must not delete a row that has pending unsynced writes.

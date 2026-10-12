@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, progressPercent, statusMeta } from './cardStatus.js'
+import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, countsByStatus, OPTIONAL_STAGES } from './cardStatus.js'
 
 /* No-mirror rule: every status pairs colour (tone) with a label and a shape. */
 test('every status carries label + tone + shape, so colour never stands alone', () => {
@@ -45,11 +45,51 @@ test('unknown status transitions nowhere instead of throwing', () => {
   assert.ok(!canTransition('bogus', 'intake'))
 })
 
-test('progress is monotonic and cleaning parks at service level', () => {
-  assert.equal(progressPercent('intake'), 0)
-  assert.equal(progressPercent('archived'), 1)
-  assert.equal(progressPercent('cleaning'), progressPercent('service'))
-  assert.ok(progressPercent('service') < progressPercent('ready'))
+test('the stage strip is the lifecycle in order, and marks the skippable stage', () => {
+  assert.deepEqual(
+    STAGES.map((s) => s.key),
+    STATUS_ORDER,
+  )
+  assert.equal(OPTIONAL_STAGES.size, 1)
+  assert.ok(OPTIONAL_STAGES.has('cleaning'))
+  assert.equal(STAGES.find((s) => s.key === 'cleaning').optional, true)
+  assert.equal(STAGES.find((s) => s.key === 'service').optional, false)
+})
+
+test('stage phase is positional: behind is done, equal is current, ahead is future', () => {
+  assert.equal(stagePhase('service', 'intake'), 'done')
+  assert.equal(stagePhase('service', 'service'), 'current')
+  assert.equal(stagePhase('service', 'ready'), 'future')
+  assert.equal(stagePhase('intake', 'intake'), 'current')
+})
+
+test('an unknown status yields no current stage instead of a wrong one', () => {
+  assert.equal(stagePhase('bogus', 'intake'), 'future')
+  assert.equal(stagePhase('intake', 'bogus'), 'future')
+})
+
+test('counts bucket every card, including an unrecognised status', () => {
+  const counts = countsByStatus([
+    { status: 'intake' },
+    { status: 'intake' },
+    { status: 'ready' },
+    { status: 'nonsense' },
+  ])
+  assert.equal(counts.intake, 2)
+  assert.equal(counts.ready, 1)
+  assert.equal(counts.nonsense, 1)
+  assert.equal(counts.archived, 0)
+  /* The buckets sum to the list length, so a filter chip total never
+     contradicts the row count on screen. */
+  assert.equal(
+    Object.values(counts).reduce((a, b) => a + b, 0),
+    4,
+  )
+})
+
+test('countsByStatus tolerates an empty or missing list', () => {
+  assert.equal(countsByStatus([]).intake, 0)
+  assert.equal(countsByStatus(undefined).intake, 0)
 })
 
 test('statusMeta falls back for unknown status instead of throwing', () => {

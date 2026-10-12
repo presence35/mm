@@ -13,6 +13,7 @@ export const CAPABILITIES = {
   WORK_ON_CARD: 'card.work',
   INVOICE: 'card.invoice',
   MANAGE_EMPLOYEES: 'admin.employees',
+  BOOK_APPOINTMENT: 'schedule.book',
 }
 
 const BY_ROLE = {
@@ -24,6 +25,7 @@ const BY_ROLE = {
     CAPABILITIES.CREATE_CARD,
     CAPABILITIES.WORK_ON_CARD,
     CAPABILITIES.INVOICE,
+    CAPABILITIES.BOOK_APPOINTMENT,
   ]),
   mechanic: new Set([CAPABILITIES.WORK_ON_CARD]),
 }

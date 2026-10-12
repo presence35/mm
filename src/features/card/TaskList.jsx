@@ -1,48 +1,76 @@
-import { ListItem, Icon, StatusPill, Chip, ChipRow } from '../../ui'
+import { ListItem, StatusPill, Chip, ChipRow, IconButton } from '../../ui'
 
 /* Intake + authorized work.
    Received items are filter chips (toggling presence). Authorized work is a
    list, because each row carries completion state that must survive greyscale
-   — the check and the label, not the colour. */
+   — the check and the label, not the colour.
 
-export function ReceivedItems({ items, selected, onToggle }) {
+   These render section *bodies* only. The title, the one-line summary and the
+   open/closed state belong to the Collapsible that wraps them, so every
+   section on a card collapses the same way. */
+
+const words = (item) => item.replace(/_/g, ' ')
+
+export function ReceivedItems({ items, selected, onToggle, onPhotograph }) {
   return (
-    <section>
-      <div className="section-head">Items received at intake</div>
+    <>
       <ChipRow>
         {items.map((item) => (
           <Chip key={item} selected={selected.includes(item)} onClick={() => onToggle(item)}>
-            {item.replace(/_/g, ' ')}
+            {words(item)}
           </Chip>
         ))}
       </ChipRow>
-      <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>
+
+      {/* Evidence, offered at the moment the item is recorded rather than
+          later on a separate screen. "It came with life jackets" is a claim;
+          a photo of those life jackets is proof, and the customer dispute
+          happens months afterwards. */}
+      {selected.length ? (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--space-2)',
+            alignItems: 'center',
+            padding: 'var(--space-2) var(--space-4) var(--space-3)',
+          }}
+        >
+          <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>Photograph what was handed over:</span>
+          {selected.map((item) => (
+            <IconButton
+              key={item}
+              icon="camera"
+              label={`Photograph ${words(item)}`}
+              onClick={() => onPhotograph?.(item)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-4)' }}>
         {selected.length} of {items.length} accounted for
       </p>
-    </section>
+    </>
   )
 }
 
 export function AuthorizedWork({ work, onToggleAuthorized, onToggleCompleted }) {
   if (!work.length) {
     return (
-      <section>
-        <div className="section-head">Authorized work</div>
-        <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-4)' }}>
-          Nothing authorized yet. Add work before starting service.
-        </p>
-      </section>
+      <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-4)' }}>
+        Nothing authorized yet. Add work before starting service.
+      </p>
     )
   }
 
   return (
-    <section>
-      <div className="section-head">Authorized work</div>
+    <>
       {work.map((w) => (
         <ListItem
           key={w.key}
           icon={w.completed ? 'check' : w.authorized ? 'wrench' : 'alert'}
-          title={w.key.replace(/_/g, ' ')}
+          title={words(w.key)}
           support={w.completed ? 'Completed' : w.authorized ? 'Authorized — not started' : 'Not authorized'}
           onClick={() => (w.authorized ? onToggleCompleted(w.key) : onToggleAuthorized(w.key))}
           trailing={
@@ -62,15 +90,14 @@ export function AuthorizedWork({ work, onToggleAuthorized, onToggleCompleted }) 
           }
         />
       ))}
-    </section>
+    </>
   )
 }
 
 /* Wrap / unwrap. A toggle pair, not a chip — this is a state, not a filter. */
 export function WrapControl({ wrapRequired, unwrapDone, onChange }) {
   return (
-    <section>
-      <div className="section-head">Storage prep</div>
+    <>
       <ListItem
         icon="bolt"
         title="Shrink wrap required"
@@ -95,6 +122,6 @@ export function WrapControl({ wrapRequired, unwrapDone, onChange }) {
           }
         />
       ) : null}
-    </section>
+    </>
   )
 }

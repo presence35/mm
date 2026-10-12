@@ -53,8 +53,7 @@ export function normalizeLocation(card, storageType) {
 }
 
 /* Human summary for list rows and the map. */
-export function locationSummary(card) {
-  switch (card.storage_type) {
+export function locationSummary(card) {  switch (card.storage_type) {
     case 'customer_boathouse':
     case 'marina_boathouse':
       return [card.boathouse_no && `BH ${card.boathouse_no}`, card.slip_no && `Slip ${card.slip_no}`]
@@ -75,4 +74,82 @@ export function locationSummary(card) {
     default:
       return '—'
   }
+}
+
+/* ------------------------------------------------------- position size
+ *
+ * A storage position carries imperial dimensions, because the marina's
+ * measurements are imperial and the paper card is too. There is no metric
+ * toggle; a toggle would have to pick a canonical unit, and picking metric
+ * would silently disagree with every existing number.
+ *
+ * Classed by LENGTH, not volume: length is what decides whether a boat fits,
+ * which is why `Boat.length_ft` exists. Height is reported separately because
+ * a top spot's roof slopes, and height is what decides whether a boat with a
+ * tower can go in at all.
+ */
+
+export const SIZE_CLASSES = [
+  { key: 'small', label: 'Small', tone: 'neutral', shape: 'square', maxLengthFt: 20 },
+  { key: 'medium', label: 'Medium', tone: 'progress', shape: 'diamond', maxLengthFt: 26 },
+  { key: 'large', label: 'Large', tone: 'action', shape: 'round', maxLengthFt: Infinity },
+]
+
+export const UNKNOWN_SIZE = { key: 'unknown', label: 'No size', tone: 'neutral', shape: 'square', maxLengthFt: 0 }
+
+export function sizeClassFor(position) {
+  const length = Number(position?.length_ft)
+  if (!Number.isFinite(length) || length <= 0) return UNKNOWN_SIZE
+  return SIZE_CLASSES.find((c) => length <= c.maxLengthFt) ?? UNKNOWN_SIZE
+}
+
+/* Heights differ front to back when the roof slopes. Returns the range, or one
+   number when they match — a single "7 ft" reads better than "7–7 ft". */
+export function heightSummary(position) {
+  const front = Number(position?.height_front_ft)
+  const back = Number(position?.height_back_ft)
+  const hasFront = Number.isFinite(front) && front > 0
+  const hasBack = Number.isFinite(back) && back > 0
+  if (hasFront && hasBack) return front === back ? `${front} ft` : `${Math.min(front, back)}–${Math.max(front, back)} ft`
+  if (hasFront) return `${front} ft`
+  if (hasBack) return `${back} ft`
+  return null
+}
+
+export function dimensionSummary(position) {
+  const length = Number(position?.length_ft)
+  const width = Number(position?.width_ft)
+  const height = heightSummary(position)
+  const parts = []
+  if (Number.isFinite(length) && length > 0) parts.push(`${length} ft long`)
+  if (Number.isFinite(width) && width > 0) parts.push(`${width} ft wide`)
+  if (height) parts.push(`${height} high`)
+  return parts.join(' · ') || null
+}
+
+/* ---------------------------------------------------- position identity
+ *
+ * A card names a position; `storage_layout` describes it. They meet on a code.
+ *
+ * This is a stated convention, not a discovery: a layout row of `kind:
+ * 'position'` whose `value` is this code carries that position's dimensions
+ * and its prior-year occupant. A row that does not exist is not an error — the
+ * map says "no size" rather than guessing one from the boat.
+ */
+export function positionCode(card) {
+  switch (card?.storage_type) {
+    case 'storage_building':
+      return [card.storage_building, card.storage_row, card.storage_col].filter((v) => v !== null && v !== undefined && v !== '').join('/') || null
+    case 'customer_boathouse':
+    case 'marina_boathouse':
+      return `BH${card.boathouse_no ?? '?'}/S${card.slip_no ?? '?'}`
+    default:
+      return null
+  }
+}
+
+export function findPosition(layout, card) {
+  const code = positionCode(card)
+  if (!code) return null
+  return (layout ?? []).find((row) => row?.kind === 'position' && row?.value === code) ?? null
 }

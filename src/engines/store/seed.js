@@ -144,3 +144,75 @@ export const SEED_CARDS = [
 ]
 
 export const SEED_CONFLICT_CARD_ID = 'k-2'
+
+/*
+ * Storage positions, with dimensions.
+ *
+ * Imperial, because the marina measures in feet and the paper card is imperial.
+ * A top spot's roof slopes, so its height is a range — that is the whole reason
+ * `height_front_ft` and `height_back_ft` are separate rather than one number
+ * with a fudge factor.
+ *
+ * `prior_year_customer` is a hint for who is asking for the spot back. It is
+ * not a reservation and nothing enforces it.
+ */
+export const SEED_STORAGE_POSITIONS = [
+  {
+    id: 'sl-m2-3d',
+    kind: 'position',
+    value: 'Metal 2/3/D',
+    label: 'Metal 2 · Row 3 · D',
+    sort_order: 1,
+    length_ft: 26,
+    width_ft: 11,
+    height_front_ft: 10,
+    height_back_ft: 8,
+    prior_year_customer: 'Hollis',
+  },
+  {
+    id: 'sl-bh3-7',
+    kind: 'position',
+    value: 'BH3/S7',
+    label: 'Boathouse 3 · Slip 7',
+    sort_order: 2,
+    length_ft: 22,
+    width_ft: 10,
+    height_front_ft: 9,
+    height_back_ft: 9,
+    prior_year_customer: 'Pettersen',
+  },
+]
+
+/*
+ * Appointments.
+ *
+ * Two rows, because the ramp is the interesting case: it holds one at a time,
+ * so a board with two ramp movements in the same window is the state the
+ * capacity rule exists to prevent and the one worth being able to see.
+ */
+export const SEED_APPOINTMENTS = [
+  {
+    id: 'ap-1',
+    card_id: 'k-2',
+    boat_id: 'b-2',
+    customer_id: 'c-2',
+    task_type: 'drop_off',
+    scheduled_start: '2026-10-12T13:00:00.000Z',
+    scheduled_end: '2026-10-12T13:45:00.000Z',
+    assigned_employee_id: 'emp-1',
+    status: 'booked',
+    notes: 'Trailer arriving with the boat.',
+  },
+  {
+    id: 'ap-2',
+    card_id: 'k-3',
+    boat_id: 'b-3',
+    customer_id: 'c-3',
+    task_type: 'repair',
+    scheduled_start: '2026-10-12T14:00:00.000Z',
+    scheduled_end: '2026-10-12T18:00:00.000Z',
+    assigned_employee_id: 'emp-1',
+    status: 'proposed',
+    notes: 'Trim sticking — needs a look before spring.',
+  },
+]

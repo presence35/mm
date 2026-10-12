@@ -52,6 +52,8 @@ Treat these as a contract. If you change one, update **every** place that relies
 | Auth session, permission snapshot | auth engine | all screens (via auth provider) |
 | Roles and capability checks | `auth/permissions.js` | every gated action |
 | Card status + legal transitions | `domain/cardStatus.js` | Cards list, Card detail, Map, public view |
+| Stage phases + per-status counts | `domain/cardStatus.js` | Cards list, Card detail |
+| Appointment legality + shared capacity | `domain/schedule.js` | Schedule board, Card detail |
 | Storage layout (buildings, slips, rows) | server reference data | card wizard, Map, filters |
 | Checklist + cleaning item sets | server reference data | Card detail |
 | Product catalogue | server reference data | log composer, invoice builder |
@@ -82,7 +84,9 @@ Five top-level destinations. M3 caps a navigation bar at five; we are at the lim
 | **Setup** | Theme, offline state, sync queue, account. | — |
 | **Scan** | Camera → new card, or QR customer link. | Scan |
 
-Contextual only, never in navigation: Card detail · New card wizard · New log · Invoice · **Needs review (conflicts)** · Admin (`admin` only) · Customer public view.
+Contextual only, never in navigation: Card detail · New card wizard · New log · **Schedule** · New appointment · Invoice · **Needs review (conflicts)** · Admin (`admin` only) · Customer public view.
+
+**Schedule is contextual, not a sixth destination.** M3 caps a navigation bar at five and we are at the limit, so the schedule board is reached from Cards and from a card, and adopts the Cards destination for navigation highlighting.
 
 ### Navigation by window size
 
@@ -140,6 +144,15 @@ Selecting a different `storage_type` clears the previous type's location fields.
 | `invoice_items` | description, quantity, unit_price, total, sort_order |
 | `status_history` | from_status, to_status, employee_id, changed_at |
 
+### Appointment
+`id`, `card_id`, `boat_id`, `customer_id`, `task_type`, `scheduled_start`, `scheduled_end`, `assigned_employee_id`, `status`, `notes`
+
+`task_type` ∈ `drop_off` | `cleaning` | `repair` | `pickup` | `ramp`
+
+Times are free start/end instants, not fixed slots — a yard works around a tide, not a booking grid. `scheduled_end` is derived from the task's nominal duration but stays editable.
+
+**Capacity is shared, not per-task-type.** `drop_off` and `ramp` consume the same physical resource — the ramp — and a boat dropped off occupies a storage position for its stay. They are therefore one capacity pool, keyed by the overlap window, not five independent calendars. `domain/schedule.js` owns that rule; nothing else decides whether a slot collides.
+
 ### Card lifecycle
 `intake` → `fall_checklist` → `storage` → `spring_checklist` → `service` → `cleaning` → `ready` → `invoiced` → `archived`
 
@@ -149,6 +162,8 @@ Not every transition is legal from every state. The legal set lives in `domain/c
 `products` · `service_item_templates` · `storage_layout` · `checklist_templates` · `employees`
 
 Storage layout is server-owned on purpose: the marina's physical layout changes, and that must not require an app release. See `behaviors-sync.md` §Reference data.
+
+Each storage position carries **imperial** dimensions — `length_ft`, `width_ft`, `height_front_ft`, `height_back_ft` — because the roof slopes and the back of a top spot is shorter than the front. The paper card is imperial and there is no metric toggle; a position's size class is derived from those four numbers, in one place. A position also records its **prior-year occupant**, which is a hint for who is asking for it back, not a reservation.
 
 ## State machines
 
@@ -174,6 +189,14 @@ anonymous ──pin online──▶ online ──token expired──▶ expired
 
 ### Card form
 `clean` | `editing` | `saving` | `saved` | `failed` — one value, not five flags.
+
+### Appointment — `domain/schedule.js`
+```
+proposed ──confirm──▶ booked ──start──▶ in_progress ──finish──▶ done
+                         │
+                         └──cancel──▶ cancelled
+```
+`proposed` is what `office` writes when a customer asks for a time but has not committed. Capacity is checked on the `booked` transition, not on `proposed`.
 
 ## Boundary rules
 
@@ -232,6 +255,7 @@ A screen missing any of these is incomplete.
 | Conflict on reconnect | Both versions preserved, card badged **Needs review**, resolvable in-app and offline. | sync engine |
 | Sync never converges | After N failed attempts the engine enters `error` and stops retrying on a timer. Setup shows the reason and a manual retry. | sync engine |
 | Two devices, one account | Both sync independently. Last write to *different* fields converges. Same field raises a conflict. `office`/`admin` actions refuse offline, so the risky case cannot occur offline. | sync engine |
+| Booking an appointment offline | Refused with a stated reason. Scheduling is an `office`/`admin` action, so it does not queue — two phones booking the one ramp with no signal would both believe they had it. | schedule domain |
 | Phone clock is wrong | Sync cursors are server monotonic `seq`, never client time. `updated_at` is server-set. A wrong phone clock cannot corrupt ordering. | sync engine |
 | Public QR link leaked | `behaviors-public-view.md` defines a narrow field projection. This is a security surface, not a convenience. | public endpoint |
 
@@ -281,7 +305,6 @@ Adding any of these requires an amendment here first.
 - Multi-marina / multi-tenant
 - Customer accounts, login, or messaging
 - Payments, card processing
-- Scheduling, appointments, bay reservation
 - Parts inventory or purchasing
 - Bulk operations across cards
 - Analytics, dashboards, reporting
@@ -296,6 +319,7 @@ Grows as code lands. Grouped by subsystem; every file with its responsibility; a
 src/
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
+             StageStrip, Collapsible,
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
   engines/
@@ -305,17 +329,19 @@ src/
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
     media/   photos.js                       — capture, compress, upload
-  domain/    cardStatus.js, storageLocation.js — pure, deterministic
-              cardStatus.test.js, storageLocation.test.js — beat tests pinning
-              the lifecycle, the unrepresentable-combination rule and the
-              label+tone+shape pairing (oko ThreatEngineTest pattern)
+  domain/    cardStatus.js, storageLocation.js, schedule.js — pure, deterministic
+              cardStatus.test.js, storageLocation.test.js, schedule.test.js —
+              beat tests pinning the lifecycle, the unrepresentable-combination
+              rule, the label+tone+shape pairing (oko ThreatEngineTest pattern)
+              and the shared ramp/drop-off capacity pool
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
+    schedule/ ScheduleBoard.jsx, useSchedule.js
     conflicts/useConflicts.js
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
-             Map, Setup, Scan, Admin, Conflicts, Login, PublicCard
+             Map, Setup, Scan, Admin, Conflicts, Login, PublicCard, Schedule
 
 server/
   index.js   routes; the only place that knows HTTP

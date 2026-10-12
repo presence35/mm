@@ -46,16 +46,51 @@ export function canTransition(from, to) {
   return nextStatuses(from).includes(to)
 }
 
-/* Determinate progress through the lifecycle. Cleaning is optional, so the
-   denominator is the chain without it. */
-const PROGRESS_CHAIN = ['intake', 'fall_checklist', 'storage', 'spring_checklist', 'service', 'ready', 'invoiced', 'archived']
-
-export function progressPercent(status) {
-  if (status === 'cleaning') return PROGRESS_CHAIN.indexOf('service') / (PROGRESS_CHAIN.length - 1)
-  const i = PROGRESS_CHAIN.indexOf(status)
-  return i < 0 ? 0 : i / (PROGRESS_CHAIN.length - 1)
-}
-
 export function statusMeta(status) {
   return CARD_STATUS[status] ?? { label: status ?? '—', tone: 'neutral', shape: 'square', step: 0 }
+}
+
+/* ------------------------------------------------------- stage strip model
+ *
+ * One ordered list of stages, consumed by exactly one component (ui/StageStrip)
+ * through exactly one composition (features/card/CardDetail). The legacy app
+ * showed the stage twice — a tracker strip and a prev/next stepper — and this
+ * rebuild had added a third, a progress bar. All three are the same fact.
+ */
+
+/* The only stage a card can legally skip. `service → ready` is a legal
+   transition (see FORWARD), so a card may reach READY having never been
+   CLEANING. Marked from the strip so a positional `done` is never read as
+   "this boat was cleaned". */
+export const OPTIONAL_STAGES = new Set(['cleaning'])
+
+export const STAGES = STATUS_ORDER.map((key) => ({
+  key,
+  label: CARD_STATUS[key].label,
+  optional: OPTIONAL_STAGES.has(key),
+}))
+
+/* Positional, not historical. A stage behind the current one is `done`; a
+   skippable stage behind it is still `done` positionally, which is why
+   OPTIONAL_STAGES exists and why StageStrip draws an optional stage with a
+   hollow marker instead of a tick. Nothing here asserts the work happened. */
+export function stagePhase(current, stage) {
+  const at = STATUS_ORDER.indexOf(stage)
+  const now = STATUS_ORDER.indexOf(current)
+  if (at < 0 || now < 0) return 'future'
+  if (at === now) return 'current'
+  return at < now ? 'done' : 'future'
+}
+
+/* Counts for the Cards filter chips. Every card lands in exactly one bucket,
+   so the counts sum to the list length; an unrecognised status still gets a
+   bucket rather than vanishing from a total. */
+export function countsByStatus(cards) {
+  const out = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0]))
+  for (const card of cards ?? []) {
+    const key = card?.status
+    if (!key) continue
+    out[key] = (out[key] ?? 0) + 1
+  }
+  return out
 }

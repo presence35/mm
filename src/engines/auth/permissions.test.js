@@ -14,7 +14,12 @@ test('mechanic works on cards and nothing else', () => {
 test('office does everything except employees', () => {
   assert.ok(can('office', CAPABILITIES.CREATE_CUSTOMER))
   assert.ok(can('office', CAPABILITIES.INVOICE))
+  assert.ok(can('office', CAPABILITIES.BOOK_APPOINTMENT))
   assert.ok(!can('office', CAPABILITIES.MANAGE_EMPLOYEES))
+})
+
+test('a mechanic cannot book an appointment, only work on cards', () => {
+  assert.ok(!can('mechanic', CAPABILITIES.BOOK_APPOINTMENT))
 })
 
 test('admin holds every capability', () => {
@@ -26,6 +31,10 @@ test('only card work is allowed offline; office and admin actions refuse', () =>
   assert.ok(!canOffline('office', CAPABILITIES.INVOICE))
   assert.ok(!canOffline('office', CAPABILITIES.CREATE_CUSTOMER))
   assert.ok(!canOffline('admin', CAPABILITIES.MANAGE_EMPLOYEES))
+  /* Booking is the case that matters most: two phones off the network would
+     otherwise both believe they hold the ramp. */
+  assert.ok(!canOffline('office', CAPABILITIES.BOOK_APPOINTMENT))
+  assert.ok(!canOffline('admin', CAPABILITIES.BOOK_APPOINTMENT))
 })
 
 test('unknown role or capability is denied, never throws', () => {

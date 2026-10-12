@@ -78,6 +78,18 @@ export const ENTITIES = {
     pk: 'id',
     columns: ['card_id', 'from_status', 'to_status', 'employee_id', 'changed_at'],
   },
+  appointments: {
+    table: 'appointments',
+    pk: 'id',
+    /* Free start/end instants, not fixed slots — a yard works around a tide,
+       not a booking grid. `assigned_employee_id` is a person, not a resource:
+       the resource a task consumes is derived from `task_type` in
+       domain/schedule.js, so it is not stored and cannot go stale here. */
+    columns: [
+      'card_id', 'boat_id', 'customer_id', 'task_type', 'scheduled_start', 'scheduled_end',
+      'assigned_employee_id', 'status', 'notes', 'created_at',
+    ],
+  },
   invoice_items: {
     table: 'invoice_items',
     pk: 'id',
@@ -108,8 +120,18 @@ export const REFERENCE = {
   storage_layout: {
     table: 'storage_layout',
     pk: 'id',
-    columns: ['kind', 'value', 'label', 'sort_order'],
-    expose: ['id', 'kind', 'value', 'label', 'sort_order'],
+    /* kind/value/label is the generic shape; a row of kind 'position' also
+       carries that position's dimensions. Imperial, because the marina's
+       measurements are and the paper card is. A sloping roof makes the height
+       two numbers rather than one. */
+    columns: [
+      'kind', 'value', 'label', 'sort_order',
+      'length_ft', 'width_ft', 'height_front_ft', 'height_back_ft', 'prior_year_customer',
+    ],
+    expose: [
+      'id', 'kind', 'value', 'label', 'sort_order',
+      'length_ft', 'width_ft', 'height_front_ft', 'height_back_ft', 'prior_year_customer',
+    ],
   },
   checklist_templates: {
     table: 'checklist_templates',

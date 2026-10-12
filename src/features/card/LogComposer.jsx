@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Button, TextField, Icon } from '../../ui'
+import { Button, TextField, Icon, IconButton } from '../../ui'
+import { PhotoTiles } from './PhotoStrip.jsx'
 
 /* Log composer.
    Owns its own draft state and marks the router dirty while there is
-   unsaved text, so an accidental back gesture cannot discard it. */
+   unsaved text, so an accidental back gesture cannot discard it.
+
+   Renders a body, not a section: the Collapsible wrapping it owns the title,
+   the summary and the open/closed state. */
 export default function LogComposer({ onSave, onDirtyChange }) {
   const [text, setText] = useState('')
   const [mode, setMode] = useState('idle')
@@ -24,8 +28,7 @@ export default function LogComposer({ onSave, onDirtyChange }) {
   }
 
   return (
-    <section style={{ paddingBottom: 'var(--space-4)' }}>
-      <div className="section-head">Add a log entry</div>
+    <div style={{ paddingBottom: 'var(--space-4)' }}>
       <TextField
         label="What did you do?"
         value={text}
@@ -38,11 +41,14 @@ export default function LogComposer({ onSave, onDirtyChange }) {
           Save entry
         </Button>
       </div>
-    </section>
+    </div>
   )
 }
 
-export function LogList({ logs }) {
+/* One entry. Photos taken against this entry are shown here — the note that
+   prompted it was "take and view pictures in the same place we make the
+   notes", and a gallery page is not that place. */
+export function LogList({ logs, cardId, photos = [], onAddPhoto }) {
   if (!logs.length) {
     return (
       <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-4)' }}>
@@ -53,28 +59,40 @@ export function LogList({ logs }) {
 
   return (
     <div>
-      {logs.map((log) => (
-        <article
-          key={log.id}
-          style={{
-            padding: 'var(--space-3) var(--space-4)',
-            boxShadow: 'inset 0 1px 0 var(--outline-variant)',
-          }}
-        >
-          <div className="row" style={{ gap: 'var(--space-2)' }}>
-            <Icon name="calendar" size={16} />
-            <span style={{ font: 'var(--label-m)', color: 'var(--on-surface-variant)' }}>
-              {log.date} · {log.name}
-            </span>
-          </div>
-          <p style={{ font: 'var(--body-m)', marginTop: 'var(--space-1)' }}>{log.description}</p>
-          {log.transcription ? (
-            <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', marginTop: 'var(--space-1)' }}>
-              Scanned: {log.transcription}
-            </p>
-          ) : null}
-        </article>
-      ))}
+      {logs.map((log) => {
+        const attached = photos.filter((p) => p.work_log_id === log.id)
+        return (
+          <article
+            key={log.id}
+            style={{
+              padding: 'var(--space-3) var(--space-4)',
+              boxShadow: 'inset 0 1px 0 var(--outline-variant)',
+            }}
+          >
+            <div className="row" style={{ gap: 'var(--space-2)' }}>
+              <Icon name="calendar" size={16} />
+              <span style={{ font: 'var(--label-m)', color: 'var(--on-surface-variant)' }}>
+                {log.date} · {log.name}
+              </span>
+            </div>
+            <p style={{ font: 'var(--body-m)', marginTop: 'var(--space-1)' }}>{log.description}</p>
+            {log.transcription ? (
+              <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', marginTop: 'var(--space-1)' }}>
+                Scanned: {log.transcription}
+              </p>
+            ) : null}
+
+            <PhotoTiles cardId={cardId} photos={attached} />
+
+            {onAddPhoto ? (
+              <div style={{ marginTop: 'var(--space-2)', display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                <IconButton icon="camera" label="Add a photo to this entry" onClick={() => onAddPhoto(log)} />
+                <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>Add photo to this entry</span>
+              </div>
+            ) : null}
+          </article>
+        )
+      })}
     </div>
   )
 }
