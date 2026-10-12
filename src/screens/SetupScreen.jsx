@@ -6,7 +6,6 @@ import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import { resetToSeed, storageProblem } from '../engines/store/localStore.js'
-import { SEED_EMPLOYEE } from '../engines/store/seed.js'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
 import { APP_VERSION } from '../appVersion.js'
 
