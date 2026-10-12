@@ -59,6 +59,7 @@ function LegacyImportPanel() {
   const [result, setResult] = useState(null)
   const [confirmApply, setConfirmApply] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmRecord, setConfirmRecord] = useState(false)
 
   const token = () => {
     try {
@@ -135,6 +136,31 @@ function LegacyImportPanel() {
     }
   }
 
+  /* The first import ran before the marker table existed, so a finished target
+     looks exactly like a half-written one. This records what is already true
+     instead of re-importing a schedule the marina is already using. */
+  const recordComplete = async () => {
+    if (!report || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/legacy-import/complete', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ id: report.id, confirm: 'record-complete' }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.detail || body.error || `failed: ${res.status}`)
+      setResult({ ok: true, counts: {}, copied: 0, recorded: body })
+      setReport(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+      setConfirmRecord(false)
+    }
+  }
+
   return (
     <div>
       <div className="section-head">Legacy import (temporary)</div>
@@ -162,22 +188,35 @@ function LegacyImportPanel() {
               <strong>{report.rows} rows</strong> to import across {report.entities.length} entities
             </div>
 
-            {/* Which state the target is actually in. "Already imported" and
-                "started and did not finish" need different actions, so they
-                cannot be one number. */}
+            {/* Which state the target is actually in.
+                "Rows present and no marker" is not evidence that a run failed —
+                the first one finished before the marker table existed — so
+                count the two sides and say what they show. */}
             {report.state?.imported ? (
               <div style={{ color: 'var(--on-surface-variant)' }}>
                 A previous import finished {new Date(report.state.completedAt).toLocaleString()}. Importing again would
                 duplicate every row.
               </div>
-            ) : report.state?.targetRows > 0 ? (
+            ) : report.state?.verdict === 'complete' ? (
               <div style={{ color: 'var(--on-surface-variant)' }}>
-                This database already holds {report.state.targetRows} rows and no finished import — a previous run did
-                not complete. Drop the mm tables and re-plan.
+                This database already holds everything this plan would write
+                {report.state.targetRows ? ` (${report.state.targetRows} rows)` : ''}. The migration has run; it was just
+                never recorded.
+              </div>
+            ) : report.state?.verdict === 'partial' ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                This database holds some of it and no finished import. Short:{' '}
+                {report.state.missing.map((m) => `${m.entity} ${m.have}/${m.want}`).join(', ')}.
               </div>
             ) : (
               <div style={{ color: 'var(--on-surface-variant)' }}>The target is empty. Nothing has been imported yet.</div>
             )}
+
+            {!report.state?.imported && report.state?.verdict === 'complete' ? (
+              <Button fullWidth variant="tonal" onClick={() => setConfirmRecord(true)} disabled={busy}>
+                Record this import as complete
+              </Button>
+            ) : null}
 
             {report.targetHasCustomers ? (
               <Button fullWidth variant="tonal" onClick={() => setConfirmReset(true)} disabled={busy}>
@@ -232,7 +271,10 @@ function LegacyImportPanel() {
         {result ? (
           <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
             <div>
-              <strong>Import {result.ok ? 'complete' : 'finished with problems'}.</strong> Photos copied: {result.copied}
+              <strong>
+                {result.recorded ? 'Recorded as complete.' : `Import ${result.ok ? 'complete' : 'finished with problems'}.`}
+              </strong>{' '}
+              {result.copied ? `Photos copied: ${result.copied}` : null}
             </div>
             {Object.entries(result.counts ?? {}).map(([entity, n]) => (
               <div key={entity}>
@@ -246,9 +288,23 @@ function LegacyImportPanel() {
         ) : null}
       </div>
       <Dialog
+        open={confirmRecord}
+        title="Record this import as complete?"
+        body="Marks the legacy migration as done without writing anything. It says the target already holds everything the plan would write, so the only thing missing is the record. Nothing is copied, nothing is deleted."
+        onDismiss={() => setConfirmRecord(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmRecord(false)}>
+              Cancel
+            </Button>
+            <Button onClick={recordComplete}>Record as complete</Button>
+          </>
+        }
+      />
+      <Dialog
         open={confirmReset}
         title="Reset mm tables?"
-        body="Drops every mm_ table on this server — everything imported, and anything entered in the new app since. The legacy tables are untouched, so the source data is safe. This cannot be undone."
+        body="Drops every mm_ table on this server — everything imported, and anything entered in the new app since. The legacy tables are untouched, so the source data is safe. Devices that have already synced will re-download everything on their next sync. This cannot be undone."
         onDismiss={() => setConfirmReset(false)}
         actions={
           <>

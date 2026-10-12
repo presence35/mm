@@ -9,13 +9,19 @@ import { FULL_DDL } from './schema.js'
 import { readTables, splitRows, splitValues, unquote, readInsertBlocks } from './legacy/reader.js'
 import { plan, legacyId, toIso, ORDER } from './legacy/plan.js'
 import { applyPlan, verify } from './legacy/apply.js'
-import { importInto, legacyImportState, MIGRATION } from './legacy/import.js'
-import { resetMmTables } from './legacy/import-live.js'
+import { importInto, legacyImportState, markMigrationComplete, MIGRATION, targetCounts } from './legacy/import.js'
+import { resetMmTables, verdictFor } from './legacy/import-live.js'
 import { bootstrap } from './db/index.js'
 import { pull, push } from './sync.js'
 import { T } from './entities.js'
 
 const NOW = '2026-10-03T12:00:00.000Z'
+
+const countByEntity = (rows) => {
+  const out = {}
+  for (const r of rows) out[r.entity] = (out[r.entity] ?? 0) + 1
+  return out
+}
 
 function freshDb() {
   const file = join(mkdtempSync(join(tmpdir(), 'mm-mig-')), 't.db')
@@ -374,10 +380,65 @@ test('a failed migration leaves the target importable again', async () => {
   assert.equal(retry.ok, true)
 })
 
+test('a finished import with its marker lost reads as complete, not as a failed run', async () => {
+  const db = freshDb()
+  const p = plan(readTables(DUMP), { now: NOW })
+  assert.equal((await importInto(db, p)).ok, true)
+
+  /* The production situation exactly: the migration ran before the marker
+     table existed, so every row is present and only the record is missing.
+     "Rows present and no marker" is not evidence that a run failed. */
+  await db.run(`DELETE FROM ${T('migrations')}`)
+  assert.equal((await legacyImportState(db)).imported, false)
+
+  const { verdict, missing } = verdictFor(countByEntity(p.rows), await targetCounts(db))
+  assert.equal(verdict, 'complete', `unexpectedly short: ${JSON.stringify(missing)}`)
+})
+
+test('a half-run reads as partial, and names the entities that are short', async () => {
+  const db = freshDb()
+  const p = plan(readTables(DUMP), { now: NOW })
+  await importInto(db, p)
+  await db.run(`DELETE FROM ${T('migrations')}`)
+  await db.run(`DELETE FROM ${T('service_cards')}`)
+
+  const { verdict, missing } = verdictFor(countByEntity(p.rows), await targetCounts(db))
+  assert.equal(verdict, 'partial')
+  assert.deepEqual(missing.map((m) => m.entity), ['service_cards'])
+  assert.equal(missing[0].want, 2)
+  assert.equal(missing[0].have, 0)
+})
+
+test('an empty target reads as empty, so nothing is offered a decision', async () => {
+  const db = freshDb()
+  const p = plan(readTables(DUMP), { now: NOW })
+  const { verdict } = verdictFor(countByEntity(p.rows), await targetCounts(db))
+  assert.equal(verdict, 'empty')
+})
+
+test('recording a completed import writes the marker and says it was recorded', async () => {
+  const db = freshDb()
+  const p = plan(readTables(DUMP), { now: NOW })
+  await importInto(db, p)
+  await db.run(`DELETE FROM ${T('migrations')}`)
+
+  const out = await markMigrationComplete(db, { counts: countByEntity(p.rows) })
+  assert.equal(out.ok, true)
+
+  const state = await legacyImportState(db)
+  assert.equal(state.imported, true)
+  assert.match(state.record.recorded, /marked complete/)
+  assert.equal(state.record.counts.service_cards, p.rows.filter((r) => r.entity === 'service_cards').length)
+
+  /* And it is a one-way door: a second attempt cannot rewrite the record. */
+  const again = await markMigrationComplete(db)
+  assert.equal(again.ok, false)
+  assert.equal(again.reason, 'already_imported')
+})
+
 test('reset drops only prefixed tables and re-seeds the admin', async () => {
   const db = freshDb()
-  await bootstrap(db, () => {})
-  /* Seed-like rows under our own tables, plus a legacy table alongside. */
+  await bootstrap(db, () => {})  /* Seed-like rows under our own tables, plus a legacy table alongside. */
   await db.run(
     `INSERT INTO ${T('customers')} (id, name, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?)`,
     ['c-seed', 'Seed Customer', NOW, NOW, 1],

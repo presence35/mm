@@ -14,9 +14,9 @@ import { readdir } from 'node:fs/promises'
 
 import { plan, ORDER } from './plan.js'
 import { planPhotoCopies } from './photos.js'
-import { importInto, legacyImportState } from './import.js'
+import { importInto, legacyImportState, markMigrationComplete, targetCounts } from './import.js'
 import { bootstrap } from '../db/index.js'
-import { ALL_TABLES, PREFIX, T } from '../entities.js'
+import { PREFIX, T } from '../entities.js'
 
 export const DEFAULT_PHOTOS_DIR = '/private/data/photos'
 
@@ -92,22 +92,35 @@ async function targetCustomerCount(database) {
   return probe ? Number(probe.n) : 0
 }
 
-/* Rows already present, per entity. The panel reports the source row counts and
-   one target number; when a previous run died partway, "how far did it get" is
-   the only question worth answering, and one number cannot answer it. */
-async function targetCounts(database) {
-  const out = {}
-  for (const [entity, spec] of Object.entries(ALL_TABLES)) {
-    const row = await database.get(`SELECT COUNT(*) AS n FROM ${T(spec.table)}`).catch(() => null)
-    out[entity] = row ? Number(row.n) : null
-  }
-  return out
-}
-
 function countByEntity(rows) {
   const out = {}
   for (const r of rows) out[r.entity] = (out[r.entity] ?? 0) + 1
   return out
+}
+
+/*
+ * Is the target already holding what this plan would write?
+ *
+ * "Rows present and no marker" is not evidence that a run failed — the first
+ * one finished before the marker table existed. Counting cannot tell those
+ * apart either, but comparing the two sides can: if every entity the plan would
+ * write is already at or above the planned count, the target holds this
+ * migration. Above, not equal, because the bootstrap seeds rows the plan never
+ * mentions (the admin employee) and those are expected.
+ *
+ * A partial run leaves at least one entity short, which is the fact worth
+ * reporting and the only one that needs acting on.
+ */
+export function verdictFor(sourceCounts, targetCounts) {
+  const entities = [...new Set([...Object.keys(sourceCounts), ...Object.keys(targetCounts)])].sort()
+  const total = entities.reduce((sum, e) => sum + (targetCounts[e] ?? 0), 0)
+  if (total === 0) return { verdict: 'empty', missing: [] }
+
+  const missing = entities
+    .filter((e) => (sourceCounts[e] ?? 0) > (targetCounts[e] ?? 0))
+    .map((e) => ({ entity: e, want: sourceCounts[e] ?? 0, have: targetCounts[e] ?? 0 }))
+
+  return { verdict: missing.length ? 'partial' : 'complete', missing }
 }
 
 async function photosDirExists(dir) {
@@ -165,14 +178,17 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
       SESSIONS.set(id, { plan: p, copies: photoPlan.copies, createdAt: Date.now() })
 
       const state = await legacyImportState(database)
+      const sourceCounts = countByEntity(p.rows)
+      const targetCountsNow = await targetCounts(database)
+      const verdict = verdictFor(sourceCounts, targetCountsNow)
 
       log(`legacy-import plan staged: ${p.rows.length} rows, ${photoPlan.copies.length} photos`)
       res.json({
         id,
-        state,
+        state: { ...state, ...verdict },
         targetHasCustomers: await targetCustomerCount(database),
-        sourceCounts: countByEntity(p.rows),
-        targetCounts: await targetCounts(database),
+        sourceCounts,
+        targetCounts: targetCountsNow,
         rows: p.rows.length,
         entities: [...new Set(p.rows.map((r) => r.entity))],
         notes: p.notes,
@@ -228,6 +244,54 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
     } catch (e) {
       log(`legacy-import apply failed: ${e?.message}`)
       res.status(500).json({ error: 'apply_failed', detail: e?.message ?? 'unknown' })
+    }
+  })
+
+  /*
+   * Record an import that has already happened.
+   *
+   * The first run finished before the marker table existed, so a completed
+   * target is indistinguishable from a half-written one. Refusing to record it
+   * would leave a re-import as the only way out — which is the thing the guard
+   * exists to prevent — so the operator can record what is already true.
+   *
+   * Refused unless the target really holds what the staged plan would write,
+   * so "record as complete" cannot become a way to bless a migration that lost
+   * half the marina.
+   */
+  app.post('/api/admin/legacy-import/complete', authenticate, adminOnly, async (req, res) => {
+    try {
+      if (req.body?.confirm !== 'record-complete') {
+        res.status(400).json({ error: 'confirm_required' })
+        return
+      }
+      const session = SESSIONS.get(req.body?.id)
+      if (!session) {
+        res.status(410).json({ error: 'plan_expired' })
+        return
+      }
+
+      const sourceCounts = countByEntity(session.plan.rows)
+      const { verdict, missing } = verdictFor(sourceCounts, await targetCounts(database))
+      if (verdict !== 'complete') {
+        res.status(409).json({
+          error: 'not_complete',
+          detail:
+            verdict === 'empty'
+              ? 'This database is empty, so there is nothing to record as complete.'
+              : `The target is short: ${missing.map((m) => `${m.entity} ${m.have}/${m.want}`).join(', ')}. Run the import instead.`,
+          missing,
+        })
+        return
+      }
+
+      SESSIONS.delete(req.body.id)
+      const out = await markMigrationComplete(database, { counts: sourceCounts })
+      log(`legacy-import recorded complete: ${out.ok}`)
+      res.json(out)
+    } catch (e) {
+      log(`legacy-import complete failed: ${e?.message}`)
+      res.status(500).json({ error: 'complete_failed', detail: e?.message ?? 'unknown' })
     }
   })
 }

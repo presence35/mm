@@ -301,12 +301,27 @@ export async function pull(db, { cursor = 0, limit = 200 }) {
   return { changes, cursor: latest, has_more: latest < (head?.seq ?? 0), full_sync: false }
 }
 
-/* A cursor below the GC floor means we can no longer produce a correct
-   delta. The 90-day floor protects dark devices. */
+/*
+ * A cursor we cannot serve from the delta stream must produce a full rehydrate.
+ * There are two ways to be unservable, and only one of them used to be checked:
+ *
+ *   - below the GC floor: the changes were collected.
+ *   - **above the head**: the log was rebuilt — a reset, or a restored backup —
+ *     and this device is looking past the end of it. `seq > cursor` then
+ *     matches nothing, so the device stops receiving changes and says nothing.
+ *
+ * The second is silent by construction: every delta query succeeds and returns
+ * an empty list, which is indistinguishable from a quiet marina. Nothing in the
+ * delta path can notice, so it is noticed here.
+ */
 async function cursorBelowFloor(db, cursor, now) {
+  const at = Number(cursor) || 0
+  const head = await headSeq(db)
+  if (at > head) return true
+
   const row = await db.get(`SELECT MIN(last_cursor) AS oldest FROM ${T('sync_devices')} WHERE revoked_at IS NULL`)
-  if (!row || row.oldest == null) return Number(cursor) > 0 && (await headSeq(db)) === 0
-  return Number(cursor) < Number(row.oldest)
+  if (!row || row.oldest == null) return at > 0 && head === 0
+  return at < Number(row.oldest)
 }
 
 async function headSeq(db) {

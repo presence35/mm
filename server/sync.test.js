@@ -323,8 +323,29 @@ test('a cursor below the GC floor triggers a full rehydrate', async () => {
   assert.equal(result.changes[0].entity, 'customers')
 })
 
-/* ---------------------------------------------------------- over HTTP */
+/* A reset drops and rebuilds change_log, so every device that had synced holds
+   a cursor past the end of the new log. `seq > cursor` then matches nothing and
+   the device stops receiving changes without a single error anywhere. */
+test('a cursor past the head of the log triggers a full rehydrate', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer('c-a')] })
 
+  const head = (await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)).seq
+  const ahead = await pull(db, { cursor: Number(head) + 5000 })
+  assert.equal(ahead.full_sync, true, 'a cursor we cannot satisfy is not an empty delta')
+  assert.ok(ahead.changes.length >= 1, 'and it re-sends everything')
+})
+
+test('a cursor sitting exactly on the head is still an ordinary delta', async () => {
+  const db = freshDb()
+  const [first] = await push(db, { ...ADMIN, ops: [customer()] })
+
+  const caughtUp = await pull(db, { cursor: first.seq })
+  assert.equal(caughtUp.full_sync, false)
+  assert.equal(caughtUp.changes.length, 0, 'up to date is not the same as unservable')
+})
+
+/* ---------------------------------------------------------- over HTTP */
 test('the public endpoint serves only the projection', async () => {
   const db = freshDb()
   const { app } = await createServer({ db, quiet: true })

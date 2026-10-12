@@ -165,7 +165,12 @@ CREATE TABLE sync_devices (
 
 **GC rule.** A `change_log` row may be deleted only when `seq < MIN(last_cursor)` across all non-revoked devices **and** `seq` is older than 90 days. The floor protects devices that have been dark — including a phone iOS evicted whose employee has not yet re-synced.
 
-**Full rehydrate.** A device whose cursor sits below the GC floor gets `full_sync: true` and a complete entity dump instead of a delta. The client wipes and rebuilds local state. This is the path a user hits after an iOS eviction and **must be exercised in testing**.
+**Full rehydrate.** A device gets `full_sync: true` and a complete entity dump instead of a delta in **two** cases:
+
+- Its cursor sits **below the GC floor** — the changes it needs have been collected. This is the path a user hits after an iOS eviction.
+- Its cursor sits **above the head of the log** — the log was rebuilt, by a reset or a restored backup, and the device is looking past the end of it. `seq > cursor` then matches nothing, so the device would stop receiving changes and report no error at all. Nothing in the delta path can detect that; the check has to be made before the query runs.
+
+Both are supported paths, not error cases, and both **must be exercised in testing**.
 
 ## Reference data
 

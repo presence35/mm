@@ -59,15 +59,22 @@ export async function completedMigration(db) {
   return db.get(`SELECT * FROM ${T('migrations')} WHERE name = ?`, [MIGRATION]).catch(() => null)
 }
 
-/* Every row this app owns. One table is not enough to describe "some of it is
-   already here" when the failure happened before that table was reached. */
-export async function targetRowTotal(db) {
-  let total = 0
-  for (const spec of Object.values(ALL_TABLES)) {
+/* Every row this app owns, one table at a time. One number cannot describe
+   "some of it is already here" when the failure happened before that table was
+   reached, and it cannot describe "all of it is here, only the marker is
+   missing" either — which is the state a first import leaves behind when it
+   predates the marker table. */
+export async function targetCounts(db) {
+  const out = {}
+  for (const [entity, spec] of Object.entries(ALL_TABLES)) {
     const row = await db.get(`SELECT COUNT(*) AS n FROM ${T(spec.table)}`).catch(() => null)
-    total += row ? Number(row.n) : 0
+    out[entity] = row ? Number(row.n) : null
   }
-  return total
+  return out
+}
+
+export async function targetRowTotal(db) {
+  return Object.values(await targetCounts(db)).reduce((a, b) => a + (b ?? 0), 0)
 }
 
 /* What the Setup panel needs to say which state this target is in. */
@@ -76,8 +83,42 @@ export async function legacyImportState(db) {
   return {
     imported: Boolean(marker),
     completedAt: marker?.completed_at ?? null,
+    record: marker?.detail ? safeParse(marker.detail) : null,
     targetRows: await targetRowTotal(db),
   }
+}
+
+function safeParse(text) {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/*
+ * Mark a migration complete without running one.
+ *
+ * The first import ran before the marker table existed, so a finished target
+ * looks exactly like a half-written one — rows present, no marker — and the
+ * only way out was a re-import, which is precisely what the guard exists to
+ * prevent. This is the way out: it records what is already true.
+ *
+ * It does not verify anything itself. Deciding whether the target really holds
+ * what the plan would write is the caller's job, because the caller is the one
+ * holding the plan.
+ */
+export async function markMigrationComplete(db, { counts = null, now = new Date().toISOString() } = {}) {
+  const done = await completedMigration(db)
+  if (done) return { ok: false, reason: 'already_imported', completedAt: done.completed_at }
+
+  await db.run(`INSERT INTO ${T('migrations')} (name, completed_at, detail) VALUES (?, ?, ?)`, [
+    MIGRATION,
+    now,
+    JSON.stringify({ recorded: 'marked complete without re-importing', counts }),
+  ])
+
+  return { ok: true, completedAt: now }
 }
 
 export async function importInto(db, p, { photosCopies = [], now = new Date().toISOString() } = {}) {
