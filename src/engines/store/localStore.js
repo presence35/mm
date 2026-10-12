@@ -14,9 +14,11 @@
  */
 
 import * as idb from './idb.js'
-import { SEED_CARDS, SEED_BOATS, SEED_CUSTOMERS, SEED_STAFF, SEED_APPOINTMENTS, SEED_STORAGE_POSITIONS } from './seed.js'
+import { activeCardFor } from '../../domain/cardStatus.js'
+import { canBeAssignedWork } from '../auth/permissions.js'
+import { SEED_CARDS, SEED_BOATS, SEED_BOAT_SERIALS, SEED_CUSTOMERS, SEED_STAFF, SEED_APPOINTMENTS, SEED_STORAGE_POSITIONS, SEED_STORAGE_LAYOUT } from './seed.js'
 
-const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customers' }
+const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customers', serials: 'boat_serials', assignments: 'boat_assignments' }
 
 /*
  * Child collections are their own entities, not columns on the card.
@@ -46,7 +48,7 @@ const childId = {
   invoice_items: (cardId, i) => `ii-${cardId}-${i}`,
 }
 
-let db = { cards: [], boats: [], customers: [], employees: [], storageLayout: [], children: {} }
+let db = { cards: [], boats: [], serials: [], assignments: [], customers: [], employees: [], storageLayout: [], children: {} }
 
 function emptyChildren() {
   return Object.fromEntries(CHILD_ENTITIES.map((e) => [e, []]))
@@ -80,9 +82,11 @@ export function hydrate() {
 
   hydratePromise = (async () => {
     try {
-      const [cards, boats, customers, employees, storageLayout, appointments, ...childRows] = await Promise.all([
+      const [cards, boats, serials, assignments, customers, employees, storageLayout, appointments, ...childRows] = await Promise.all([
         idb.all('service_cards'),
         idb.all('boats'),
+        idb.all('boat_serials'),
+        idb.all('boat_assignments'),
         idb.all('customers'),
         idb.getReference('employees'),
         idb.getReference('storage_layout'),
@@ -148,12 +152,13 @@ export function hydrate() {
           }
         }
 
-        /* Customers and boats only. Children were queued in the loop above;
-           queueing them again here put two ops per row in the outbox, and the
-           second one arrived as a conflict against the first. */
+        /* Customers, boats and serials only. Children were queued in the loop
+           above; queueing them again here put two ops per row in the outbox, and
+           the second one arrived as a conflict against the first. */
         await Promise.all([
           ...SEED_CUSTOMERS.map((c) => idb.putAndQueue('customers', { ...c, version: 0, updated_at: now })),
           ...SEED_BOATS.map((b) => idb.putAndQueue('boats', { ...b, version: 0, updated_at: now })),
+          ...SEED_BOAT_SERIALS.map((s) => idb.putAndQueue('boat_serials', { ...s, version: 0, updated_at: now })),
           ...SEED_APPOINTMENTS.map((a) => idb.putAndQueue('appointments', { ...a, version: 0, updated_at: now })),
         ])
 
@@ -170,10 +175,12 @@ export function hydrate() {
           employees: roster.map((e) => ({ ...e, version: 0, local_pending: true })),
           storageLayout: SEED_STORAGE_POSITIONS,
           appointments: SEED_APPOINTMENTS.map((a) => ({ ...a, version: 0, local_pending: true })),
+          serials: SEED_BOAT_SERIALS.map((s) => ({ ...s, version: 0, local_pending: true })),
+          assignments: [],
           children: seededChildren,
         }
       } else {
-        db = { cards, boats, customers, employees: roster, storageLayout, appointments, children }
+        db = { cards, boats, customers, employees: roster, storageLayout, appointments, serials, assignments, children }
       }
     } catch (e) {
       /* Storage is unavailable — private mode, or a browser that refuses. Say
@@ -187,6 +194,8 @@ export function hydrate() {
         employees: SEED_STAFF,
         storageLayout: SEED_STORAGE_POSITIONS,
         appointments: SEED_APPOINTMENTS,
+        serials: SEED_BOAT_SERIALS,
+        assignments: [],
         children: emptyChildren(),
       }
     }
@@ -288,6 +297,12 @@ export function listStaff() {
   return db.employees.filter((e) => Number(e.active) === 1 && !e.deleted_at)
 }
 
+/* Who can be given a boat to work on. The role test lives in permissions.js —
+   nothing outside that file compares a role string. */
+export function listAssignableStaff() {
+  return listStaff().filter((e) => canBeAssignedWork(e.role))
+}
+
 export function getCustomer(id) {
   return { customer: db.customers.find((c) => c.id === id) ?? null, boats: db.boats.filter((b) => b.customer_id === id) }
 }
@@ -305,10 +320,71 @@ export function cardByToken(token) {
   return db.cards.find((c) => c.customer_token === token) ?? null
 }
 
+/* ------------------------------------------------------------------ boats */
+
+/* Every boat, with the one card a worker should be sent to.
+ *
+ * A boat accumulates a card per season, so "the boat's card" is a rule, not a
+ * lookup. It is legacy's: the card that is neither invoiced nor archived. When
+ * a boat has none — a boat on file that has never been in — the row still
+ * exists and points at the owner instead. See domain/cardStatus.js. */
+export function listBoats() {
+  return [...db.boats]
+    .sort((a, b) => String(a.name ?? a.model ?? '').localeCompare(String(b.name ?? b.model ?? '')))
+    .map((boat) => ({
+      boat,
+      customer: db.customers.find((c) => c.id === boat.customer_id) ?? null,
+      card: activeCardFor(db.cards.filter((c) => c.boat_id === boat.id)),
+    }))
+}
+
+export function getBoat(id) {
+  const boat = db.boats.find((b) => b.id === id)
+  if (!boat) return null
+  return {
+    boat,
+    customer: db.customers.find((c) => c.id === boat.customer_id) ?? null,
+    card: activeCardFor(db.cards.filter((c) => c.boat_id === id)),
+    serials: db.serials.filter((s) => s.boat_id === id),
+    /* Decorated here, once. A screen looking up employee names would be a second
+       place that knows how an assignment is joined. */
+    assignments: db.assignments
+      .filter((a) => a.boat_id === id)
+      .map((a) => {
+        const employee = db.employees.find((e) => e.id === a.employee_id) ?? null
+        return { ...a, employee_name: employee?.name ?? null, employee_initials: employee?.initials ?? null, employee_role: employee?.role ?? null }
+      }),
+  }
+}
+
 /* Server-owned storage positions. Read synchronously like everything else —
    a screen must never await. Hydrated at boot and after a sync reload. */
 export function listStorageLayout() {
   return db.storageLayout
+}
+
+/* The marina's shape: which buildings exist, how many rows and columns each
+ * has, how many boathouses and slips.
+ *
+ * Server-owned, like the positions — behaviors-sync.md says the app must not
+ * need a release to learn about a new building. So the rows win when the server
+ * has told us; SEED_STORAGE_LAYOUT is the bootstrap snapshot for a device that
+ * has never synced, the same role SEED_STORAGE_POSITIONS plays. Deriving it in
+ * one place is also why no screen imports the seed directly any more. */
+export function getStorageShape() {
+  const fromRows = (kind, mapper) => db.storageLayout.filter((r) => r.kind === kind).map(mapper)
+  const buildings = fromRows('building', (r) => r.value)
+  const rows = fromRows('row', (r) => r.value)
+  const cols = fromRows('col', (r) => r.value)
+  const boathouses = fromRows('boathouse', (r) => r.value)
+  const slips = fromRows('slip', (r) => r.value)
+  return {
+    buildings: buildings.length ? buildings : SEED_STORAGE_LAYOUT.buildings,
+    rows: rows.length ? rows : SEED_STORAGE_LAYOUT.rows,
+    cols: cols.length ? cols : SEED_STORAGE_LAYOUT.cols,
+    boathouseCount: boathouses.length ? boathouses.length : SEED_STORAGE_LAYOUT.boathouse_count,
+    boathouseSlips: slips.length ? slips.length : SEED_STORAGE_LAYOUT.boathouse_slips,
+  }
 }
 
 /* ----------------------------------------------------------------- schedule */
@@ -537,6 +613,69 @@ export function createBoat(fields) {
   return row
 }
 
+/* `undefined` means "leave alone". An explicit `null` clears the field — the
+   difference matters for licence plates and lengths, where clearing is a real
+   intention and not an omission. */
+export function updateBoat(id, patch) {
+  const i = db.boats.findIndex((b) => b.id === id)
+  if (i < 0) return null
+  const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
+  db.boats[i] = { ...db.boats[i], ...clean, local_pending: true }
+  write('boats', db.boats[i])
+  return db.boats[i]
+}
+
+/* Serials are replaced wholesale, not merged: the editor edits them as a list,
+   and a row the worker deleted has to disappear. Rows are dropped from the
+   local projection immediately and the delete is queued like any other write. */
+export function setBoatSerials(boatId, serials) {
+  const keep = new Set()
+  serials.forEach((s) => {
+    const row = {
+      id: s.id ?? idb.newId('bs'),
+      boat_id: boatId,
+      type: s.type ?? 'other',
+      serial_number: s.serial_number ?? null,
+      notes: s.notes ?? null,
+      version: Number(s.version ?? 0),
+    }
+    keep.add(row.id)
+    const at = db.serials.findIndex((r) => r.id === row.id)
+    const next = { ...row, local_pending: true }
+    if (at >= 0) db.serials[at] = next
+    else db.serials = [...db.serials, next]
+    write('serials', next)
+  })
+
+  for (const row of db.serials.filter((r) => r.boat_id === boatId && !keep.has(r.id))) {
+    db.serials = db.serials.filter((r) => r.id !== row.id)
+    idb.removeAndQueue('boat_serials', row.id).catch(() => {})
+    notify()
+  }
+  return getBoat(boatId)?.serials ?? []
+}
+
+/* Assignment is one row per boat-and-person pair, so assigning twice is the
+   same assignment. The id is derived from both, which is also what makes a
+   retried sync land on one row instead of two. */
+export function addAssignment(boatId, employeeId, assignedBy = null) {
+  const id = `ba-${boatId}-${employeeId}`
+  if (db.assignments.some((a) => a.id === id)) return null
+  const row = { id, boat_id: boatId, employee_id: employeeId, assigned_by: assignedBy, version: 0, local_pending: true }
+  db.assignments = [...db.assignments, row]
+  write('assignments', row)
+  return row
+}
+
+export function removeAssignment(boatId, employeeId) {
+  const id = `ba-${boatId}-${employeeId}`
+  if (!db.assignments.some((a) => a.id === id)) return null
+  db.assignments = db.assignments.filter((a) => a.id !== id)
+  idb.removeAndQueue('boat_assignments', id).catch(() => {})
+  notify()
+  return id
+}
+
 export function nextWorkOrderNo(now) {
   const year = now.getFullYear()
   const max = db.cards
@@ -593,7 +732,14 @@ export async function clearPendingFlags() {
 
 /* Generic entity access for the conflict resolver, which deals in whatever
    entity a conflict happened to be on rather than cards specifically. */
-const LISTS = { service_cards: 'cards', boats: 'boats', customers: 'customers', appointments: 'appointments' }
+const LISTS = {
+  service_cards: 'cards',
+  boats: 'boats',
+  boat_serials: 'serials',
+  boat_assignments: 'assignments',
+  customers: 'customers',
+  appointments: 'appointments',
+}
 
 export function getEntity(entity, id) {
   if (CHILD_ENTITIES.includes(entity)) {

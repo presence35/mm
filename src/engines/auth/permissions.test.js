@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CAPABILITIES, can, canOffline } from './permissions.js'
+import { CAPABILITIES, can, canOffline, canBeAssignedWork } from './permissions.js'
 
 test('mechanic works on cards and nothing else', () => {
   assert.ok(can('mechanic', CAPABILITIES.WORK_ON_CARD))
@@ -41,4 +41,29 @@ test('unknown role or capability is denied, never throws', () => {
   assert.ok(!can('cleaner', CAPABILITIES.WORK_ON_CARD))
   assert.ok(!can('mechanic', 'card.launch'))
   assert.ok(!canOffline('mechanic', 'card.launch'))
+})
+
+/* ------------------------------------------------------- editing a boat */
+
+test('editing and assigning a boat are office and admin work, not the yard', () => {
+  assert.ok(can('office', CAPABILITIES.EDIT_BOAT))
+  assert.ok(can('office', CAPABILITIES.ASSIGN_BOAT))
+  assert.ok(can('admin', CAPABILITIES.EDIT_BOAT))
+  assert.ok(can('admin', CAPABILITIES.ASSIGN_BOAT))
+  assert.ok(!can('mechanic', CAPABILITIES.EDIT_BOAT))
+  assert.ok(!can('mechanic', CAPABILITIES.ASSIGN_BOAT))
+})
+
+test('a boat edit refuses offline rather than queueing, like every other office action', () => {
+  assert.ok(!canOffline('office', CAPABILITIES.EDIT_BOAT))
+  assert.ok(!canOffline('admin', CAPABILITIES.EDIT_BOAT))
+  assert.ok(!canOffline('office', CAPABILITIES.ASSIGN_BOAT))
+})
+
+test('only mechanics can be assigned work, which is what replaced the old cleaner role', () => {
+  assert.ok(canBeAssignedWork('mechanic'))
+  assert.ok(!canBeAssignedWork('office'))
+  assert.ok(!canBeAssignedWork('admin'))
+  assert.ok(!canBeAssignedWork('cleaner'))
+  assert.ok(!canBeAssignedWork(undefined))
 })

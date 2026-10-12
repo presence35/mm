@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { locationFieldsFor, isBoathouse, needsLocation, normalizeLocation, locationSummary, SIZE_CLASSES, sizeClassFor, heightSummary, dimensionSummary, positionCode, findPosition } from './storageLocation.js'
+import { locationFieldsFor, isBoathouse, needsLocation, normalizeLocation, locationSummary, SIZE_CLASSES, sizeClassFor, heightSummary, dimensionSummary, positionCode, findPosition, buildingGrid, boathouseGrid, buildingsToDraw, boathousesToDraw, groupByStorageType, positionByCode } from './storageLocation.js'
 
 test('boathouse types take boathouse + slip, building takes building + row + col', () => {
   assert.deepEqual(locationFieldsFor('customer_boathouse'), ['boathouse_no', 'slip_no'])
@@ -112,4 +112,118 @@ test('the layout lookup joins on the code, and misses cleanly', () => {
   assert.equal(sizeClassFor(findPosition(layout, card)).key, 'large')
   assert.equal(findPosition(layout, { storage_type: 'dry_land' }), null)
   assert.equal(findPosition(layout, { storage_type: 'storage_building', storage_building: 'Z', storage_row: 9, storage_col: 9 }), null)
+})
+
+/* ------------------------------------------------------------- map views */
+
+const SHAPE = { buildings: ['Metal 1', 'Metal 2'], rows: [1, 2], cols: ['A', 'B'] }
+
+test('a building grid puts each boat in its own cell and leaves the rest vacant', () => {
+  const cards = [
+    { id: 'k-1', storage_type: 'storage_building', storage_building: 'Metal 1', storage_row: 1, storage_col: 'B' },
+    { id: 'k-2', storage_type: 'storage_building', storage_building: 'Metal 2', storage_row: 2, storage_col: 'A' },
+  ]
+  const grid = buildingGrid({ building: 'Metal 1', cards, layout: [], shape: SHAPE })
+
+  assert.equal(grid.cols.join(''), 'AB')
+  assert.deepEqual(grid.rows.map((r) => r.row), [1, 2])
+  assert.equal(grid.rows[0].cells[1].card.id, 'k-1')
+  assert.equal(grid.rows[0].cells[0].card, null)
+  assert.equal(grid.rows[1].cells[0].card, null)
+  /* Only this building's boats are placed: the row count is not a filter. */
+  assert.equal(grid.rows.flatMap((r) => r.cells).filter((c) => c.card).length, 1)
+})
+
+test('a cell carries the measured position as well as the boat', () => {
+  const layout = [{ kind: 'position', value: 'Metal 1/1/A', length_ft: 28, width_ft: 12, height_front_ft: 9, height_back_ft: 7, prior_year_customer: 'Hollis' }]
+  const grid = buildingGrid({ building: 'Metal 1', cards: [], layout, shape: SHAPE })
+  const cell = grid.rows[0].cells[0]
+
+  assert.equal(cell.card, null)
+  assert.equal(cell.position.prior_year_customer, 'Hollis')
+  assert.equal(sizeClassFor(cell.position).key, 'large')
+  /* And a cell the layout does not describe says so rather than guessing. */
+  assert.equal(grid.rows[0].cells[1].position, null)
+  assert.equal(sizeClassFor(grid.rows[0].cells[1].position).label, 'No size')
+})
+
+test('a boat with no row or column is surfaced, not dropped off the map', () => {
+  const cards = [{ id: 'k-1', storage_type: 'storage_building', storage_building: 'Metal 1', storage_row: null, storage_col: null }]
+  const grid = buildingGrid({ building: 'Metal 1', cards, layout: [], shape: SHAPE })
+
+  assert.equal(grid.rows.flatMap((r) => r.cells).filter((c) => c.card).length, 0)
+  assert.deepEqual(grid.unplaced.map((c) => c.id), ['k-1'])
+})
+
+test('only buildings that hold something are drawn', () => {
+  const layout = [{ kind: 'position', value: 'Metal 2/1/A', length_ft: 20, width_ft: 9, height_front_ft: 7, height_back_ft: 7 }]
+  const empty = []
+  /* A building with neither a boat nor a measured position is a page of empty
+     boxes, and it is left out. */
+  assert.deepEqual(buildingsToDraw({ cards: empty, layout: empty, shape: SHAPE }), [])
+
+  const withBoat = buildingsToDraw({
+    cards: [{ id: 'k-1', storage_type: 'storage_building', storage_building: 'Metal 1' }],
+    layout: [],
+    shape: SHAPE,
+  })
+  assert.deepEqual(withBoat, ['Metal 1'])
+
+  /* A measured but unoccupied spot is exactly what somebody is asking about. */
+  const withPosition = buildingsToDraw({ cards: empty, layout, shape: SHAPE })
+  assert.deepEqual(withPosition, ['Metal 2'])
+})
+
+test('a boathouse grid counts what is in it and places boats by slip', () => {
+  const shape = { boathouseSlips: 3 }
+  const cards = [
+    { id: 'k-1', storage_type: 'marina_boathouse', boathouse_no: 3, slip_no: 2 },
+    { id: 'k-2', storage_type: 'customer_boathouse', boathouse_no: 3, slip_no: null },
+    { id: 'k-3', storage_type: 'marina_boathouse', boathouse_no: 4, slip_no: 1 },
+  ]
+  const grid = boathouseGrid({ boathouse: 3, cards, layout: [], shape })
+
+  assert.equal(grid.slips.length, 3)
+  assert.equal(grid.slips[1].card.id, 'k-1')
+  assert.equal(grid.slips[0].card, null)
+  /* A boat parked here with no slip is still counted as occupying the
+     boathouse, and is listed rather than lost. */
+  assert.equal(grid.occupied, 2)
+  assert.deepEqual(grid.unplaced.map((c) => c.id), ['k-2'])
+})
+
+test('a boathouse number is matched numerically, so 3 and "3" are the same berth', () => {
+  const grid = boathouseGrid({
+    boathouse: 3,
+    cards: [{ id: 'k-1', storage_type: 'marina_boathouse', boathouse_no: '3', slip_no: '1' }],
+    layout: [],
+    shape: { boathouseSlips: 2 },
+  })
+  assert.equal(grid.slips[0].card.id, 'k-1')
+})
+
+test('boathousesToDraw is the marina shape, not the data', () => {
+  assert.deepEqual(boathousesToDraw({ boathouseCount: 3 }), [1, 2, 3])
+  assert.deepEqual(boathousesToDraw({}), [])
+})
+
+test('the list groups by storage type in a fixed order, and names the unplaced', () => {
+  const groups = groupByStorageType([
+    { id: 'k-1', storage_type: 'water' },
+    { id: 'k-2', storage_type: null },
+    { id: 'k-3', storage_type: 'storage_building' },
+    { id: 'k-4', storage_type: 'water' },
+  ])
+
+  assert.deepEqual(groups.map((g) => g.type), ['storage_building', 'water', 'unset'])
+  assert.equal(groups.find((g) => g.type === 'water').items.length, 2)
+  assert.equal(groups.find((g) => g.type === 'storage_building').label, 'Storage building')
+  assert.equal(groups.find((g) => g.type === 'unset').label, 'No location set')
+})
+
+test('a code lookup matches exactly, and an absent code returns nothing', () => {
+  const layout = [{ kind: 'position', value: 'A/2/3' }]
+  assert.equal(positionByCode(layout, 'A/2/3').value, 'A/2/3')
+  assert.equal(positionByCode(layout, 'A/2/4'), null)
+  assert.equal(positionByCode(layout, null), null)
 })

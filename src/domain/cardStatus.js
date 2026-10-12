@@ -42,6 +42,28 @@ export function nextStatuses(status) {
   return out
 }
 
+/*
+ * The card a boat's row should open.
+ *
+ * A boat collects one card per season, so "the boat's card" is a rule rather
+ * than a lookup. This is the legacy app's rule, kept deliberately: the card that
+ * is neither invoiced nor archived. Invoiced and archived cards are history and
+ * belong on the owner's screen, not behind a boat in the yard list.
+ *
+ * Returns null when a boat has only history or no cards at all — the caller
+ * sends the worker to the owner instead of inventing a card to open. Rather than
+ * the first match, the newest season wins, so the answer does not depend on the
+ * order the store happens to hand rows over in.
+ */
+export function activeCardFor(cards) {
+  const open = (cards ?? []).filter((c) => c.status !== 'invoiced' && c.status !== 'archived')
+  if (!open.length) return null
+  const newest = (a, b) =>
+    Number(b.season_year ?? 0) - Number(a.season_year ?? 0) ||
+    String(b.work_order_no ?? '').localeCompare(String(a.work_order_no ?? ''))
+  return open.slice().sort(newest)[0]
+}
+
 export function canTransition(from, to) {
   return nextStatuses(from).includes(to)
 }

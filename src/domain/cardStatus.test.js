@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, countsByStatus, OPTIONAL_STAGES } from './cardStatus.js'
+import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, countsByStatus, OPTIONAL_STAGES, activeCardFor } from './cardStatus.js'
 
 /* No-mirror rule: every status pairs colour (tone) with a label and a shape. */
 test('every status carries label + tone + shape, so colour never stands alone', () => {
@@ -95,4 +95,42 @@ test('countsByStatus tolerates an empty or missing list', () => {
 test('statusMeta falls back for unknown status instead of throwing', () => {
   const m = statusMeta('bogus')
   assert.equal(m.tone, 'neutral')
+})
+
+/* ------------------------------------------- which card a boat's row opens */
+
+test('a boat opens the card that is neither invoiced nor archived', () => {
+  const cards = [
+    { id: 'k-1', season_year: 2024, status: 'archived' },
+    { id: 'k-2', season_year: 2025, status: 'invoiced' },
+    { id: 'k-3', season_year: 2026, status: 'storage' },
+  ]
+  assert.equal(activeCardFor(cards).id, 'k-3')
+})
+
+test('history alone is no card at all, so the caller can fall back to the owner', () => {
+  assert.equal(activeCardFor([{ id: 'k-1', status: 'invoiced' }, { id: 'k-2', status: 'archived' }]), null)
+  assert.equal(activeCardFor([]), null)
+  assert.equal(activeCardFor(undefined), null)
+})
+
+test('the newest season wins, so the answer does not depend on row order', () => {
+  const older = { id: 'k-1', season_year: 2025, work_order_no: 'WO-1', status: 'storage' }
+  const newer = { id: 'k-2', season_year: 2026, work_order_no: 'WO-2', status: 'intake' }
+  assert.equal(activeCardFor([older, newer]).id, 'k-2')
+  assert.equal(activeCardFor([newer, older]).id, 'k-2')
+})
+
+test('the same season is broken by work order number, and by nothing else', () => {
+  const a = { id: 'k-1', season_year: 2026, work_order_no: 'WO-2481', status: 'storage' }
+  const b = { id: 'k-2', season_year: 2026, work_order_no: 'WO-2484', status: 'storage' }
+  assert.equal(activeCardFor([a, b]).id, 'k-2')
+  assert.equal(activeCardFor([b, a]).id, 'k-2')
+})
+
+test('a card with no season at all still counts as open, and sorts last', () => {
+  const seasonal = { id: 'k-1', season_year: 2024, status: 'storage' }
+  const undated = { id: 'k-2', season_year: null, status: 'intake' }
+  assert.equal(activeCardFor([undated, seasonal]).id, 'k-1')
+  assert.equal(activeCardFor([undated]).id, 'k-2')
 })

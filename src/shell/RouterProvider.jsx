@@ -13,8 +13,6 @@ import { holdReload } from '../engines/pwa/update.js'
 
 const RouterCtx = createContext(null)
 
-const TABS = ['cards', 'people', 'map', 'setup', 'scan']
-
 export function RouterProvider({ children }) {
   const [stack, setStack] = useState([{ screen: 'cards', params: {} }])
   const stackRef = useRef(stack)
@@ -146,5 +144,3 @@ export function useRouter() {
   if (!ctx) throw new Error('useRouter must be used inside RouterProvider')
   return ctx
 }
-
-export { TABS }

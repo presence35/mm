@@ -321,20 +321,35 @@ src/
   appVersion.js  — the version string, injected at build time from package.json
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
-             StageStrip, Collapsible,
+             StageStrip, Collapsible, SlotGrid,
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
+             *Note:* AppShell.NAV is the only list of destinations. The router
+             used to export a second one; nothing imported it, and a new tab had
+             to be added in two places.
   engines/
     pwa/     update.js (reloads an open page when a new worker takes over;
              held while a form has unsaved work)
     store/   localStore.js (sync read API over a hydrated projection),
              idb.js (IndexedDB), seed.js
+             *Note:* boat_serials and boat_assignments are entities, not columns
+             on `boats`. getStorageShape() reads the marina's buildings, rows,
+             columns, boathouses and slips out of the storage_layout reference
+             rows, with the seed as the bootstrap snapshot — a new building from
+             the server must not need a release.
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
     media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js, schedule.js, conflictDiff.js
               — pure, deterministic
+              *Note:* storageLocation.js also builds the Map's views —
+              groupByStorageType, buildingsToDraw, buildingGrid, boathouseGrid.
+              The grid is a rule about position codes, not a layout detail, so
+              the list and the grid cannot disagree about who is in Metal 2 row 3.
+              It takes the marina's shape as an argument: it never reads the seed.
+              cardStatus.js owns activeCardFor — a boat's row opens the card that
+              is neither invoiced nor archived, and the owner when there is none.
               cardStatus.test.js, storageLocation.test.js, schedule.test.js,
               conflictDiff.test.js — beat tests pinning the lifecycle, the
               unrepresentable-combination rule, the label+tone+shape pairing
@@ -343,14 +358,18 @@ src/
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
+    boat/    BoatEdit.jsx — a boat's own record: fields, serials, assignments.
+             Editing and assigning are office/admin capabilities and refuse
+             offline rather than queueing (behaviours-auth.md constraint 5).
     schedule/ ScheduleBoard.jsx, useSchedule.js
     conflicts/useConflicts.js — joins an open conflict to the record it
               belongs to, and decorates it. The comparison itself lives in
               domain/conflictDiff.js, because the store's settled-conflict
               sweep needs the same rule
   screens/   composition only:
-             Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
-             Map, Setup, Scan, Admin, Conflicts, Login, PublicCard, Schedule
+             Cards, CardDetail, NewCard, Invoice, People, PeopleDetail, Boats,
+             Boat, Map, Setup, Scan, Admin, Conflicts, Login, PublicCard,
+             Schedule
 
 server/
   index.js   routes; the only place that knows HTTP

@@ -13,8 +13,8 @@
 import { isSettled } from '../../domain/conflictDiff.js'
 
 const DB_NAME = 'marina-manager'
-const DB_VERSION = 2
-const STORES = ['customers', 'boats', 'service_cards', 'work_logs', 'received_items', 'authorized_work', 'condition_assessment', 'photos', 'invoice_items', 'status_history', 'appointments', 'meta', 'outbox', 'conflicts', 'reference']
+const DB_VERSION = 3
+const STORES = ['customers', 'boats', 'boat_serials', 'boat_assignments', 'service_cards', 'work_logs', 'received_items', 'authorized_work', 'condition_assessment', 'photos', 'invoice_items', 'status_history', 'appointments', 'meta', 'outbox', 'conflicts', 'reference']
 
 let dbPromise = null
 

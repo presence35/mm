@@ -53,6 +53,7 @@ export default function PeopleDetailScreen({ params = {} }) {
             icon="boat"
             title={b.name || '(no name)'}
             support={[b.motor_type, b.model, b.licence, b.length_ft && `${b.length_ft} ft`].filter(Boolean).join(' · ')}
+            onClick={() => navigate('boat', { id: b.id })}
           />
         ))
       )}

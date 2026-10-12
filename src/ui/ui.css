@@ -881,6 +881,87 @@ select.field__input { cursor: pointer; }
 .status-pill--warn { background: var(--warning-container); color: var(--on-warning-container); }
 .status-pill--error { background: var(--error-container); color: var(--on-error-container); }
 
+/* ------------------------------------------------------------- Slot grid --
+   The marina's physical grid. Buildings are 26 columns wide and scroll
+   sideways; on a phone that is the price of a grid whose shape means
+   something. Cells stay at the minimum interactive target even though the
+   legacy app drew them at 28px — a spot a worker cannot tap is not a spot.
+
+   The tone classes mirror the status pills exactly, on purpose: a cell and a
+   pill showing the same status must not be two different colours. */
+
+.slot-grid__scroll {
+  overflow-x: auto;
+  padding: 0 var(--space-4) var(--space-4);
+  -webkit-overflow-scrolling: touch;
+}
+
+.slot-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+  min-width: max-content;
+}
+
+.slot-grid__head {
+  font: var(--label-s);
+  color: var(--on-surface-variant);
+  text-align: center;
+  padding: 0 var(--space-1);
+  min-width: var(--target-min);
+}
+
+.slot-grid__corner { min-width: var(--target-min); }
+
+.slot-cell { padding: 0; }
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: var(--target-min);
+  height: var(--target-min);
+  border-radius: var(--corner-s);
+  border: 1px solid transparent;
+  font: var(--label-s);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  padding: 0 2px;
+  transition: filter var(--duration-short-2) var(--easing-standard);
+}
+
+button.slot { cursor: pointer; }
+button.slot:hover { filter: brightness(1.08); }
+button.slot:active { filter: brightness(0.94); }
+
+.slot__text {
+  display: block;
+  width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Vacant: outlined and dimmed, and never a target.
+   Deliberately last, and deliberately without a `color`: a vacant cell that the
+   layout has measured still shows its size class as the dot, which takes its
+   colour from the tone class, while the cell itself stays unfilled — an empty
+   spot must not read as a full one at a glance. */
+.slot--neutral { background: var(--surface-container-highest); color: var(--on-surface-variant); border-color: var(--outline-variant); }
+.slot--progress { background: var(--primary-container); color: var(--on-primary-container); }
+.slot--action { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.slot--done { background: var(--success-container); color: var(--on-success-container); }
+.slot--warn { background: var(--warning-container); color: var(--on-warning-container); }
+.slot--error { background: var(--error-container); color: var(--on-error-container); }
+
+.slot--vacant {
+  background: transparent;
+  border: 1px dashed var(--outline-variant);
+  opacity: 0.55;
+}
+
 /* ------------------------------------------------------------ StateViews -- */
 
 .state-view {

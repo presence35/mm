@@ -7,6 +7,8 @@ import CardsScreen from '../screens/CardsScreen.jsx'
 import CardDetailScreen from '../screens/CardDetailScreen.jsx'
 import PeopleScreen from '../screens/PeopleScreen.jsx'
 import PeopleDetailScreen from '../screens/PeopleDetailScreen.jsx'
+import BoatsScreen from '../screens/BoatsScreen.jsx'
+import BoatScreen from '../screens/BoatScreen.jsx'
 import MapScreen from '../screens/MapScreen.jsx'
 import SetupScreen from '../screens/SetupScreen.jsx'
 import ScanScreen from '../screens/ScanScreen.jsx'
@@ -22,6 +24,7 @@ import ScheduleScreen from '../screens/ScheduleScreen.jsx'
 const NAV = [
   { key: 'cards', label: 'Cards', icon: 'cards' },
   { key: 'people', label: 'People', icon: 'users' },
+  { key: 'boats', label: 'Boats', icon: 'boat' },
   { key: 'map', label: 'Map', icon: 'map' },
   { key: 'setup', label: 'Setup', icon: 'tune' },
   { key: 'scan', label: 'Scan', icon: 'qr' },
@@ -30,11 +33,13 @@ const NAV = [
 const SCREENS = {
   cards: CardsScreen,
   people: PeopleScreen,
+  boats: BoatsScreen,
   'people-detail': PeopleDetailScreen,
   map: MapScreen,
   setup: SetupScreen,
   scan: ScanScreen,
   card: CardDetailScreen,
+  boat: BoatScreen,
   'new-card': NewCardScreen,
   invoice: InvoiceScreen,
   admin: AdminScreen,

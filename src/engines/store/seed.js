@@ -56,6 +56,7 @@ export const SEED_CUSTOMERS = [
   { id: 'c-2', name: 'Priya Anand', phone: '250-555-0177', email: 'priya.a@example.com', city: 'Courtenay' },
   { id: 'c-3', name: 'Joelle Tremblay', phone: '250-555-0193', email: 'j.tremblay@example.com', city: 'Comox' },
   { id: 'c-4', name: 'Sam Okafor', phone: '250-555-0110', email: 's.okafor@example.com', city: 'Campbell River' },
+  { id: 'c-5', name: 'Ruth Delacroix', phone: '250-555-0128', email: 'r.delacroix@example.com', city: 'Campbell River' },
 ]
 
 export const SEED_BOATS = [
@@ -63,6 +64,16 @@ export const SEED_BOATS = [
   { id: 'b-2', customer_id: 'c-2', name: 'Kestrel', motor_type: 'Outboard', model: 'Mercury 150', licence: 'BC 7734 QJ', trailer_licence: 'TR-8810', length_ft: 19, rate_type: 'SW' },
   { id: 'b-3', customer_id: 'c-3', name: null, motor_type: 'Inboard', model: 'Volvo Penta', licence: 'BC 1180 ZX', trailer_licence: null, length_ft: 31, rate_type: 'LW' },
   { id: 'b-4', customer_id: 'c-4', name: 'Tern', motor_type: 'Outboard', model: 'Honda 90', licence: 'BC 3306 HM', trailer_licence: 'TR-4417', length_ft: 16, rate_type: 'SW' },
+  { id: 'b-5', customer_id: 'c-5', name: 'Annelise', motor_type: 'Inboard', model: 'Mercruiser 4.3', licence: 'BC 9912 RD', trailer_licence: null, length_ft: 21, rate_type: 'SW' },
+]
+
+/*
+ * Engine and hull serials. Their own table on both sides — the legacy app kept
+ * them in a side table and dropping them lost the only record of which motor is
+ * on which hull.
+ */
+export const SEED_BOAT_SERIALS = [
+  { id: 'bs-1', boat_id: 'b-1', type: 'engine', serial_number: 'F200-1143922', notes: null },
 ]
 
 export const SEED_CARDS = [
@@ -136,6 +147,22 @@ export const SEED_CARDS = [
     invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
     customer_token: 'tk-2484-2b8c05',
     received_items: ['keys', 'paddles', 'tie_ropes'],
+    authorized_work: [],
+    condition: [],
+    logs: [],
+    photos: [],
+  },
+  {
+    id: 'k-5', boat_id: 'b-5', work_order_no: 'WO-2486', season_year: 2026,
+    storage_type: 'storage_building', storage_building: 'Metal 1', storage_row: 1, storage_col: 'B',
+    boathouse_no: null, slip_no: null,
+    date_in: '2026-10-03', date_out: null, status: 'intake',
+    remarks: 'Second spot on Row 1.',
+    other_work: null,
+    wrap_required: false, unwrap_done: false, pickup_delivery: null,
+    invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
+    customer_token: 'tk-2486-9ade14',
+    received_items: ['keys', 'cover'],
     authorized_work: [],
     condition: [],
     logs: [],

@@ -15,7 +15,6 @@ import { useRouter } from '../shell/RouterProvider.jsx'
 import * as store from '../engines/store/localStore.js'
 import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import { STORAGE_TYPES, normalizeLocation, isBoathouse, needsLocation } from '../domain/storageLocation.js'
-import { SEED_STORAGE_LAYOUT } from '../engines/store/seed.js'
 
 /* Three steps: customer → boat → card.
  *
@@ -55,6 +54,11 @@ export default function NewCardScreen() {
   }))
 
   const canCreateCustomer = may(CAPABILITIES.CREATE_CUSTOMER)
+
+  /* The marina's shape, from the store: server-owned reference data with the
+     bootstrap fixture behind it. Reading the seed directly here meant a new
+     building needed a release. */
+  const shape = store.getStorageShape()
 
   const customers = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -258,7 +262,7 @@ export default function NewCardScreen() {
               label="Boathouse #"
               value={card.boathouse_no ?? ''}
               onChange={(v) => setLoc('boathouse_no', v ? Number(v) : null)}
-              options={[{ value: '', label: 'Boathouse #' }, ...Array.from({ length: SEED_STORAGE_LAYOUT.boathouse_count }, (_, i) => ({ value: String(i + 1), label: `Boathouse ${i + 1}` }))]}
+              options={[{ value: '', label: 'Boathouse #' }, ...Array.from({ length: shape.boathouseCount }, (_, i) => ({ value: String(i + 1), label: `Boathouse ${i + 1}` }))]}
             />
           ) : null}
           {isBoathouse(card.storage_type) ? (
@@ -266,7 +270,7 @@ export default function NewCardScreen() {
               label="Slip #"
               value={card.slip_no ?? ''}
               onChange={(v) => setLoc('slip_no', v ? Number(v) : null)}
-              options={[{ value: '', label: 'Slip #' }, ...Array.from({ length: SEED_STORAGE_LAYOUT.boathouse_slips }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]}
+              options={[{ value: '', label: 'Slip #' }, ...Array.from({ length: shape.boathouseSlips }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))]}
             />
           ) : null}
           {card.storage_type === 'storage_building' ? (
@@ -275,19 +279,19 @@ export default function NewCardScreen() {
                 label="Building"
                 value={card.storage_building ?? ''}
                 onChange={(v) => setLoc('storage_building', v)}
-                options={[{ value: '', label: 'Building' }, ...SEED_STORAGE_LAYOUT.buildings.map((b) => ({ value: b, label: b }))]}
+                options={[{ value: '', label: 'Building' }, ...shape.buildings.map((b) => ({ value: b, label: b }))]}
               />
               <SelectField
                 label="Row"
                 value={card.storage_row ?? ''}
                 onChange={(v) => setLoc('storage_row', v ? Number(v) : null)}
-                options={[{ value: '', label: 'Row' }, ...SEED_STORAGE_LAYOUT.rows.map((r) => ({ value: String(r), label: `Row ${r}` }))]}
+                options={[{ value: '', label: 'Row' }, ...shape.rows.map((r) => ({ value: String(r), label: `Row ${r}` }))]}
               />
               <SelectField
                 label="Column"
                 value={card.storage_col ?? ''}
                 onChange={(v) => setLoc('storage_col', v)}
-                options={[{ value: '', label: 'Column' }, ...SEED_STORAGE_LAYOUT.cols.map((c) => ({ value: c, label: `Column ${c}` }))]}
+                options={[{ value: '', label: 'Column' }, ...shape.cols.map((c) => ({ value: c, label: `Column ${c}` }))]}
               />
             </>
           ) : null}

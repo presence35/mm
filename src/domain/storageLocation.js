@@ -149,7 +149,152 @@ export function positionCode(card) {
 }
 
 export function findPosition(layout, card) {
-  const code = positionCode(card)
+  return positionByCode(layout, positionCode(card))
+}
+
+/* ----------------------------------------------------------- the map views
+ *
+ * The Map draws three views of the same fact: where boats are. A flat list,
+ * a building grid, and a boathouse grid.
+ *
+ * All three are built here rather than in the screen, because the grid is a rule
+ * about positions, not a layout detail: a cell exists at building/row/column and
+ * the boat in it is the card whose location code is that cell. Written in the
+ * screen, "which boat is in Metal 2 row 3 column D" would be answered a second
+ * time, next to the answer in positionCode, and the two would drift.
+ *
+ * Pure: the marina's shape arrives as an argument. It is never read from the
+ * seed fixture here, so a server that learns a new building changes the grid
+ * without a release.
+ */
+
+const present = (v) => v !== null && v !== undefined && v !== ''
+
+export function buildingCode(building, row, col) {
+  return [building, row, col].join('/')
+}
+
+export function boathouseCode(no, slip) {
+  return `BH${no}/S${slip}`
+}
+
+export function positionByCode(layout, code) {
   if (!code) return null
   return (layout ?? []).find((row) => row?.kind === 'position' && row?.value === code) ?? null
+}
+
+export function cardsInBuilding(cards, building) {
+  return (cards ?? []).filter((c) => c.storage_type === 'storage_building' && c.storage_building === building)
+}
+
+export function cardsInBoathouse(cards, boathouseNo) {
+  return (cards ?? []).filter((c) => isBoathouse(c.storage_type) && Number(c.boathouse_no) === Number(boathouseNo))
+}
+
+/* A building is drawn when it holds something: a boat, or a measured position
+ * that no boat currently occupies (last year's spot, which is exactly what
+ * someone is asking about). A building the app knows nothing about stays out
+ * rather than appearing as a page of empty boxes. */
+export function buildingsToDraw({ cards, layout, shape }) {
+  return (shape?.buildings ?? []).filter(
+    (b) =>
+      cardsInBuilding(cards, b).length > 0 ||
+      (layout ?? []).some((r) => r?.kind === 'position' && String(r.value ?? '').startsWith(`${b}/`)),
+  )
+}
+
+/*
+ * One building's grid.
+ *
+ * Dimensions belong to the position, so a cell carries the position as well as
+ * the card: an empty cell with a recorded size is still worth showing, and a
+ * boat in a cell the layout does not describe gets "No size" rather than a size
+ * guessed from the boat. `unplaced` holds cards parked in this building with no
+ * row or column — a half-entered location is a thing to fix, not a thing to
+ * silently drop off the map.
+ */
+export function buildingGrid({ building, cards, layout, shape }) {
+  const here = cardsInBuilding(cards, building)
+  const rows = shape?.rows ?? []
+  const cols = shape?.cols ?? []
+
+  const cells = new Map()
+  const unplaced = []
+  for (const card of here) {
+    if (!present(card.storage_row) || !present(card.storage_col)) {
+      unplaced.push(card)
+      continue
+    }
+    cells.set(`${building}/${card.storage_row}/${card.storage_col}`, card)
+  }
+
+  return {
+    building,
+    cols,
+    unplaced,
+    rows: rows.map((row) => ({
+      row,
+      cells: cols.map((col) => {
+        const code = buildingCode(building, row, col)
+        return { code, col, card: cells.get(code) ?? null, position: positionByCode(layout, code) }
+      }),
+    })),
+  }
+}
+
+export function boathousesToDraw(shape) {
+  return Array.from({ length: Number(shape?.boathouseCount ?? 0) }, (_, i) => i + 1)
+}
+
+/* Same shape as a building grid, one row of slips instead of rows of columns. */
+export function boathouseGrid({ boathouse, cards, layout, shape }) {
+  const here = cardsInBoathouse(cards, boathouse)
+  const slips = Array.from({ length: Number(shape?.boathouseSlips ?? 0) }, (_, i) => i + 1)
+
+  const cells = new Map()
+  const unplaced = []
+  for (const card of here) {
+    if (!present(card.slip_no)) {
+      unplaced.push(card)
+      continue
+    }
+    cells.set(`${boathouse}/${card.slip_no}`, card)
+  }
+
+  return {
+    boathouse,
+    occupied: here.length,
+    unplaced,
+    slips: slips.map((slip) => {
+      const code = boathouseCode(boathouse, slip)
+      return { code, col: slip, card: cells.get(`${boathouse}/${slip}`) ?? null, position: positionByCode(layout, code) }
+    }),
+  }
+}
+
+/*
+ * The List view: every card with a location, grouped by storage type.
+ *
+ * Grouped in the storage types' declared order rather than by whatever key the
+ * cards happen to come in, so the screen reads the same way twice, and "Dry
+ * land" does not float above "Storage building" on a different day.
+ *
+ * `unset` is a real answer here: a card with no storage type yet is a card
+ * nobody has placed, and the group says so instead of hiding it.
+ */
+export function groupByStorageType(cards) {
+  const groups = new Map()
+  for (const card of cards ?? []) {
+    const key = card.storage_type ?? 'unset'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(card)
+  }
+  const order = [...STORAGE_TYPES.map((t) => t.value), 'unset']
+  return order
+    .filter((key) => groups.has(key))
+    .map((key) => ({
+      type: key,
+      label: STORAGE_TYPES.find((t) => t.value === key)?.label ?? 'No location set',
+      items: groups.get(key),
+    }))
 }

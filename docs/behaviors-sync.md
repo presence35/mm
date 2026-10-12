@@ -180,7 +180,7 @@ Delivered through the same sync stream, not bundled — except a bootstrap snaps
 |---|---|
 | `products` | Catalogue changes without an app release. |
 | `service_item_templates` | Admin-editable labels and pricing. |
-| `storage_layout` | Building names, boathouse numbers, slips, rows, columns, storage types. The marina's physical layout changes; the app must not need a release to learn a new building. |
+| `storage_layout` | Building names, boathouse numbers, slips, rows, columns, storage types. The marina's physical layout changes; the app must not need a release to learn a new building. Rows are `kind` + `value`, and the client reads five kinds to build the marina's shape: `building`, `row`, `col`, `boathouse`, `slip`. A sixth, `position`, carries one spot's dimensions and its prior-year occupant and is *not* part of the shape — it is looked up by position code. |
 | `checklist_templates` | Fall / Spring / Storage item sets. |
 | `employees` | Name, role, active. PIN hashes never leave the server. |
 
@@ -199,6 +199,14 @@ Client behaviour when offline: the camera stays available — a worker must neve
 What is special is the write path. Scheduling is an `office`/`admin` action, so it **does not queue offline** (architecture.md constraint 15). An appointment write from a client without a live session is refused with `unauthorized_role`, not queued and drained later. This is deliberate: two phones off the network could otherwise both believe they hold the one ramp.
 
 Capacity is a client-side legality check in `domain/schedule.js` and is advisory on the server. The server does not enforce a booking grid — it has no clock trust and no resource model — so the check exists to stop an honest mistake, not a determined one.
+
+## Boats: serials and assignments
+
+`boat_serials` and `boat_assignments` are ordinary syncable entities, each row keyed by its own id and carrying its own row metadata. Neither is a column on `boats`, for the same reason a work log is not a column on a card: an array nested in a parent payload is dropped by the server in silence, and what gets dropped here is which motor is on which hull.
+
+An assignment's id is derived from the boat and the employee (`ba-<boat_id>-<employee_id>`) rather than allocated. Assigning the same person twice is therefore the same row at a higher version, and a retried push lands on one row instead of two.
+
+The write path is gated: editing a boat and assigning work are `office`/`admin` capabilities and **do not queue offline** (behaviours-auth.md constraint 5). Both are refused with `unauthorized_role` rather than drained later.
 
 ## Retention
 
