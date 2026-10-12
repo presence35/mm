@@ -18,8 +18,8 @@
     "inspect:legacy": "node server/legacy/inspect-db.js",
     "diag": "node server/diag.js",
     "set:pin": "node server/set-pin.js",
-    "test:unit": "node --test server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/client-staff.test.js server/session.test.js server/driver.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/domain/schedule.test.js src/features/conflicts/differences.test.js src/engines/auth/permissions.test.js",
-    "test:full": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js server/test-listen.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/domain/schedule.test.js src/features/conflicts/differences.test.js src/engines/auth/permissions.test.js"
+    "test:unit": "node --test server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/client-staff.test.js server/session.test.js server/driver.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/domain/schedule.test.js src/domain/conflictDiff.test.js src/engines/auth/permissions.test.js",
+    "test:full": "node --test server/sync.test.js server/client-sync.test.js server/legacy.test.js server/condition.test.js server/production.test.js server/pin-leak.test.js server/staff.test.js server/client-staff.test.js server/session.test.js server/driver.test.js server/test-listen.test.js src/domain/cardStatus.test.js src/domain/storageLocation.test.js src/domain/schedule.test.js src/domain/conflictDiff.test.js src/engines/auth/permissions.test.js"
   },
   "dependencies": {
     "archiver": "^8.0.0",

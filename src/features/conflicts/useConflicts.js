@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as idb from '../../engines/store/idb.js'
 import * as store from '../../engines/store/localStore.js'
-import { describe, differences, isSettled } from './differences.js'
-
-export { describe, differences, isSettled, fieldLabel } from './differences.js'
+import { describe, differences } from '../../domain/conflictDiff.js'
 
 /*
  * The resolver needs both versions side by side to be usable: what this device
@@ -55,7 +53,6 @@ function decorate(conflict) {
     record: recordOf(conflict, payload),
     detail: detailOf(conflict, payload),
     rows: differences(conflict),
-    settled: isSettled(conflict),
   }
 }
 

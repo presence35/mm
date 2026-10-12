@@ -376,3 +376,63 @@ test('an employees change arrives via the reference store and does not wedge the
   assert.ok(await idb.get('customers', 'c-pull-probe'), 'later entities still land')
   assert.ok(Number(await idb.getMeta('cursor', 0)) > 0, 'cursor advanced past the page')
 })
+
+/*
+ * A conflict is raised by a version that moved, not by a change. A device
+ * re-seeding its snapshot against a server that already holds it produces one
+ * per row, all identical — 41 of them in practice — and each asked a worker to
+ * choose between two versions with nothing between them.
+ */
+test('a conflict with nothing to decide closes itself; a real one does not', async () => {
+  const at = new Date().toISOString()
+
+  await idb.addConflict({
+    id: 'cf-same',
+    entity: 'received_items',
+    entity_id: 'ri-same',
+    local_payload: { id: 'ri-same', card_id: 'k-x', item: 'paddles', present: 1 },
+    server_payload: { id: 'ri-same', card_id: 'k-x', item: 'paddles', present: 1 },
+    status: 'open',
+    detected_at: at,
+  })
+
+  await idb.addConflict({
+    id: 'cf-real',
+    entity: 'received_items',
+    entity_id: 'ri-real',
+    local_payload: { id: 'ri-real', card_id: 'k-x', item: 'keys', present: 1 },
+    server_payload: { id: 'ri-real', card_id: 'k-x', item: 'keys', present: 0 },
+    status: 'open',
+    detected_at: at,
+  })
+
+  /* No server side yet. "Not comparable" is not "agrees", and closing this
+     would silently discard the only copy of a version we have not seen. */
+  await idb.addConflict({
+    id: 'cf-waiting',
+    entity: 'customers',
+    entity_id: 'c-waiting',
+    local_payload: { id: 'c-waiting', name: 'Someone' },
+    server_payload: null,
+    status: 'open',
+    detected_at: at,
+  })
+
+  const out = await transport.pullAll(token, 'dev-sweep')
+  assert.ok(out.settled >= 1, 'the pull reports what it closed')
+
+  const openIds = (await idb.openConflicts()).map((c) => c.id)
+  assert.ok(!openIds.includes('cf-same'), 'two identical versions are not a decision')
+  assert.ok(openIds.includes('cf-real'), 'a real disagreement stays in the queue')
+  assert.ok(openIds.includes('cf-waiting'), 'not comparable yet is not agreement')
+
+  const closed = (await idb.all('conflicts')).find((c) => c.id === 'cf-same')
+  assert.equal(closed.status, 'resolved')
+  /* A distinct value, so the record says it closed itself rather than claiming
+     a person looked at it. */
+  assert.equal(closed.resolution, 'identical')
+  /* Merged, not replaced: the entity and both payloads survive resolution. */
+  assert.equal(closed.entity, 'received_items')
+  assert.ok(closed.local_payload && closed.server_payload)
+  assert.equal(closed.detected_at, at)
+})

@@ -317,9 +317,17 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
       if (!conflict) return
 
       if (resolution !== 'kept_server') {
+        const current = await store.getEntity(conflict.entity, conflict.entity_id)
         await store.putEntity(conflict.entity, {
-          ...(await store.getEntity(conflict.entity, conflict.entity_id)),
+          ...current,
           ...(payload ?? conflict.local_payload),
+          /* Based on the version the SERVER holds, not the version this device
+             last saw. behaviors-sync.md §Conflicts: a kept-local resolution is
+             "an ordinary convergent write" at server_version + 1, which means
+             sending rev = server_version. Sending the stale local version
+             instead meant the resolution arrived as a fresh conflict, so
+             resolving bred conflicts instead of ending them. */
+          version: Number(conflict.server_version ?? current?.version ?? 0),
         })
       }
       await idb.resolveConflict(conflictId, 'resolved', resolution)

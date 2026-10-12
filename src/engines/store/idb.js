@@ -10,6 +10,8 @@
  * outbox of pending ops.
  */
 
+import { isSettled } from '../../domain/conflictDiff.js'
+
 const DB_NAME = 'marina-manager'
 const DB_VERSION = 2
 const STORES = ['customers', 'boats', 'service_cards', 'work_logs', 'received_items', 'authorized_work', 'condition_assessment', 'photos', 'invoice_items', 'status_history', 'appointments', 'meta', 'outbox', 'conflicts', 'reference']
@@ -265,8 +267,50 @@ export async function openConflicts() {
 
 export async function resolveConflict(id, status, resolution) {
   const db = await open()
-  const row = await tx(db, ['conflicts'], 'readwrite', (t) => reqp(t.objectStore('conflicts').put({ id, status: 'resolved', resolution })))
-  return row
+  /* Merged, not replaced. This used to put `{ id, status, resolution }` over
+     the whole row, discarding the entity, the id it belongs to, both payloads
+     and the detection time — so a resolved conflict could no longer be
+     inspected, and the audit trail of what was kept was gone. */
+  const existing = await tx(db, ['conflicts'], 'readonly', (t) => reqp(t.objectStore('conflicts').get(id)))
+  if (!existing) return null
+  return tx(db, ['conflicts'], 'readwrite', (t) =>
+    reqp(
+      t.objectStore('conflicts').put({
+        ...existing,
+        status,
+        resolution,
+        resolved_at: new Date().toISOString(),
+      }),
+    ),
+  )
+}
+
+/*
+ * Close the conflicts nobody needs to see.
+ *
+ * A conflict is raised because the version moved, not because a field changed.
+ * A device re-seeding its bootstrap snapshot against a server that already
+ * holds it produces one per row — 41 of them — each asking a worker to choose
+ * between two identical versions. When the server's side has been pulled and
+ * compared, those rows are not a decision and should not sit in a queue.
+ *
+ * `identical` rather than a person's choice, so the record says it closed
+ * itself. `kept_server` would claim somebody looked.
+ *
+ * Deliberately requires `server_payload` to be present: an empty comparison
+ * before the pull means "not comparable yet", which is not agreement.
+ */
+export async function closeSettledConflicts() {
+  const db = await open()
+  const all = await tx(db, ['conflicts'], 'readonly', (t) => reqp(t.objectStore('conflicts').getAll()))
+  const settled = all.filter((c) => c.status === 'open' && isSettled(c))
+  const at = new Date().toISOString()
+  for (const c of settled) {
+    await tx(db, ['conflicts'], 'readwrite', (t) =>
+      reqp(t.objectStore('conflicts').put({ ...c, status: 'resolved', resolution: 'identical', resolved_at: at })),
+    )
+  }
+  return settled.length
 }
 
 /* After a pull the local store holds the server's version of anything that was

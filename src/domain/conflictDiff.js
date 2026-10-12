@@ -3,7 +3,8 @@
  *
  * Pure. No React, no store, no clock — this is the part that decides whether a
  * human is being asked a real question, so it is the part that has to be
- * testable.
+ * testable. It lives in `domain/` because two layers need it: the conflict
+ * screen, and the sweep that closes conflicts nobody needs to see.
  *
  * It used to whitelist ~27 card, boat and customer column names. Child
  * entities — received items, work logs, authorised work, condition notes,

@@ -330,20 +330,21 @@ src/
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
     media/   photos.js                       — capture, compress, upload
-  domain/    cardStatus.js, storageLocation.js, schedule.js — pure, deterministic
-              cardStatus.test.js, storageLocation.test.js, schedule.test.js —
-              beat tests pinning the lifecycle, the unrepresentable-combination
-              rule, the label+tone+shape pairing (oko ThreatEngineTest pattern)
-              and the shared ramp/drop-off capacity pool
+  domain/    cardStatus.js, storageLocation.js, schedule.js, conflictDiff.js
+              — pure, deterministic
+              cardStatus.test.js, storageLocation.test.js, schedule.test.js,
+              conflictDiff.test.js — beat tests pinning the lifecycle, the
+              unrepresentable-combination rule, the label+tone+shape pairing
+              (oko ThreatEngineTest pattern) and the shared ramp/drop-off
+              capacity pool
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
     schedule/ ScheduleBoard.jsx, useSchedule.js
-    conflicts/useConflicts.js, differences.js — the comparison is pure and
-              tested on its own, and diffs the union of both payloads' own
-              keys. It used to whitelist card/boat/customer column names, which
-              meant a conflict on a child entity could never show a difference
-              and always claimed the two versions agreed
+    conflicts/useConflicts.js — joins an open conflict to the record it
+              belongs to, and decorates it. The comparison itself lives in
+              domain/conflictDiff.js, because the store's settled-conflict
+              sweep needs the same rule
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
              Map, Setup, Scan, Admin, Conflicts, Login, PublicCard, Schedule

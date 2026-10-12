@@ -277,8 +277,12 @@ export async function pullAll(token, deviceId, now = new Date()) {
   await idb.setMeta('cursor', res.cursor)
   await idb.setMeta('last_pull_at', new Date(now).toISOString())
   await idb.attachServerPayloads()
+  /* With both sides now on hand, close the ones with nothing to decide. A
+     conflict raised by a version that moved while the content did not is not a
+     question for a worker, and there is no version to choose between. */
+  const settled = await idb.closeSettledConflicts()
   if (applyErrors.length) console.warn('pull skipped rows:', applyErrors)
-  return { applied, full: false, applyErrors }
+  return { applied, full: false, applyErrors, settled }
 }
 
 export { MAX_ATTEMPTS }

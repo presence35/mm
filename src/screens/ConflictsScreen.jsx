@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { TopBar, Button, Divider, EmptyState, StatusPill, Icon, Collapsible, ListItem } from '../ui'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useConflicts } from '../features/conflicts/useConflicts.js'
@@ -9,38 +8,25 @@ import { useRouter } from '../shell/RouterProvider.jsx'
  * last-write-wins, never a silent merge. Resolution is a queued write, so this
  * works with no signal.
  *
- * Most conflicts have nothing to decide: the same edit landed twice, so the
- * version moved and no field changed. Those get one line and one tap, and can
- * be cleared in bulk. Only a real disagreement opens into the comparison.
+ * Only real disagreements reach this screen. A conflict raised by a version
+ * that moved while the content did not is closed by the sweep in the store
+ * (idb.closeSettledConflicts), which owns that rule — so there is exactly one
+ * place that decides a pair of identical versions is not a decision, and this
+ * screen never has to offer a choice that does not exist.
+ *
+ * What is left is two cases: a genuine difference, and a row whose server side
+ * has not been pulled yet. The second is not agreement and is never shown as
+ * something to resolve.
  *
  * The comparison is stacked, not three columns. At 360px a
  * `field | mine | theirs` grid squeezes two values into ~120px each, which is
  * how a worker ends up choosing without reading.
  */
 
-function stateOf(conflict) {
-  if (!conflict.server_payload) return 'waiting'
-  return conflict.rows.length ? 'differs' : 'same'
-}
-
 export default function ConflictsScreen() {
   const { goBack } = useRouter()
   const { resolve, online } = useSync()
   const { conflicts, refresh } = useConflicts()
-  const [busy, setBusy] = useState(false)
-
-  const settled = conflicts.filter((c) => stateOf(c) === 'same')
-
-  const acceptAll = async () => {
-    setBusy(true)
-    for (const c of settled) {
-      /* kept_server, because the two versions are the same. Nothing is
-         re-written and nothing is lost. */
-      await resolve(c.id, { resolution: 'kept_server' })
-    }
-    await refresh()
-    setBusy(false)
-  }
 
   const act = async (id, resolution) => {
     await resolve(id, { resolution })
@@ -62,14 +48,6 @@ export default function ConflictsScreen() {
           <div className="offline-bar" role="status">
             <Icon name="alert" size={18} />
             {conflicts.length} change{conflicts.length === 1 ? '' : 's'} kept — nothing was lost
-            {settled.length ? (
-              <>
-                <span className="spacer" />
-                <Button variant="text" size="sm" onClick={acceptAll} loading={busy} disabled={busy}>
-                  Accept {settled.length} identical
-                </Button>
-              </>
-            ) : null}
           </div>
 
           {conflicts.map((c) => (
@@ -88,24 +66,10 @@ export default function ConflictsScreen() {
 }
 
 function Row({ conflict, onResolve }) {
-  const state = stateOf(conflict)
+  const waiting = !conflict.server_payload
   const heading = conflict.detail ? `${conflict.type} · ${conflict.detail}` : conflict.type
 
-  if (state === 'same') {
-    return (
-      <ListItem
-        title={heading}
-        support={[conflict.record, 'No differences'].filter(Boolean).join(' · ')}
-        trailing={
-          <Button variant="text" size="sm" onClick={() => onResolve(conflict.id, 'kept_server')}>
-            Accept
-          </Button>
-        }
-      />
-    )
-  }
-
-  if (state === 'waiting') {
+  if (waiting) {
     return (
       <ListItem
         title={heading}

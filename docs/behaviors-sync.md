@@ -123,9 +123,10 @@ CREATE TABLE card_conflicts (
 Client behaviour:
 - Applies the server payload — the server stays authoritative for the entity itself.
 - Surfaces a **Needs review** badge on the card.
+- **After a pull, closes the ones with nothing to decide.** A conflict whose two payloads are equal is raised by a version that moved, not by a change, so there is no version to choose between. Those are marked `resolved` with resolution `identical` — a distinct value, so the record says it closed itself rather than claiming a person decided. `server_payload` must be present first; an empty comparison before the pull has landed means "not comparable yet", which is not agreement. Without this sweep, conflicts raised before the no-op rule sat in the queue forever, asking a worker to choose between two identical values.
 - Resolution offers keep mine / keep theirs / edit-and-merge.
 - **Resolution is itself a queued write** and can be performed offline.
-- Resolving as `kept_local` or `merged` re-writes the entity at `server_version + 1` — an ordinary convergent write, not a special case.
+- Resolving as `kept_local` or `merged` re-writes the entity at `server_version + 1` — an ordinary convergent write, not a special case. The client must therefore send `rev = server_version`, from the conflict record, not the version this device last saw: a stale rev makes the resolution itself a conflict, so resolving breeds conflicts instead of ending them.
 
 ## Change log & garbage collection
 

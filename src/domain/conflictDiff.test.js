@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { describe, differences, fieldLabel, isSettled } from './differences.js'
+import { describe, differences, fieldLabel, isSettled } from './conflictDiff.js'
 
 const conflict = (over = {}) => ({
   entity: 'service_cards',
