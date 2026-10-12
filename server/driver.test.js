@@ -24,7 +24,7 @@ test('the whole schema splits into one statement per statement', () => {
 
   /* Every table the app owns, plus the index. Counted from the registry rather
      than hard-coded, so adding an entity cannot quietly stop splitting. */
-  const expectedTables = Object.values(ALL_TABLES).length + 6 // change_log, sync_ops, sync_devices, card_conflicts, sessions, login_attempts
+  const expectedTables = Object.values(ALL_TABLES).length + 7 // change_log, sync_ops, sync_devices, card_conflicts, sessions, login_attempts, migrations
   assert.equal(statements.length, expectedTables + 1, 'tables plus idx_change_entity')
 
   for (const s of statements) {

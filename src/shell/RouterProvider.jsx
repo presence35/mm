@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, Button } from '../ui'
+import { holdReload } from '../engines/pwa/update.js'
 
 /*
  * Router — a plain module, not a ported dependency.
@@ -88,6 +89,10 @@ export function RouterProvider({ children }) {
 
   const setDirty = useCallback((val) => {
     dirtyRef.current = Boolean(val)
+    /* A service-worker update reloads the page on its own. It must not do that
+       under a half-typed log entry, so the pending reload is held until this
+       form is saved or abandoned. */
+    holdReload(val)
   }, [])
 
   const discard = () => {

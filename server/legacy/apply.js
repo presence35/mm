@@ -15,6 +15,43 @@ import { ALL_TABLES, T, columnsFor } from '../entities.js'
 import { rowToPayload } from '../sync.js'
 
 export async function applyPlan(db, plan, { deviceId = 'legacy' } = {}) {
+  /* One transaction.
+     This used to insert row by row with no transaction, and the failure mode
+     was not a clean abort: a run that died partway left 23 customers written
+     and no cards, and the guard in import.js then refused every retry — a
+     half-migrated database that looks healthy and can never be re-run. Now a
+     failure rolls the whole thing back and the next attempt starts clean. */
+  return db.tx((handle) => insertAll(handle, plan, deviceId))
+}
+
+/*
+ * Insert and verify as one unit.
+ *
+ * Verification is part of the migration, not a report on it: a dangling
+ * reference means the rows just written are wrong, so they roll back with it
+ * rather than being left behind for someone to clean up by hand.
+ */
+export class DanglingReferences extends Error {
+  constructor(problems) {
+    super(`The migration found ${problems.length} dangling reference(s), so it was rolled back. Nothing was written.`)
+    this.name = 'DanglingReferences'
+    this.problems = problems
+  }
+}
+
+export async function applyAndVerify(db, plan, { deviceId = 'legacy' } = {}) {
+  return db.tx(async (handle) => {
+    const counts = await insertAll(handle, plan, deviceId)
+    const problems = await verify(handle, plan)
+    /* Thrown rather than returned: a transaction unwinds on an exception and
+       on nothing else, so returning the problems would commit the rows they
+       describe. */
+    if (problems.length) throw new DanglingReferences(problems)
+    return { counts, problems: [] }
+  })
+}
+
+async function insertAll(db, plan, deviceId) {
   const counts = {}
 
   for (const { entity, row } of plan.rows) {

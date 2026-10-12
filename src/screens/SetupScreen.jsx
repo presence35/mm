@@ -159,11 +159,58 @@ function LegacyImportPanel() {
         {report ? (
           <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
             <div>
-              <strong>{report.rows} rows</strong> across {report.entities.length} entities
-              {report.targetHasCustomers ? (
-                <span> — target already holds {report.targetHasCustomers} customers, apply will refuse</span>
-              ) : null}
+              <strong>{report.rows} rows</strong> to import across {report.entities.length} entities
             </div>
+
+            {/* Which state the target is actually in. "Already imported" and
+                "started and did not finish" need different actions, so they
+                cannot be one number. */}
+            {report.state?.imported ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                A previous import finished {new Date(report.state.completedAt).toLocaleString()}. Importing again would
+                duplicate every row.
+              </div>
+            ) : report.state?.targetRows > 0 ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                This database already holds {report.state.targetRows} rows and no finished import — a previous run did
+                not complete. Drop the mm tables and re-plan.
+              </div>
+            ) : (
+              <div style={{ color: 'var(--on-surface-variant)' }}>The target is empty. Nothing has been imported yet.</div>
+            )}
+
+            {report.targetHasCustomers ? (
+              <Button fullWidth variant="tonal" onClick={() => setConfirmReset(true)} disabled={busy}>
+                Reset mm tables ({report.targetHasCustomers} customers already there) &amp; re-plan
+              </Button>
+            ) : null}
+
+            <details>
+              <summary style={{ font: 'var(--label-m)', padding: 'var(--space-2) 0' }}>
+                What is already in the target, entity by entity
+              </summary>
+              <table style={{ width: '100%', borderCollapse: 'collapse', font: 'var(--body-s)' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: 'var(--on-surface-variant)' }}>
+                    <th style={{ padding: 'var(--space-1) 0' }}>Entity</th>
+                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>To import</th>
+                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>Already there</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...new Set([...report.entities, ...Object.keys(report.targetCounts ?? {})])].map((e) => (
+                    <tr key={e}>
+                      <td style={{ padding: 'var(--space-1) 0' }}>{e}</td>
+                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>{report.sourceCounts?.[e] ?? 0}</td>
+                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>
+                        {report.targetCounts?.[e] ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+
             <div>
               Photos from {report.photosDir}: {report.photosToCopy} to copy, {report.photosMissingTotal} without a file
               {report.photosDirFound ? null : ' (directory not readable on the server)'}
@@ -180,11 +227,6 @@ function LegacyImportPanel() {
             <Button fullWidth variant="destructive" onClick={() => setConfirmApply(true)} disabled={busy}>
               Apply import
             </Button>
-            {report.targetHasCustomers ? (
-              <Button fullWidth variant="tonal" onClick={() => setConfirmReset(true)} disabled={busy}>
-                Reset mm tables ({report.targetHasCustomers} seed customers) & re-plan
-              </Button>
-            ) : null}
           </div>
         ) : null}
         {result ? (
@@ -206,7 +248,7 @@ function LegacyImportPanel() {
       <Dialog
         open={confirmReset}
         title="Reset mm tables?"
-        body="Drops every mm_ table (seed rows only — legacy tables are untouched) and re-plans the import against the clean target. This cannot be undone."
+        body="Drops every mm_ table on this server — everything imported, and anything entered in the new app since. The legacy tables are untouched, so the source data is safe. This cannot be undone."
         onDismiss={() => setConfirmReset(false)}
         actions={
           <>
@@ -214,7 +256,7 @@ function LegacyImportPanel() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={resetAndReplan}>
-              Reset & re-plan
+              Reset &amp; re-plan
             </Button>
           </>
         }
@@ -323,10 +365,6 @@ export default function SetupScreen() {
         trailing={<Icon name="right" size={20} />}
       />
 
-      {/* The first thing anyone asks about a beta build. Read from
-          package.json at build time, so it cannot disagree with what shipped. */}
-      <ListItem title="Version" support={APP_VERSION} />
-
       <div className="section-head">Account</div>
       <ListItem icon="users" title={employee.name} support={ROLE_LABEL[employee.role]} />
       {/* Your own PIN, so it is not gated behind being an admin. */}
@@ -356,6 +394,20 @@ export default function SetupScreen() {
 
       {/* TEMPORARY legacy import — delete with server/legacy/import-http.js after the one production import. */}
       {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}
+
+      {/* Footnote, not a setting. Read from package.json at build time, so it
+          cannot disagree with what shipped. The bottom padding clears the
+          navigation bar so it is readable rather than tucked under it. */}
+      <p
+        style={{
+          font: 'var(--body-s)',
+          color: 'var(--on-surface-variant)',
+          textAlign: 'center',
+          padding: 'var(--space-4) var(--space-4) calc(var(--nav-bar-height) + var(--space-6))',
+        }}
+      >
+        Marina Manager · version {APP_VERSION}
+      </p>
 
       <Dialog
         open={confirmReset}

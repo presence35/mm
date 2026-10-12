@@ -82,6 +82,15 @@ export function domainDdl() {
  * columns, and the index on change_log names entity and entity_id rather than
  * declaring them. Both are bounded now, and driver.test.js asserts the property
  * rather than trusting that nobody adds another one.
+ *
+ * `migrations` is the completion marker for a one-shot data migration. "Has
+ * this been imported?" was answered by counting customers, which cannot tell a
+ * finished import from one that died halfway — both leave rows behind — so a
+ * partial run was refused forever by a guard that believed it was looking at a
+ * completed one. The marker is written only after a migration verifies clean.
+ *
+ * No comment may sit between two statements in this string: driver.test.js
+ * asserts every split statement starts with a keyword, and a comment does not.
  */
 export const SYNC_DDL = `
 CREATE TABLE IF NOT EXISTS ${T('change_log')} (
@@ -148,6 +157,12 @@ CREATE TABLE IF NOT EXISTS ${T('login_attempts')} (
   count       INTEGER NOT NULL DEFAULT 0,
   last_at     TEXT NOT NULL,
   PRIMARY KEY (employee_id, source)
+);
+
+CREATE TABLE IF NOT EXISTS ${T('migrations')} (
+  name         VARCHAR(255) PRIMARY KEY,
+  completed_at TEXT NOT NULL,
+  detail       TEXT
 );
 `
 

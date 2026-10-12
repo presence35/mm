@@ -14,9 +14,9 @@ import { readdir } from 'node:fs/promises'
 
 import { plan, ORDER } from './plan.js'
 import { planPhotoCopies } from './photos.js'
-import { importInto } from './import.js'
+import { importInto, legacyImportState } from './import.js'
 import { bootstrap } from '../db/index.js'
-import { PREFIX, T } from '../entities.js'
+import { ALL_TABLES, PREFIX, T } from '../entities.js'
 
 export const DEFAULT_PHOTOS_DIR = '/private/data/photos'
 
@@ -92,6 +92,24 @@ async function targetCustomerCount(database) {
   return probe ? Number(probe.n) : 0
 }
 
+/* Rows already present, per entity. The panel reports the source row counts and
+   one target number; when a previous run died partway, "how far did it get" is
+   the only question worth answering, and one number cannot answer it. */
+async function targetCounts(database) {
+  const out = {}
+  for (const [entity, spec] of Object.entries(ALL_TABLES)) {
+    const row = await database.get(`SELECT COUNT(*) AS n FROM ${T(spec.table)}`).catch(() => null)
+    out[entity] = row ? Number(row.n) : null
+  }
+  return out
+}
+
+function countByEntity(rows) {
+  const out = {}
+  for (const r of rows) out[r.entity] = (out[r.entity] ?? 0) + 1
+  return out
+}
+
 async function photosDirExists(dir) {
   try {
     await readdir(dir)
@@ -146,10 +164,15 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
       const id = randomUUID()
       SESSIONS.set(id, { plan: p, copies: photoPlan.copies, createdAt: Date.now() })
 
+      const state = await legacyImportState(database)
+
       log(`legacy-import plan staged: ${p.rows.length} rows, ${photoPlan.copies.length} photos`)
       res.json({
         id,
+        state,
         targetHasCustomers: await targetCustomerCount(database),
+        sourceCounts: countByEntity(p.rows),
+        targetCounts: await targetCounts(database),
         rows: p.rows.length,
         entities: [...new Set(p.rows.map((r) => r.entity))],
         notes: p.notes,
@@ -164,8 +187,7 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
       })
     } catch (e) {
       log(`legacy-import plan failed: ${e?.message}`)
-      res.status(500).json({ error: 'plan_failed', detail: e?.message ?? 'unknown' })
-    }
+      res.status(500).json({ error: 'plan_failed', detail: e?.message ?? 'unknown' })    }
   })
 
   app.post('/api/admin/legacy-import/reset', authenticate, adminOnly, async (req, res) => {
@@ -194,8 +216,11 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
       /* Single-use before any write, so a double-tap cannot double the rows. */
       SESSIONS.delete(req.body.id)
       const result = await importInto(database, session.plan, { photosCopies: session.copies })
-      if (!result.ok && result.reason === 'already_imported') {
-        res.status(409).json({ error: 'already_imported', detail: result.message })
+      /* Both refusals are 409 with the reason in `detail`: one means "finished",
+         the other means "started and did not finish". They need different
+         actions, so they cannot share a status without sharing a message. */
+      if (!result.ok && (result.reason === 'already_imported' || result.reason === 'partial_import')) {
+        res.status(409).json({ error: result.reason, detail: result.message })
         return
       }
       log(`legacy-import applied: ${JSON.stringify(result.counts)} copied=${result.copied}`)

@@ -383,6 +383,55 @@ test('an employees change arrives via the reference store and does not wedge the
  * per row, all identical — 41 of them in practice — and each asked a worker to
  * choose between two versions with nothing between them.
  */
+/*
+ * A per-field merged resolution is the main path now: the worker taps This
+ * device or Server beside each differing field, and one button commits the
+ * combination. It must land as an ordinary convergent write at
+ * server_version + 1, carrying the chosen fields from each side.
+ */
+test('a per-field merged resolution keeps the chosen field from each side', async () => {
+  const ID = 'c-merge-probe'
+  await idb.putAndQueue('customers', { id: ID, name: 'Merge Person', city: 'Comox', version: 0 })
+  await transport.drain(token, 'dev-1')
+
+  const starting = await idb.get('customers', ID)
+  assert.equal(starting.version, 1)
+
+  /* Two devices diverge, each on a different field. */
+  await idb.putAndQueue('customers', { ...starting, city: 'Courtney' })
+  await idb.putAndQueue('customers', { ...starting, name: 'Merge Person Jr' })
+
+  const queued = await idb.pendingOps()
+  await transport.push(token, 'dev-2', [toOp(queued[0])])
+  await idb.ackOps([queued[0].op_id])
+
+  const [conflict] = await transport.push(token, 'dev-1', [toOp(queued[1])])
+  assert.equal(conflict.result, 'conflict')
+  await idb.ackOps([queued[1].op_id])
+
+  const remote = await transport.pull(token, 0, '')
+  const latest = remote.changes
+    .filter((c) => c.entity === 'customers' && c.entity_id === ID)
+    .pop()
+
+  /* Take the name from this device, keep the city the server holds. */
+  const merged = { ...latest.payload, name: 'Merge Person Jr' }
+  const out = await transport.resolveConflict(token, conflict.conflict_id, {
+    resolution: 'merged',
+    payload: merged,
+    deviceId: 'dev-1',
+  })
+  assert.equal(out.results[0].result, 'applied')
+  assert.equal(out.results[0].version, latest.version + 1, 'an ordinary convergent write')
+
+  const after = await transport.pull(token, 0, '')
+  const final = after.changes
+    .filter((c) => c.entity === 'customers' && c.entity_id === ID)
+    .pop()
+  assert.equal(final.payload.name, 'Merge Person Jr', 'the chosen field came from this device')
+  assert.equal(final.payload.city, 'Courtney', 'the untouched field kept the server value')
+})
+
 test('a conflict with nothing to decide closes itself; a real one does not', async () => {
   const at = new Date().toISOString()
 

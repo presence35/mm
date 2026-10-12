@@ -9,7 +9,7 @@ import { FULL_DDL } from './schema.js'
 import { readTables, splitRows, splitValues, unquote, readInsertBlocks } from './legacy/reader.js'
 import { plan, legacyId, toIso, ORDER } from './legacy/plan.js'
 import { applyPlan, verify } from './legacy/apply.js'
-import { importInto } from './legacy/import.js'
+import { importInto, legacyImportState, MIGRATION } from './legacy/import.js'
 import { resetMmTables } from './legacy/import-live.js'
 import { bootstrap } from './db/index.js'
 import { pull, push } from './sync.js'
@@ -295,6 +295,83 @@ test('a second import is refused rather than duplicating every row', async () =>
   /* Refused means nothing was written, not half-written. */
   const cards = await db.get(`SELECT COUNT(*) AS n FROM ${T('service_cards')}`)
   assert.equal(Number(cards.n), 2)
+})
+
+test('a half-written target is refused as partial, not as already imported', async () => {
+  const db = freshDb()
+  /* A previous run died partway: 23 customers landed, no cards did. Counting
+     customers cannot tell this from a finished import, so the guard used to
+     say "already imported" and refuse every retry forever. */
+  await db.run(
+    `INSERT INTO ${T('customers')} (id, name, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?)`,
+    ['c-leftover', 'Leftover', NOW, NOW, 1],
+  )
+
+  const result = await importInto(db, plan(readTables(DUMP), { now: NOW }))
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'partial_import')
+  assert.match(result.message, /Reset mm tables/, 'the message names the way out')
+  /* Refused means nothing was written. */
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('service_cards')}`)).n), 0)
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('migrations')}`)).n), 0)
+})
+
+test('the completion marker is what refuses a second run, and it is written last', async () => {
+  const db = freshDb()
+  const p = plan(readTables(DUMP), { now: NOW })
+
+  assert.equal((await legacyImportState(db)).imported, false)
+
+  const first = await importInto(db, p)
+  assert.equal(first.ok, true)
+
+  const state = await legacyImportState(db)
+  assert.equal(state.imported, true)
+  assert.ok(state.completedAt, 'the marker records when')
+  assert.ok(state.targetRows > 0)
+
+  const marker = await db.get(`SELECT * FROM ${T('migrations')} WHERE name = ?`, [MIGRATION])
+  assert.equal(JSON.parse(marker.detail).service_cards, first.counts.service_cards)
+})
+
+test('a migration that fails verification rolls back instead of landing half-written', async () => {
+  const db = freshDb()
+  /* A card pointing at a boat that is not in the plan: referentially broken,
+     and exactly the kind of damage a partial migration used to leave behind. */
+  const broken = {
+    rows: [
+      { entity: 'customers', row: { id: 'c-ok', name: 'Fine', rev: 0, version: 1, updated_at: NOW } },
+      { entity: 'service_cards', row: { id: 'k-orphan', boat_id: 'b-missing', status: 'intake', rev: 0, version: 1, updated_at: NOW } },
+    ],
+    notes: [],
+    warnings: [],
+  }
+
+  const result = await importInto(db, broken)
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'dangling_references')
+  assert.ok(result.problems.length)
+
+  /* The customer was inserted before the bad card was reached. It must not
+     have survived. */
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('customers')}`)).n), 0)
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('service_cards')}`)).n), 0)
+  assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('migrations')}`)).n), 0)
+})
+
+test('a failed migration leaves the target importable again', async () => {
+  const db = freshDb()
+  /* Whatever went wrong, the next attempt must not be refused — that is the
+     whole point of rolling back rather than carrying on. */
+  const broken = {
+    rows: [{ entity: 'service_cards', row: { id: 'k-orphan', boat_id: 'b-missing', status: 'intake', rev: 0, version: 1, updated_at: NOW } }],
+    notes: [],
+    warnings: [],
+  }
+  await importInto(db, broken)
+
+  const retry = await importInto(db, plan(readTables(DUMP), { now: NOW }))
+  assert.equal(retry.ok, true)
 })
 
 test('reset drops only prefixed tables and re-seeds the admin', async () => {

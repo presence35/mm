@@ -20,7 +20,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      /* autoUpdate, not prompt. The shell is precached, so without a new worker
+         taking over, a deployed build never reaches a device: the old worker
+         keeps serving the old index.html and the old hashed assets. This adds
+         skipWaiting + clientsClaim to the generated worker; engines/pwa/update.js
+         then reloads the open page once it is safe to. */
+      registerType: 'autoUpdate',
       // Local-first means the app shell is precached in production. It must NOT
       // be during development, or a stale precache masks every rebuild — the
       // exact failure documented in the old project's deploy notes.

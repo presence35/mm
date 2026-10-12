@@ -20,10 +20,10 @@ import { basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { createDb, bootstrap } from '../db/index.js'
-import { T } from '../entities.js'
+import { ALL_TABLES, T } from '../entities.js'
 import { readTables } from './reader.js'
 import { plan } from './plan.js'
-import { applyPlan, verify } from './apply.js'
+import { applyAndVerify, DanglingReferences } from './apply.js'
 import { planPhotoCopies, copyPhotos } from './photos.js'
 
 const USAGE = `
@@ -43,31 +43,90 @@ not resolve. Read the report before using --apply.
 `
 
 /*
- * Before anything is written: has this database already been imported?
- * Counted against our own tables only. The legacy tables are expected to be
- * present and full — that is the source — so counting those would refuse every
- * run against the production schema.
+ * Has this database already been imported?
+ *
+ * Answered by a completion marker, not by counting rows. Counting customers
+ * cannot tell a finished import from one that died halfway — both leave rows
+ * behind — so a partial run was refused forever by a guard that believed it was
+ * looking at a completed one. The mark is written only after verify() passes.
+ *
+ * The legacy tables are expected to be present and full; only our own prefixed
+ * tables are counted.
  */
-async function alreadyImported(db) {
-  const probe = await db.get(`SELECT COUNT(*) AS n FROM ${T('customers')}`).catch(() => null)
-  return probe ? Number(probe.n) : 0
+export const MIGRATION = 'legacy-import'
+
+export async function completedMigration(db) {
+  return db.get(`SELECT * FROM ${T('migrations')} WHERE name = ?`, [MIGRATION]).catch(() => null)
 }
 
-export async function importInto(db, p, { photosCopies = [] } = {}) {
-  const existing = await alreadyImported(db)
-  if (existing > 0) {
+/* Every row this app owns. One table is not enough to describe "some of it is
+   already here" when the failure happened before that table was reached. */
+export async function targetRowTotal(db) {
+  let total = 0
+  for (const spec of Object.values(ALL_TABLES)) {
+    const row = await db.get(`SELECT COUNT(*) AS n FROM ${T(spec.table)}`).catch(() => null)
+    total += row ? Number(row.n) : 0
+  }
+  return total
+}
+
+/* What the Setup panel needs to say which state this target is in. */
+export async function legacyImportState(db) {
+  const marker = await completedMigration(db)
+  return {
+    imported: Boolean(marker),
+    completedAt: marker?.completed_at ?? null,
+    targetRows: await targetRowTotal(db),
+  }
+}
+
+export async function importInto(db, p, { photosCopies = [], now = new Date().toISOString() } = {}) {
+  const done = await completedMigration(db)
+  if (done) {
     return {
       ok: false,
       reason: 'already_imported',
       message:
-        `This database already holds ${existing} customers under our own tables. ` +
+        `This database was already migrated on ${done.completed_at}. ` +
         'Importing again would duplicate every row. Use a fresh database, or drop the prefixed tables first.',
     }
   }
+
+  const existing = await targetRowTotal(db)
+  if (existing > 0) {
+    return {
+      ok: false,
+      reason: 'partial_import',
+      message:
+        `This database holds ${existing} rows under our own tables and no completed migration. ` +
+        'Either a previous run did not finish, or a device seeded its sample data here. ' +
+        'Nothing has been written. Drop the prefixed tables (Setup → Legacy import → Reset mm tables) and re-plan.',
+    }
+  }
+
+  /* Photos first: the copy is independent of the database, and a file that
+     cannot be written should stop the import before any row claims a card. */
   const copied = photosCopies.length ? await copyPhotos(photosCopies) : 0
-  const counts = await applyPlan(db, p)
-  const problems = await verify(db, p)
-  return { ok: problems.length === 0, counts, copied, problems }
+
+  let counts
+  try {
+    ;({ counts } = await applyAndVerify(db, p))
+  } catch (e) {
+    if (e instanceof DanglingReferences) {
+      return { ok: false, reason: 'dangling_references', message: e.message, counts: null, copied, problems: e.problems }
+    }
+    throw e
+  }
+
+  /* Written last, and only here. Everything before this point can be retried
+     from a clean state; this is the line that makes it not. */
+  await db.run(`INSERT INTO ${T('migrations')} (name, completed_at, detail) VALUES (?, ?, ?)`, [
+    MIGRATION,
+    now,
+    JSON.stringify(counts),
+  ])
+
+  return { ok: true, counts, copied, problems: [] }
 }
 
 export async function main(argv = process.argv) {
@@ -133,7 +192,7 @@ export async function main(argv = process.argv) {
   await bootstrap(db, () => {})
 
   const result = await importInto(db, p, { photosCopies: photosCopies ?? [] })
-  if (!result.ok && result.reason === 'already_imported') {
+  if (!result.ok && (result.reason === 'already_imported' || result.reason === 'partial_import')) {
     console.error(`\nRefusing to import: ${result.message}`)
     await db.close?.()
     return 1

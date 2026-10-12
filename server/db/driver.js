@@ -37,10 +37,31 @@ export function sqliteDriver(file) {
     async exec(sql) {
       db.exec(sql)
     },
-    /* better-sqlite3 transactions are synchronous; the body stays sync so a
-       rollback actually unwinds an exception. */
+    /* Both dialects take an async body.
+       better-sqlite3's own transaction helper is synchronous — handed an async
+       function it commits the moment the body returns its first promise, so the
+       work that follows runs outside the transaction and nothing rolls back.
+       Explicit BEGIN/COMMIT on the single connection is async-safe and gives
+       the two dialects one contract, which is what makes an async migration
+       inside a transaction testable at all. */
     async tx(fn) {
-      return db.transaction(fn)()
+      const handle = {
+        all: async (sql, params = []) => db.prepare(sql).all(...params),
+        get: async (sql, params = []) => db.prepare(sql).get(...params) ?? null,
+        run: async (sql, params = []) => {
+          const r = db.prepare(sql).run(...params)
+          return { changes: r.changes, lastId: Number(r.lastInsertRowid) }
+        },
+      }
+      db.exec('BEGIN')
+      try {
+        const out = await fn(handle)
+        db.exec('COMMIT')
+        return out
+      } catch (e) {
+        db.exec('ROLLBACK')
+        throw e
+      }
     },
     async close() {
       db.close()

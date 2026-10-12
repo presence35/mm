@@ -256,6 +256,7 @@ A screen missing any of these is incomplete.
 | Sync never converges | After N failed attempts the engine enters `error` and stops retrying on a timer. Setup shows the reason and a manual retry. | sync engine |
 | Two devices, one account | Both sync independently. Last write to *different* fields converges. Same field raises a conflict. `office`/`admin` actions refuse offline, so the risky case cannot occur offline. | sync engine |
 | Booking an appointment offline | Refused with a stated reason. Scheduling is an `office`/`admin` action, so it does not queue — two phones booking the one ramp with no signal would both believe they had it. | schedule domain |
+| A deployed build never reaches a device | The precached shell hides it: the old worker keeps serving the old `index.html` and the old hashed assets, so every load looks like the previous build. `registerType: 'autoUpdate'` makes a new worker activate and claim open pages at once, and `engines/pwa/update.js` reloads them — held while a form has unsaved work, released when it is saved or abandoned. | PWA |
 | Phone clock is wrong | Sync cursors are server monotonic `seq`, never client time. `updated_at` is server-set. A wrong phone clock cannot corrupt ordering. | sync engine |
 | Public QR link leaked | `behaviors-public-view.md` defines a narrow field projection. This is a security surface, not a convenience. | public endpoint |
 
@@ -324,6 +325,8 @@ src/
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
   engines/
+    pwa/     update.js (reloads an open page when a new worker takes over;
+             held while a form has unsaved work)
     store/   localStore.js (sync read API over a hydrated projection),
              idb.js (IndexedDB), seed.js
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
@@ -361,10 +364,12 @@ server/
   legacy/    the one-shot import from the legacy app
     reader.js     parses the INSERT-only export with no database present
     plan.js       ids, FK remapping, metadata — pure, no I/O
-    apply.js      inserts rows + change_log entries; verify() checks referential
-                  integrity against the database rather than trusting the map
+    apply.js      inserts rows + change_log entries and verifies, both inside
+                  one transaction; verify() checks referential integrity against
+                  the database rather than trusting the map
     photos.js     copies image files, and reports any row without one
-    import.js     CLI. Dry run by default; --apply writes; refuses to run twice
+    import.js     Dry run by default; applies; refuses a second run by a
+                  completion marker, not by counting rows
     inspect-db.js reads the result back through pull() and checks the joins
 ```
 

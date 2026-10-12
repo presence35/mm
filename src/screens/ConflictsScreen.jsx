@@ -1,4 +1,5 @@
-import { TopBar, Button, Divider, EmptyState, StatusPill, Icon, Collapsible, ListItem } from '../ui'
+import { useState } from 'react'
+import { TopBar, Button, Divider, EmptyState, StatusPill, Icon, ListItem } from '../ui'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useConflicts } from '../features/conflicts/useConflicts.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
@@ -10,17 +11,23 @@ import { useRouter } from '../shell/RouterProvider.jsx'
  *
  * Only real disagreements reach this screen. A conflict raised by a version
  * that moved while the content did not is closed by the sweep in the store
- * (idb.closeSettledConflicts), which owns that rule — so there is exactly one
- * place that decides a pair of identical versions is not a decision, and this
- * screen never has to offer a choice that does not exist.
+ * (idb.closeSettledConflicts), which owns that rule — so this screen never has
+ * to offer a choice that does not exist, and what is left is two cases: a
+ * genuine difference, and a row whose server side has not been pulled yet.
  *
- * What is left is two cases: a genuine difference, and a row whose server side
- * has not been pulled yet. The second is not agreement and is never shown as
- * something to resolve.
+ * Every difference is open on arrival. This screen exists to be read once and
+ * cleared, and a collapsed row makes the worker tap before they can find out
+ * whether there is anything to do.
  *
- * The comparison is stacked, not three columns. At 360px a
- * `field | mine | theirs` grid squeezes two values into ~120px each, which is
- * how a worker ends up choosing without reading.
+ * The side label is the control. Two generic "Keep mine / Keep theirs" buttons
+ * under a list of fields asked the worker to choose a whole version without
+ * saying which field they were choosing about — and cost a row of screen for a
+ * decision that belongs beside each value. Tapping This device or Server picks
+ * that side for that field; one button commits the result.
+ *
+ * Server is preselected because the server's version is what the entity
+ * currently holds (behaviors-sync.md §Conflicts). Choosing "This device" is the
+ * deviation, so the default is the state that already exists.
  */
 
 export default function ConflictsScreen() {
@@ -28,8 +35,8 @@ export default function ConflictsScreen() {
   const { resolve, online } = useSync()
   const { conflicts, refresh } = useConflicts()
 
-  const act = async (id, resolution) => {
-    await resolve(id, { resolution })
+  const act = async (id, choice) => {
+    await resolve(id, choice)
     await refresh()
   }
 
@@ -66,8 +73,23 @@ export default function ConflictsScreen() {
 }
 
 function Row({ conflict, onResolve }) {
-  const waiting = !conflict.server_payload
+  /* field → 'mine' | 'theirs'. Absent means server, so a field the worker
+     never looked at keeps the value the entity already holds. */
+  const [chosen, setChosen] = useState({})
+
   const heading = conflict.detail ? `${conflict.type} · ${conflict.detail}` : conflict.type
+  const waiting = !conflict.server_payload
+  const kept = conflict.rows.filter((r) => chosen[r.field] === 'mine')
+
+  const apply = () => {
+    if (!kept.length) return onResolve(conflict.id, { resolution: 'kept_server' })
+    /* Start from what the server holds and override only the fields the worker
+       chose. Everything they did not touch keeps the value the entity already
+       has, which is the whole point of picking per field. */
+    const payload = { ...conflict.server_payload }
+    for (const r of kept) payload[r.field] = conflict.local_payload?.[r.field] ?? null
+    return onResolve(conflict.id, { resolution: 'merged', payload })
+  }
 
   if (waiting) {
     return (
@@ -85,54 +107,112 @@ function Row({ conflict, onResolve }) {
 
   return (
     <>
-      <Collapsible title={heading} count={conflict.rows.length} summary={conflict.record}>
-        <div style={{ padding: '0 var(--space-4) var(--space-2)' }}>
-          {conflict.rows.map((r) => (
-            <div key={r.field} style={{ padding: 'var(--space-3) 0', boxShadow: 'inset 0 1px 0 var(--outline-variant)' }}>
-              <div style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {r.label}
-              </div>
-              <Side label="This device" value={r.mine} kind="mine" />
-              <Side label="Server" value={r.theirs} kind="theirs" />
-            </div>
-          ))}
+      <section style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
+        <div className="row" style={{ gap: 'var(--space-2)', alignItems: 'baseline' }}>
+          <span
+            style={{
+              font: 'var(--label-m)',
+              color: 'var(--on-surface-variant)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {heading}
+          </span>
+          <span className="spacer" />
+          <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>
+            {conflict.rows.length} field{conflict.rows.length === 1 ? '' : 's'} differ
+          </span>
         </div>
+        {conflict.record ? (
+          <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>{conflict.record}</p>
+        ) : null}
+      </section>
 
-        <div style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-1) var(--space-4) var(--space-4)' }}>
-          <Button variant="tonal" size="sm" onClick={() => onResolve(conflict.id, 'kept_local')}>
-            Keep mine
-          </Button>
-          <Button variant="text" size="sm" onClick={() => onResolve(conflict.id, 'kept_server')}>
-            Keep theirs
-          </Button>
-        </div>
-      </Collapsible>
+      <div style={{ padding: 'var(--space-2) var(--space-4) 0' }}>
+        {conflict.rows.map((r) => (
+          <div key={r.field} style={{ paddingBottom: 'var(--space-3)' }}>
+            <div
+              style={{
+                font: 'var(--label-s)',
+                color: 'var(--on-surface-variant)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                padding: 'var(--space-2) 0 var(--space-1)',
+              }}
+            >
+              {r.label}
+            </div>
+            <Side
+              label="This device"
+              value={r.mine}
+              selected={chosen[r.field] === 'mine'}
+              onSelect={() => setChosen((c) => ({ ...c, [r.field]: 'mine' }))}
+            />
+            <Side
+              label="Server"
+              value={r.theirs}
+              selected={chosen[r.field] !== 'mine'}
+              onSelect={() => setChosen((c) => ({ ...c, [r.field]: 'theirs' }))}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+        <Button fullWidth onClick={apply}>
+          {kept.length === 0
+            ? 'Keep the server version'
+            : kept.length === conflict.rows.length
+              ? `Use this device for all ${kept.length}`
+              : `Apply — ${kept.length} from this device, ${conflict.rows.length - kept.length} from the server`}
+        </Button>
+      </div>
       <Divider />
     </>
   )
 }
 
-/* Stacked, mine above theirs, each named. Two columns of prose side by side on
-   a phone is a design that assumes the reader is comparing, which they are not
-   — they are reading one, then the other. */
-function Side({ label, value, kind }) {
+/*
+ * One side of one field. The label is the control: pressing it chooses this
+ * side, and the chosen one is marked with a tick as well as a fill, so the
+ * choice survives greyscale (architecture.md constraint 9).
+ */
+function Side({ label, value, selected, onSelect }) {
   return (
-    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'baseline', marginTop: 'var(--space-1)' }}>
-      <span style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)', minWidth: 64, flexShrink: 0 }}>
-        {label}
-      </span>
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        width: '100%',
+        minHeight: 'var(--target-min)',
+        padding: 'var(--space-1) var(--space-2)',
+        marginBottom: 'var(--space-1)',
+        borderRadius: 'var(--corner-m)',
+        textAlign: 'left',
+        background: selected ? 'var(--secondary-container)' : 'var(--surface-container-high)',
+        color: selected ? 'var(--on-secondary-container)' : 'var(--on-surface)',
+        boxShadow: selected ? 'inset 0 0 0 2px var(--primary)' : 'inset 0 0 0 1px var(--outline-variant)',
+      }}
+    >
       <span
         style={{
-          font: 'var(--body-m)',
-          background: kind === 'mine' ? 'var(--secondary-container)' : 'var(--surface-container-high)',
-          color: kind === 'mine' ? 'var(--on-secondary-container)' : 'var(--on-surface)',
-          padding: 'var(--space-1) var(--space-2)',
-          borderRadius: 'var(--corner-s)',
-          overflowWrap: 'anywhere',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-1)',
+          minWidth: 96,
+          font: 'var(--label-m)',
         }}
       >
-        {value}
+        {selected ? <Icon name="check" size={16} /> : null}
+        {label}
       </span>
-    </div>
+      <span style={{ font: 'var(--body-m)', overflowWrap: 'anywhere' }}>{value}</span>
+    </button>
   )
 }

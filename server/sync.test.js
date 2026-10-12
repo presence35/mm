@@ -626,6 +626,7 @@ test('every table this app owns is created under the prefix, and none bare', asy
     'card_conflicts',
     'sessions',
     'login_attempts',
+    'migrations',
   ].map((n) => T(n))
 
   for (const name of expected) {
