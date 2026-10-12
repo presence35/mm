@@ -283,7 +283,7 @@ A screen missing any of these is incomplete.
 
 ### Reference data is server-owned
 - **Why:** storage layout and checklists change physically, not on a release schedule.
-- **Cost:** the app cannot render a fully cold, never-synced first launch. Mitigation: ship a bundled bootstrap snapshot for first run only.
+- **Cost:** the app cannot render a fully cold, never-synced first launch. Mitigation: ship a bundled bootstrap snapshot for first run only — the roster (so there is somebody to sign in as), the marina's shape, and the paper card's field sets. Deliberately not sample data: the store invents no customers, boats or cards, because a brand-new device pointed at production would otherwise push them there.
 
 ### Conflicts resolve offline
 - **Why:** a worker who spots a conflict in the yard should not have to find signal to settle it.
@@ -332,11 +332,15 @@ src/
              held while a form has unsaved work)
     store/   localStore.js (sync read API over a hydrated projection),
              idb.js (IndexedDB), seed.js
-             *Note:* boat_serials and boat_assignments are entities, not columns
-             on `boats`. getStorageShape() reads the marina's buildings, rows,
+             *Note:* seed.js holds studio defaults only — the roster, the marina's
+             shape, and the paper card's field sets. It deliberately holds no
+             sample marina: a cold device queues what the store holds, so invented
+             customers, boats or cards would be pushed into the real database.
+             boat_serials and boat_assignments are entities, not columns on
+             `boats`. getStorageShape() reads the marina's buildings, rows,
              columns, boathouses and slips out of the storage_layout reference
-             rows, with the seed as the bootstrap snapshot — a new building from
-             the server must not need a release.
+             rows, with the shape above as the snapshot for a device that has never
+             synced — a new building from the server must not need a release.
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)

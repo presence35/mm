@@ -316,7 +316,7 @@ test('a half-written target is refused as partial, not as already imported', asy
   const result = await importInto(db, plan(readTables(DUMP), { now: NOW }))
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'partial_import')
-  assert.match(result.message, /Reset mm tables/, 'the message names the way out')
+  assert.match(result.message, /resetMmTables/, 'the message names the way out')
   /* Refused means nothing was written. */
   assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('service_cards')}`)).n), 0)
   assert.equal(Number((await db.get(`SELECT COUNT(*) AS n FROM ${T('migrations')}`)).n), 0)

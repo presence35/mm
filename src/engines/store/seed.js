@@ -1,13 +1,27 @@
 /*
- * Seed fixture — Phase 1 only.
+ * Studio defaults — what the app needs before it has ever reached a server.
  *
- * Backs the local store so the reference screen has something real to render
- * before the sync engine exists. Replaced by IndexedDB + server reference data
- * in the sync phase. Not a fallback, not a mock mode: the store reads this once
- * on a cold, never-synced device.
+ * Deliberately *not* sample data. This file used to carry a whole fabricated
+ * marina — five customers, five boats, five cards, appointments, measured
+ * positions — and the cold-device path not only rendered it, it queued it. A
+ * brand-new phone pointed at production therefore pushed five invented customers
+ * and their boats into the real database. `server/legacy/import.js` still carries
+ * a message apologising for that having happened once.
+ *
+ * So there is no sample marina any more, and none of this is a fallback to
+ * render in its place. What is left is the three things the app genuinely cannot
+ * invent a first-run substitute for:
+ *
+ *   - the roster, so the sign-in picker is not empty (you cannot sync until you
+ *     have signed in)
+ *   - the marina's shape, so the location pickers and the map have buildings,
+ *     rows, columns and boathouses before the server has said what they are
+ *     (behaviors-sync.md §Reference data — server-owned, bootstrapped once)
+ *   - the paper card's field sets, which are the form itself and not data
+ *
+ * None of it is queued: the roster and the layout are server-owned reference
+ * data, and the field sets never leave the client.
  */
-
-export const SEED_EMPLOYEE = { id: 'emp-1', name: 'Dana Whitfield', role: 'office', initials: 'DW' }
 
 /*
  * The roster a fresh install starts with.
@@ -22,6 +36,19 @@ export const SEED_EMPLOYEE = { id: 'emp-1', name: 'Dana Whitfield', role: 'offic
  */
 export const SEED_STAFF = [{ id: 'emp-admin', name: 'Admin', role: 'admin', initials: 'AD', active: 1 }]
 
+/*
+ * The marina's shape: buildings, rows, columns, boathouses, slips.
+ *
+ * A bootstrap snapshot of server-owned reference data, not a fixture the app
+ * falls back to: `getStorageShape()` prefers `storage_layout` rows of kind
+ * `building` / `row` / `col` / `boathouse` / `slip` and only reaches for this
+ * when the device has never synced. A marina that adds a fifth building is a row
+ * on the server, not a release.
+ *
+ * Dimensions are not here. A position's size belongs to the position, which is
+ * reference data the server owns; inventing one here would be a size guessed for
+ * a spot nobody measured.
+ */
 export const SEED_STORAGE_LAYOUT = {
   buildings: ['Metal 1', 'Metal 2', 'Metal 3', 'Metal 4'],
   boathouse_count: 8,
@@ -29,6 +56,9 @@ export const SEED_STORAGE_LAYOUT = {
   rows: [1, 2, 3, 4, 5],
   cols: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
 }
+
+/* The paper intake card's field sets. Constraint 11 freezes the field set, the
+   order and the grouping — these are that card, and they are not sample rows. */
 
 export const SEED_RECEIVED_ITEMS = [
   'battery', 'keys', 'cover', 'paddles', 'life_jackets', 'cushions', 'gas_cans', 'tie_ropes', 'lights',
@@ -49,197 +79,4 @@ export const SEED_CONDITIONS = [
   { key: 'motor', label: 'Motor' },
   { key: 'propeller', label: 'Propeller' },
   { key: 'lower_unit', label: 'Lower unit' },
-]
-
-export const SEED_CUSTOMERS = [
-  { id: 'c-1', name: 'Marcus Reyes', phone: '250-555-0142', email: 'mreyes@example.com', city: 'Campbell River' },
-  { id: 'c-2', name: 'Priya Anand', phone: '250-555-0177', email: 'priya.a@example.com', city: 'Courtenay' },
-  { id: 'c-3', name: 'Joelle Tremblay', phone: '250-555-0193', email: 'j.tremblay@example.com', city: 'Comox' },
-  { id: 'c-4', name: 'Sam Okafor', phone: '250-555-0110', email: 's.okafor@example.com', city: 'Campbell River' },
-  { id: 'c-5', name: 'Ruth Delacroix', phone: '250-555-0128', email: 'r.delacroix@example.com', city: 'Campbell River' },
-]
-
-export const SEED_BOATS = [
-  { id: 'b-1', customer_id: 'c-1', name: 'Sea Jay', motor_type: 'Outboard', model: 'Yamaha 200', licence: 'BC 4821 TK', trailer_licence: 'TR-2291', length_ft: 24, rate_type: 'SW' },
-  { id: 'b-2', customer_id: 'c-2', name: 'Kestrel', motor_type: 'Outboard', model: 'Mercury 150', licence: 'BC 7734 QJ', trailer_licence: 'TR-8810', length_ft: 19, rate_type: 'SW' },
-  { id: 'b-3', customer_id: 'c-3', name: null, motor_type: 'Inboard', model: 'Volvo Penta', licence: 'BC 1180 ZX', trailer_licence: null, length_ft: 31, rate_type: 'LW' },
-  { id: 'b-4', customer_id: 'c-4', name: 'Tern', motor_type: 'Outboard', model: 'Honda 90', licence: 'BC 3306 HM', trailer_licence: 'TR-4417', length_ft: 16, rate_type: 'SW' },
-  { id: 'b-5', customer_id: 'c-5', name: 'Annelise', motor_type: 'Inboard', model: 'Mercruiser 4.3', licence: 'BC 9912 RD', trailer_licence: null, length_ft: 21, rate_type: 'SW' },
-]
-
-/*
- * Engine and hull serials. Their own table on both sides — the legacy app kept
- * them in a side table and dropping them lost the only record of which motor is
- * on which hull.
- */
-export const SEED_BOAT_SERIALS = [
-  { id: 'bs-1', boat_id: 'b-1', type: 'engine', serial_number: 'F200-1143922', notes: null },
-]
-
-export const SEED_CARDS = [
-  {
-    id: 'k-1', boat_id: 'b-1', work_order_no: 'WO-2481', season_year: 2026,
-    storage_type: 'storage_building', storage_building: 'Metal 2', storage_row: 3, storage_col: 'D',
-    boathouse_no: null, slip_no: null,
-    date_in: '2026-10-01', date_out: null, status: 'storage',
-    remarks: 'Winter storage 2026–2027. Shrink wrap required.',
-    other_work: 'Trim sticking when lifting — customer flagged in September, wants it looked at before spring.',
-    wrap_required: true, unwrap_done: false, pickup_delivery: null,
-    invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
-    customer_token: 'tk-2481-7f3a91',
-    received_items: ['battery', 'keys', 'cover', 'tie_ropes'],
-    authorized_work: [
-      { key: 'outdrive_service', authorized: true, completed: true },
-      { key: 'lower_unit_drain', authorized: true, completed: false },
-    ],
-    condition: [
-      { area: 'hull', rating: 'fair', note: 'Scuff on starboard at waterline' },
-      { area: 'upholstery', rating: 'poor', note: 'Cushion split, will need replacing' },
-    ],
-    logs: [
-      { id: 'l-1', employee_id: 'emp-2', name: 'Bo', date: '2026-10-01', description: 'Intake — vessel inspected, damage photographed.', transcription: null },
-      { id: 'l-2', employee_id: 'emp-3', name: 'Rin', date: '2026-10-01', description: 'Lower unit drained, refill scheduled.', transcription: null },
-    ],
-    photos: [
-      { id: 'p-1', caption: 'Hull at waterline', gps: null },
-      { id: 'p-2', caption: 'Cushion split', gps: null },
-    ],
-  },
-  {
-    id: 'k-2', boat_id: 'b-2', work_order_no: 'WO-2482', season_year: 2026,
-    storage_type: 'marina_boathouse', storage_building: null, storage_row: null, storage_col: null,
-    boathouse_no: 3, slip_no: 7,
-    date_in: '2026-10-01', date_out: null, status: 'intake',
-    remarks: 'Liveaboard — needs power during storage.',
-    other_work: null,
-    wrap_required: false, unwrap_done: false, pickup_delivery: 'Deliver to slip',
-    invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 1,
-    received_items: ['keys', 'cover', 'paddles', 'life_jackets', 'gas_cans'],
-    authorized_work: [{ key: 'oil_change', authorized: true, completed: false }],
-    condition: [{ area: 'motor', rating: 'good', note: null }],
-    logs: [{ id: 'l-3', employee_id: 'emp-2', name: 'Bo', date: '2026-10-01', description: 'Walk-in, paperwork scanned.', transcription: null }],
-    photos: [],
-  },
-  {
-    id: 'k-3', boat_id: 'b-3', work_order_no: 'WO-2479', season_year: 2026,
-    storage_type: 'water', storage_building: null, storage_row: null, storage_col: null,
-    boathouse_no: null, slip_no: null,
-    date_in: '2026-09-28', date_out: null, status: 'ready',
-    remarks: 'In water over winter — no haul-out.',
-    other_work: null,
-    wrap_required: false, unwrap_done: false, pickup_delivery: null,
-    invoice_number: 'INV-1180', invoice_status: 'issued', tax_rate: 0.05, is_fake: 0, is_scanned: 0,
-    customer_token: 'tk-2479-c40b2e',
-    received_items: ['keys', 'cover'],
-    authorized_work: [{ key: 'tune_up', authorized: true, completed: true }],
-    condition: [{ area: 'hull', rating: 'good', note: null }],
-    logs: [],
-    photos: [],
-  },
-  {
-    id: 'k-4', boat_id: 'b-4', work_order_no: 'WO-2484', season_year: 2026,
-    storage_type: 'dry_land', storage_building: null, storage_row: null, storage_col: null,
-    boathouse_no: null, slip_no: null,
-    date_in: '2026-10-02', date_out: null, status: 'intake',
-    remarks: 'Trail-in, arrives on trailer.',
-    other_work: 'Paddle loose in port locker.',
-    wrap_required: false, unwrap_done: false, pickup_delivery: null,
-    invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
-    customer_token: 'tk-2484-2b8c05',
-    received_items: ['keys', 'paddles', 'tie_ropes'],
-    authorized_work: [],
-    condition: [],
-    logs: [],
-    photos: [],
-  },
-  {
-    id: 'k-5', boat_id: 'b-5', work_order_no: 'WO-2486', season_year: 2026,
-    storage_type: 'storage_building', storage_building: 'Metal 1', storage_row: 1, storage_col: 'B',
-    boathouse_no: null, slip_no: null,
-    date_in: '2026-10-03', date_out: null, status: 'intake',
-    remarks: 'Second spot on Row 1.',
-    other_work: null,
-    wrap_required: false, unwrap_done: false, pickup_delivery: null,
-    invoice_number: null, invoice_status: null, tax_rate: 0, is_fake: 0, is_scanned: 0,
-    customer_token: 'tk-2486-9ade14',
-    received_items: ['keys', 'cover'],
-    authorized_work: [],
-    condition: [],
-    logs: [],
-    photos: [],
-  },
-]
-
-export const SEED_CONFLICT_CARD_ID = 'k-2'
-
-/*
- * Storage positions, with dimensions.
- *
- * Imperial, because the marina measures in feet and the paper card is imperial.
- * A top spot's roof slopes, so its height is a range — that is the whole reason
- * `height_front_ft` and `height_back_ft` are separate rather than one number
- * with a fudge factor.
- *
- * `prior_year_customer` is a hint for who is asking for the spot back. It is
- * not a reservation and nothing enforces it.
- */
-export const SEED_STORAGE_POSITIONS = [
-  {
-    id: 'sl-m2-3d',
-    kind: 'position',
-    value: 'Metal 2/3/D',
-    label: 'Metal 2 · Row 3 · D',
-    sort_order: 1,
-    length_ft: 26,
-    width_ft: 11,
-    height_front_ft: 10,
-    height_back_ft: 8,
-    prior_year_customer: 'Hollis',
-  },
-  {
-    id: 'sl-bh3-7',
-    kind: 'position',
-    value: 'BH3/S7',
-    label: 'Boathouse 3 · Slip 7',
-    sort_order: 2,
-    length_ft: 22,
-    width_ft: 10,
-    height_front_ft: 9,
-    height_back_ft: 9,
-    prior_year_customer: 'Pettersen',
-  },
-]
-
-/*
- * Appointments.
- *
- * Two rows, because the ramp is the interesting case: it holds one at a time,
- * so a board with two ramp movements in the same window is the state the
- * capacity rule exists to prevent and the one worth being able to see.
- */
-export const SEED_APPOINTMENTS = [
-  {
-    id: 'ap-1',
-    card_id: 'k-2',
-    boat_id: 'b-2',
-    customer_id: 'c-2',
-    task_type: 'drop_off',
-    scheduled_start: '2026-10-12T13:00:00.000Z',
-    scheduled_end: '2026-10-12T13:45:00.000Z',
-    assigned_employee_id: 'emp-1',
-    status: 'booked',
-    notes: 'Trailer arriving with the boat.',
-  },
-  {
-    id: 'ap-2',
-    card_id: 'k-3',
-    boat_id: 'b-3',
-    customer_id: 'c-3',
-    task_type: 'repair',
-    scheduled_start: '2026-10-12T14:00:00.000Z',
-    scheduled_end: '2026-10-12T18:00:00.000Z',
-    assigned_employee_id: 'emp-1',
-    status: 'proposed',
-    notes: 'Trim sticking — needs a look before spring.',
-  },
 ]

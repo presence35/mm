@@ -92,10 +92,12 @@ Skipping a step leaves production stale in a different way:
 | No restart | New routes/tables missing; the client silently no-ops |
 | Client cache not cleared | Installed PWA keeps serving the old precached bundle |
 
-The client is an installed PWA. After deploying, on each device: **Setup →
-Reinstall sample data is not the cache clear** — instead open the app, use the
-service worker update prompt, or clear site data for the origin. Verify with
-`<site>/api/version`-style checks against a route you just added.
+The client is an installed PWA. After deploying, each device has to drop its
+cached bundle: open the app and use the service worker update prompt, or clear
+site data for the origin. There is deliberately no reset in Setup — a fresh,
+empty store is what a device has before its first pull, and clearing site data
+is how you get one. Verify with `<site>/api/version`-style checks against a
+route you just added.
 
 Verify production MySQL by looking for `schema ensured` in the server logs. If
 the `mm_`-prefixed tables are missing, the database account lacked `CREATE`.

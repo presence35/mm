@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet, Dialog } from '../ui'
+import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
-import { resetToSeed, storageProblem } from '../engines/store/localStore.js'
+import { storageProblem } from '../engines/store/localStore.js'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
 import { APP_VERSION } from '../appVersion.js'
 
@@ -47,294 +47,6 @@ function PalettePicker({ palette, onChange }) {
   )
 }
 
-/* TEMPORARY legacy import — delete with server/legacy/import-live.js after
-   the one production import. Plans from the live legacy tables sharing this
-   database, shows the dry-run report, then applies once. Admin-only. */
-function LegacyImportPanel() {
-  const [photosDir, setPhotosDir] = useState('/private/data/photos')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [report, setReport] = useState(null)
-  const [result, setResult] = useState(null)
-  const [confirmApply, setConfirmApply] = useState(false)
-  const [confirmReset, setConfirmReset] = useState(false)
-  const [confirmRecord, setConfirmRecord] = useState(false)
-
-  const token = () => {
-    try {
-      return localStorage.getItem('mm.token') ?? ''
-    } catch {
-      return ''
-    }
-  }
-
-  const planImport = async () => {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    setReport(null)
-    setResult(null)
-    try {
-      const res = await fetch('/api/admin/legacy-import/plan', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ photos_dir: photosDir }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.detail || body.error || `plan failed: ${res.status}`)
-      setReport(body)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const resetAndReplan = async () => {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    setConfirmReset(false)
-    try {
-      const res = await fetch('/api/admin/legacy-import/reset', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ reset: 'mm-tables' }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.detail || body.error || `reset failed: ${res.status}`)
-      setResult(null)
-    } catch (e) {
-      setError(e.message)
-      setBusy(false)
-      return
-    }
-    setBusy(false)
-    await planImport()
-  }
-
-  const applyImport = async () => {
-    if (!report || busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const res = await fetch('/api/admin/legacy-import/apply', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ id: report.id }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.detail || body.error || `apply failed: ${res.status}`)
-      setResult(body)
-      setReport(null)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setBusy(false)
-      setConfirmApply(false)
-    }
-  }
-
-  /* The first import ran before the marker table existed, so a finished target
-     looks exactly like a half-written one. This records what is already true
-     instead of re-importing a schedule the marina is already using. */
-  const recordComplete = async () => {
-    if (!report || busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const res = await fetch('/api/admin/legacy-import/complete', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token()}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ id: report.id, confirm: 'record-complete' }),
-      })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.detail || body.error || `failed: ${res.status}`)
-      setResult({ ok: true, counts: {}, copied: 0, recorded: body })
-      setReport(null)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setBusy(false)
-      setConfirmRecord(false)
-    }
-  }
-
-  return (
-    <div>
-      <div className="section-head">Legacy import (temporary)</div>
-      <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
-        <input
-          type="text"
-          value={photosDir}
-          onChange={(e) => setPhotosDir(e.target.value)}
-          aria-label="Legacy photos directory on the server"
-          placeholder="/private/data/photos"
-          style={{ font: 'var(--body-m)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--corner-s)', border: '1px solid var(--outline)' }}
-        />
-        <Button fullWidth variant="tonal" onClick={planImport} disabled={busy} loading={busy}>
-          Plan from live tables
-        </Button>
-        {error ? (
-          <div className="offline-bar offline-bar--conflict" role="alert">
-            <Icon name="alert" size={18} />
-            {error}
-          </div>
-        ) : null}
-        {report ? (
-          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
-            <div>
-              <strong>{report.rows} rows</strong> to import across {report.entities.length} entities
-            </div>
-
-            {/* Which state the target is actually in.
-                "Rows present and no marker" is not evidence that a run failed —
-                the first one finished before the marker table existed — so
-                count the two sides and say what they show. */}
-            {report.state?.imported ? (
-              <div style={{ color: 'var(--on-surface-variant)' }}>
-                A previous import finished {new Date(report.state.completedAt).toLocaleString()}. Importing again would
-                duplicate every row.
-              </div>
-            ) : report.state?.verdict === 'complete' ? (
-              <div style={{ color: 'var(--on-surface-variant)' }}>
-                This database already holds everything this plan would write
-                {report.state.targetRows ? ` (${report.state.targetRows} rows)` : ''}. The migration has run; it was just
-                never recorded.
-              </div>
-            ) : report.state?.verdict === 'partial' ? (
-              <div style={{ color: 'var(--on-surface-variant)' }}>
-                This database holds some of it and no finished import. Short:{' '}
-                {report.state.missing.map((m) => `${m.entity} ${m.have}/${m.want}`).join(', ')}.
-              </div>
-            ) : (
-              <div style={{ color: 'var(--on-surface-variant)' }}>The target is empty. Nothing has been imported yet.</div>
-            )}
-
-            {!report.state?.imported && report.state?.verdict === 'complete' ? (
-              <Button fullWidth variant="tonal" onClick={() => setConfirmRecord(true)} disabled={busy}>
-                Record this import as complete
-              </Button>
-            ) : null}
-
-            {report.targetHasCustomers ? (
-              <Button fullWidth variant="tonal" onClick={() => setConfirmReset(true)} disabled={busy}>
-                Reset mm tables ({report.targetHasCustomers} customers already there) &amp; re-plan
-              </Button>
-            ) : null}
-
-            <details>
-              <summary style={{ font: 'var(--label-m)', padding: 'var(--space-2) 0' }}>
-                What is already in the target, entity by entity
-              </summary>
-              <table style={{ width: '100%', borderCollapse: 'collapse', font: 'var(--body-s)' }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--on-surface-variant)' }}>
-                    <th style={{ padding: 'var(--space-1) 0' }}>Entity</th>
-                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>To import</th>
-                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>Already there</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...new Set([...report.entities, ...Object.keys(report.targetCounts ?? {})])].map((e) => (
-                    <tr key={e}>
-                      <td style={{ padding: 'var(--space-1) 0' }}>{e}</td>
-                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>{report.sourceCounts?.[e] ?? 0}</td>
-                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>
-                        {report.targetCounts?.[e] ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
-
-            <div>
-              Photos from {report.photosDir}: {report.photosToCopy} to copy, {report.photosMissingTotal} without a file
-              {report.photosDirFound ? null : ' (directory not readable on the server)'}
-            </div>
-            {report.notes.map((n) => (
-              <div key={n} style={{ color: 'var(--on-surface-variant)' }}>
-                {n}
-              </div>
-            ))}
-            {report.warnings.map((w) => (
-              <div key={w}>! {w}</div>
-            ))}
-            {report.warningTotal > report.warnings.length ? <div>…and {report.warningTotal - report.warnings.length} more</div> : null}
-            <Button fullWidth variant="destructive" onClick={() => setConfirmApply(true)} disabled={busy}>
-              Apply import
-            </Button>
-          </div>
-        ) : null}
-        {result ? (
-          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
-            <div>
-              <strong>
-                {result.recorded ? 'Recorded as complete.' : `Import ${result.ok ? 'complete' : 'finished with problems'}.`}
-              </strong>{' '}
-              {result.copied ? `Photos copied: ${result.copied}` : null}
-            </div>
-            {Object.entries(result.counts ?? {}).map(([entity, n]) => (
-              <div key={entity}>
-                {entity}: {n}
-              </div>
-            ))}
-            {(result.problems ?? []).map((p) => (
-              <div key={p}>! {p}</div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      <Dialog
-        open={confirmRecord}
-        title="Record this import as complete?"
-        body="Marks the legacy migration as done without writing anything. It says the target already holds everything the plan would write, so the only thing missing is the record. Nothing is copied, nothing is deleted."
-        onDismiss={() => setConfirmRecord(false)}
-        actions={
-          <>
-            <Button variant="text" onClick={() => setConfirmRecord(false)}>
-              Cancel
-            </Button>
-            <Button onClick={recordComplete}>Record as complete</Button>
-          </>
-        }
-      />
-      <Dialog
-        open={confirmReset}
-        title="Reset mm tables?"
-        body="Drops every mm_ table on this server — everything imported, and anything entered in the new app since. The legacy tables are untouched, so the source data is safe. Devices that have already synced will re-download everything on their next sync. This cannot be undone."
-        onDismiss={() => setConfirmReset(false)}
-        actions={
-          <>
-            <Button variant="text" onClick={() => setConfirmReset(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={resetAndReplan}>
-              Reset &amp; re-plan
-            </Button>
-          </>
-        }
-      />
-      <Dialog
-        open={confirmApply}
-        title="Apply legacy import?"
-        body="Every legacy row is inserted into the live database once. This cannot be undone — a second run is refused, so a partial failure needs manual repair."
-        onDismiss={() => setConfirmApply(false)}
-        actions={
-          <>
-            <Button variant="text" onClick={() => setConfirmApply(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={applyImport}>
-              Apply
-            </Button>
-          </>
-        }
-      />
-    </div>
-  )
-}
 
 export default function SetupScreen() {
   const { palette, setPalette, mode, setMode } = useTheme()
@@ -342,8 +54,6 @@ export default function SetupScreen() {
   const { employee, may, signOut } = useAuth()
   const { navigate } = useRouter()
   const [showOfflineHelp, setShowOfflineHelp] = useState(false)
-  const [confirmReset, setConfirmReset] = useState(false)
-
   const lastSynced = sync.lastSyncedAt
     ? sync.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'never'
@@ -406,13 +116,6 @@ export default function SetupScreen() {
         </div>
       ) : null}
       <ListItem
-        icon="cards"
-        title="Reinstall sample data"
-        support="Beta only — wipes this device back to the sample marina"
-        onClick={() => setConfirmReset(true)}
-        trailing={<Icon name="right" size={20} />}
-      />
-      <ListItem
         icon="alert"
         title="About offline behaviour"
         support="What works with no signal, and what doesn't"
@@ -447,9 +150,6 @@ export default function SetupScreen() {
         trailing={<Icon name="right" size={20} />}
       />
 
-      {/* TEMPORARY legacy import — delete with server/legacy/import-http.js after the one production import. */}
-      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}
-
       {/* Footnote, not a setting. Read from package.json at build time, so it
           cannot disagree with what shipped. The bottom padding clears the
           navigation bar so it is readable rather than tucked under it. */}
@@ -463,30 +163,6 @@ export default function SetupScreen() {
       >
         Marina Manager · version {APP_VERSION}
       </p>
-
-      <Dialog
-        open={confirmReset}
-        title="Reinstall sample data?"
-        body="Every card, log entry and photo on this device is deleted and replaced with the sample marina. This cannot be undone."
-        onDismiss={() => setConfirmReset(false)}
-        actions={
-          <>
-            <Button variant="text" onClick={() => setConfirmReset(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                resetToSeed()
-                setConfirmReset(false)
-                navigate('cards')
-              }}
-            >
-              Wipe and reinstall
-            </Button>
-          </>
-        }
-      />
 
       <Sheet open={showOfflineHelp} title="Offline behaviour" onDismiss={() => setShowOfflineHelp(false)}>
         <div style={{ padding: '0 var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-4)' }}>

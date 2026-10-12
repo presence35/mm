@@ -174,7 +174,7 @@ Both are supported paths, not error cases, and both **must be exercised in testi
 
 ## Reference data
 
-Delivered through the same sync stream, not bundled — except a bootstrap snapshot shipped with the app for the very first launch.
+Delivered through the same sync stream, not bundled — except a bootstrap snapshot shipped with the app for the very first launch: the roster, the marina's shape, and the paper card's field sets. The snapshot contains no customers, boats or cards. A brand-new device must never be able to push invented records into the marina's database, and the store's cold path queues what it holds.
 
 | Entity | Why server-owned |
 |---|---|

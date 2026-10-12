@@ -164,9 +164,9 @@ test('pull never clobbers a row with unsynced local edits', async () => {
   assert.equal(stillQueued.length, 1)
 })
 
-test('a second device seeding the same snapshot does not conflict with itself', async () => {
-  /* The bootstrap snapshot is queued, so two fresh devices both try to create
-     the same rows. The second must recognise the first's work rather than
+test('a second device writing the same rows does not conflict with itself', async () => {
+  /* A row created on two devices before either has synced is the same edit
+     arriving twice. The second must recognise the first's work rather than
      push a stale rev and manufacture a conflict. */
   await idb.wipe()
   await idb.setMeta('cursor', 0)
@@ -175,15 +175,15 @@ test('a second device seeding the same snapshot does not conflict with itself', 
   const first = await transport.drain(token, 'dev-A')
   assert.equal(first.applied, 1)
 
-  /* Device B seeds the same row and then pulls before pushing. */
+  /* Device B writes the same row and then pulls before pushing. */
   await idb.putAndQueue('customers', { id: 'c-seed', name: 'Seeded Person', city: 'Comox', version: 0 })
   await transport.pullAll(token, 'dev-B')
 
   const remaining = (await idb.pendingOps()).filter((o) => o.entity_id === 'c-seed')
-  assert.equal(remaining.length, 0, 'the duplicate seed op was dropped')
+  assert.equal(remaining.length, 0, 'the duplicate op was dropped')
 
   const result = await transport.drain(token, 'dev-B')
-  assert.equal(result.conflicts, 0, 'no conflict manufactured against our own snapshot')
+  assert.equal(result.conflicts, 0, 'no conflict manufactured against its own work')
 })
 
 test('a conflict gains the server payload after a pull, so it can be compared', async () => {
@@ -246,26 +246,40 @@ test('a conflict can be resolved offline without a network call', async () => {
   assert.equal(row.city, 'Nanaimo')
 })
 
-test('seeding the snapshot queues each row exactly once', async () => {
+test('rows this device creates are queued once each, and converge after a joining pull', async () => {
   const store = await import('../src/engines/store/localStore.js')
   await idb.wipe()
   await idb.setMeta('cursor', 0)
   await store.reload()
 
+  /* Nothing queued itself on boot — the store seeds nothing — so the rows in
+     play are the ones this device creates, one op each. */
+  assert.equal((await idb.pendingOps()).length, 0, 'a boot queues nothing of its own')
+
+  const customer = await store.createCustomer({ name: 'Round Trip', city: 'Comox' })
+  const card = await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-ONCE', season_year: 2026 })
+
   const queued = await idb.pendingOps()
+  assert.equal(queued.length, 2)
   const seen = new Set()
   for (const op of queued) {
     const key = `${op.entity}:${op.entity_id}`
     assert.equal(seen.has(key), false, `duplicate op queued for ${key}`)
     seen.add(key)
   }
+  assert.deepEqual(
+    queued.map((o) => o.entity_id).sort(),
+    [card.id, customer.id].sort(),
+  )
 
-  /* A joining device pulls first: the pull brings the server's version of the
-     snapshot and dropSuperseded discards the duplicate local ops. */
+  /* A joining device pulls first: the pull brings the server's version of
+     anything it already holds and dropSuperseded discards the duplicate local
+     ops. */
   await transport.pullAll(token, 'dev-fresh')
   const result = await transport.drain(token, 'dev-fresh')
-  assert.equal(result.conflicts, 0, `a fresh device produced ${result.conflicts} conflicts against its own seed`)
+  assert.equal(result.conflicts, 0, `a fresh device produced ${result.conflicts} conflicts against its own rows`)
   assert.equal((await idb.pendingOps()).length, 0)
+  assert.equal(store.getCustomer(customer.id).customer.name, 'Round Trip')
 })
 
 test('a work log survives the round trip as its own entity', async () => {
@@ -274,13 +288,13 @@ test('a work log survives the round trip as its own entity', async () => {
   await idb.setMeta('cursor', 0)
   await store.hydrate()
 
-  const card = store.listCards()[0]
-  const before = store.getCard(card.id).card.logs.length
-
-  /* A fresh device seeds the snapshot, which includes child rows. Clear that
-     first so the assertion is about this log and not the fixture. */
-  await transport.drain(token, 'dev-seed')
+  /* Nothing is seeded, so the card under test is one this device created. It is
+     drained first, so the assertion below is about the log and nothing else. */
+  const card = await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-LOG', season_year: 2026 })
+  await transport.drain(token, 'dev-create')
   assert.equal((await idb.pendingOps()).length, 0)
+
+  const before = store.getCard(card.id).card.logs.length
 
   /* A mechanic writes a log entry with no signal. */
   store.addLog(card.id, { id: 'test-1', employee_id: 'emp-1', name: 'Bo', date: '2026-10-03', description: 'Lower unit drained' })
@@ -309,9 +323,9 @@ test('a work log survives the round trip as its own entity', async () => {
 
 test('ticking the same task twice updates one row, not two', async () => {
   const store = await import('../src/engines/store/localStore.js')
-  /* The previous test wiped and re-pulled; the projection has to follow. */
+  /* Self-contained: nothing is seeded, so this device creates the card it ticks. */
+  const card = await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-TICK', season_year: 2026 })
   await store.reload()
-  const card = store.listCards()[0]
 
   const rows = () => (store.getCard(card.id).card.authorized_work ?? []).filter((w) => w.key === 'tune_up').length
   const start = rows()
@@ -378,10 +392,10 @@ test('an employees change arrives via the reference store and does not wedge the
 })
 
 /*
- * A conflict is raised by a version that moved, not by a change. A device
- * re-seeding its snapshot against a server that already holds it produces one
- * per row, all identical — 41 of them in practice — and each asked a worker to
- * choose between two versions with nothing between them.
+ * A conflict is raised by a version that moved, not by a change. A device that
+ * pushes the same rows twice — the old sample-data bootstrap did exactly that,
+ * 41 rows at a time — produced one conflict per row, all identical, and each
+ * asked a worker to choose between two versions with nothing between them.
  */
 /*
  * A per-field merged resolution is the main path now: the worker taps This

@@ -16,7 +16,7 @@
 import * as idb from './idb.js'
 import { activeCardFor } from '../../domain/cardStatus.js'
 import { canBeAssignedWork } from '../auth/permissions.js'
-import { SEED_CARDS, SEED_BOATS, SEED_BOAT_SERIALS, SEED_CUSTOMERS, SEED_STAFF, SEED_APPOINTMENTS, SEED_STORAGE_POSITIONS, SEED_STORAGE_LAYOUT } from './seed.js'
+import { SEED_STAFF, SEED_STORAGE_LAYOUT } from './seed.js'
 
 const ENTITY_OF = { cards: 'service_cards', boats: 'boats', customers: 'customers', serials: 'boat_serials', assignments: 'boat_assignments' }
 
@@ -69,13 +69,13 @@ export function subscribe(fn) {
 
 /* ------------------------------------------------------------------ boot */
 
-/* A cold device with nothing stored gets the seed fixture. This is the
-   bootstrap snapshot; after the first sync the server is the truth.
+/* Reads the stored projection into memory. No seeding, no substitute data: a
+   store that holds nothing is a device that has never pulled, and every screen
+   already has an empty state for that.
 
    Memoised on the promise, not on a boolean: Boot and SyncProvider both call
    this on mount, and a flag checked at the top lets two callers through before
-   either sets it. That seeded the snapshot twice, queued every row twice, and
-   turned the duplicate into a wall of conflicts against our own data. */
+   either sets it, so the whole read ran twice. */
 export function hydrate() {
   if (hydrated) return Promise.resolve(db)
   if (hydratePromise) return hydratePromise
@@ -95,108 +95,24 @@ export function hydrate() {
       ])
       const children = Object.fromEntries(CHILD_ENTITIES.map((e, i) => [e, childRows[i]]))
 
-      /* Never empty: see below. */
+      /* A device that has never synced has no roster of its own, and you cannot
+         sync until you have signed in. One name, the one the server seeds. */
       const roster = employees.length ? employees : SEED_STAFF
 
-      if (!cards.length && !customers.length) {
-        /* Queued, not just stored. A brand-new server has nothing, so this
-           snapshot is what creates the marina there. Stored-only, the first
-           edit would carry rev 1 against a row the server has never seen and
-           be rejected as a conflict instead of an insert. */
-        const now = new Date().toISOString()
-        const seededChildren = emptyChildren()
-
-        for (const c of SEED_CARDS) {
-          const bare = { ...c }
-          delete bare.received_items
-          delete bare.authorized_work
-          delete bare.condition
-          delete bare.logs
-          delete bare.photos
-
-          await idb.putAndQueue('service_cards', { ...bare, version: 0, updated_at: now })
-
-          for (const item of c.received_items ?? []) {
-            const row = { id: childId.received_items(c.id, item), card_id: c.id, item, present: 1, notes: null, version: 0 }
-            seededChildren.received_items.push(row)
-            await idb.putAndQueue('received_items', row)
-          }
-          for (const w of c.authorized_work ?? []) {
-            const row = {
-              id: childId.authorized_work(c.id, w.key), card_id: c.id, service_type: w.key,
-              authorized: w.authorized ? 1 : 0, completed: w.completed ? 1 : 0,
-              notes: null, completed_by: null, completed_at: null, products_used: '[]', version: 0,
-            }
-            seededChildren.authorized_work.push(row)
-            await idb.putAndQueue('authorized_work', row)
-          }
-          for (const a of c.condition ?? []) {
-            const row = { id: childId.condition_assessment(c.id, a.area), card_id: c.id, area: a.area, rating: a.rating, notes: a.note, version: 0 }
-            seededChildren.condition_assessment.push(row)
-            await idb.putAndQueue('condition_assessment', row)
-          }
-          for (const l of c.logs ?? []) {
-            const row = {
-              id: `wl-${l.id}`, card_id: c.id, employee_id: l.employee_id,
-              log_date: l.date, description: l.description, transcription: l.transcription, created_at: now, version: 0,
-            }
-            seededChildren.work_logs.push(row)
-            await idb.putAndQueue('work_logs', row)
-
-            const history = {
-              id: `sh-${l.id}`, card_id: c.id, from_status: null, to_status: 'intake',
-              employee_id: l.employee_id, changed_at: now, version: 0,
-            }
-            seededChildren.status_history.push(history)
-            await idb.putAndQueue('status_history', history)
-          }
-        }
-
-        /* Customers, boats and serials only. Children were queued in the loop
-           above; queueing them again here put two ops per row in the outbox, and
-           the second one arrived as a conflict against the first. */
-        await Promise.all([
-          ...SEED_CUSTOMERS.map((c) => idb.putAndQueue('customers', { ...c, version: 0, updated_at: now })),
-          ...SEED_BOATS.map((b) => idb.putAndQueue('boats', { ...b, version: 0, updated_at: now })),
-          ...SEED_BOAT_SERIALS.map((s) => idb.putAndQueue('boat_serials', { ...s, version: 0, updated_at: now })),
-          ...SEED_APPOINTMENTS.map((a) => idb.putAndQueue('appointments', { ...a, version: 0, updated_at: now })),
-        ])
-
-        /* Reference data is server-owned, but a device that has never synced
-           still has to render a map. This is the bootstrap snapshot
-           (architecture.md §Reference data), written once and replaced by the
-           server's version on the first successful pull. */
-        await idb.putReference({ storage_layout: SEED_STORAGE_POSITIONS })
-
-        db = {
-          cards: SEED_CARDS.map(({ received_items, authorized_work, condition, logs, photos, ...c }) => ({ ...c, version: 0, local_pending: true })),
-          boats: SEED_BOATS.map((b) => ({ ...b, version: 0, local_pending: true })),
-          customers: SEED_CUSTOMERS.map((c) => ({ ...c, version: 0, local_pending: true })),
-          employees: roster.map((e) => ({ ...e, version: 0, local_pending: true })),
-          storageLayout: SEED_STORAGE_POSITIONS,
-          appointments: SEED_APPOINTMENTS.map((a) => ({ ...a, version: 0, local_pending: true })),
-          serials: SEED_BOAT_SERIALS.map((s) => ({ ...s, version: 0, local_pending: true })),
-          assignments: [],
-          children: seededChildren,
-        }
-      } else {
-        db = { cards, boats, customers, employees: roster, storageLayout, appointments, serials, assignments, children }
-      }
+      /* Empty is a real answer. A store that holds nothing is a device that has
+         never pulled, and an empty list is the truth about it. */
+      db = { cards, boats, customers, employees: roster, storageLayout, appointments, serials, assignments, children }
     } catch (e) {
       /* Storage is unavailable — private mode, or a browser that refuses. Say
          so rather than running in a state that looks fine and silently loses
          every write. `degraded` drives a visible warning in Setup. */
       degraded = e?.message ?? 'storage unavailable'
+      /* An empty store, not a sample one. Substituting sample data here is what
+         made a failed read indistinguishable from a healthy boot — the exact
+         bug server/client-staff.test.js was written to prevent. */
       db = {
-        cards: SEED_CARDS,
-        boats: SEED_BOATS,
-        customers: SEED_CUSTOMERS,
-        employees: SEED_STAFF,
-        storageLayout: SEED_STORAGE_POSITIONS,
-        appointments: SEED_APPOINTMENTS,
-        serials: SEED_BOAT_SERIALS,
-        assignments: [],
-        children: emptyChildren(),
+        cards: [], boats: [], serials: [], assignments: [], customers: [],
+        employees: SEED_STAFF, storageLayout: [], appointments: [], children: emptyChildren(),
       }
     }
     hydrated = true
@@ -369,8 +285,11 @@ export function listStorageLayout() {
  * Server-owned, like the positions — behaviors-sync.md says the app must not
  * need a release to learn about a new building. So the rows win when the server
  * has told us; SEED_STORAGE_LAYOUT is the bootstrap snapshot for a device that
- * has never synced, the same role SEED_STORAGE_POSITIONS plays. Deriving it in
- * one place is also why no screen imports the seed directly any more. */
+ * has never synced.
+ *
+ * Dimensions are deliberately absent: a size belongs to a measured position,
+ * which the server owns, and no default is better than a guessed size for a spot
+ * nobody measured. */
 export function getStorageShape() {
   const fromRows = (kind, mapper) => db.storageLayout.filter((r) => r.kind === kind).map(mapper)
   const buildings = fromRows('building', (r) => r.value)
@@ -779,17 +698,6 @@ export async function putEntity(entity, row) {
   }
   notify()
   return next
-}
-
-export async function resetToSeed() {
-  try {
-    await idb.wipe()
-    await idb.setMeta('cursor', 0)
-  } catch {
-    /* ignore */
-  }
-  hydrated = false
-  await hydrate()
 }
 
 export { idb }

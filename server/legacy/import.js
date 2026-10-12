@@ -140,8 +140,10 @@ export async function importInto(db, p, { photosCopies = [], now = new Date().to
       reason: 'partial_import',
       message:
         `This database holds ${existing} rows under our own tables and no completed migration. ` +
-        'Either a previous run did not finish, or a device seeded its sample data here. ' +
-        'Nothing has been written. Drop the prefixed tables (Setup → Legacy import → Reset mm tables) and re-plan.',
+        'Either a previous run did not finish, or a device running an older build pushed its ' +
+        'sample marina here. Nothing has been written. Drop the prefixed tables first ' +
+        '(`resetMmTables()` in server/legacy/import-live.js, or POST ' +
+        '/api/admin/legacy-import/reset with {"reset":"mm-tables"}) and re-plan.',
     }
   }
 

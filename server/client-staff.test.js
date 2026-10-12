@@ -45,20 +45,25 @@ test('a healthy boot does not degrade and does not lose cards', async () => {
   await store.reload()
 
   assert.equal(store.storageProblem(), null, 'no storage problem')
-  assert.ok(store.listCards().length > 0, 'the sample marina is there')
+  /* Nothing is invented: an empty store means this device has not pulled yet,
+     and a boot that substitutes data over it is the failure below. */
+  assert.equal(store.listCards().length, 0, 'no sample marina is manufactured')
 
-  /* Written, not read-through: a card added locally must survive a rehydrate. */
-  await store.hydrate()
-  assert.ok(store.listCards().length > 0)
+  /* Written, not read-through: a card added locally must survive a rehydrate
+     from storage. */
+  await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-BOOT', season_year: 2026 })
+  await store.reload()
+
+  assert.equal(store.listCards().length, 1, 'the card survives the rehydrate')
+  assert.equal(store.listCards()[0].work_order_no, 'WO-BOOT')
 })
 
 test('the roster arrives from the reference store, not a store of its own', async () => {
   await idb.wipe()
   await idb.setMeta('cursor', 0)
 
-  /* First boot seeds a snapshot, which is correct for a device with nothing.
-     The reference snapshot then arrives, and the next read is the one that must
-     pick it up — so the seed branch is not what is under test here. */
+  /* A device with nothing offers the one seeded name until the reference
+     snapshot arrives; the next read is the one that must pick it up. */
   await store.reload()
   await idb.putReference(REFERENCE_SNAPSHOT)
   await store.reload()
