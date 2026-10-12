@@ -317,6 +317,7 @@ Grows as code lands. Grouped by subsystem; every file with its responsibility; a
 
 ```
 src/
+  appVersion.js  — the version string, injected at build time from package.json
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
              StageStrip, Collapsible,
@@ -338,7 +339,11 @@ src/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js
     schedule/ ScheduleBoard.jsx, useSchedule.js
-    conflicts/useConflicts.js
+    conflicts/useConflicts.js, differences.js — the comparison is pure and
+              tested on its own, and diffs the union of both payloads' own
+              keys. It used to whitelist card/boat/customer column names, which
+              meant a conflict on a child entity could never show a difference
+              and always claimed the two versions agreed
   screens/   composition only:
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail,
              Map, Setup, Scan, Admin, Conflicts, Login, PublicCard, Schedule

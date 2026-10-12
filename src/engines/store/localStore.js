@@ -363,8 +363,16 @@ export function patchCard(id, patch) {
   if (i < 0) return null
 
   const { received_items, authorized_work, condition, logs, invoice_items, ...cardPatch } = patch
-  db.cards[i] = { ...db.cards[i], ...cardPatch, local_pending: true }
-  write('cards', db.cards[i])
+
+  /* Only queue a card write when a card column actually changed. Adding a log
+     entry passes `logs` and nothing else, and this used to queue an unchanged
+     card row alongside it — one wasted op per log entry on every device, which
+     then arrived at the server with a stale rev and was raised as a conflict
+     over content that had not moved. */
+  if (Object.keys(cardPatch).length) {
+    db.cards[i] = { ...db.cards[i], ...cardPatch, local_pending: true }
+    write('cards', db.cards[i])
+  }
 
   if (received_items) queueReceivedItems(id, received_items)
   if (authorized_work) queueAuthorizedWork(id, authorized_work)

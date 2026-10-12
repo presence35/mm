@@ -8,6 +8,7 @@ import { CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import { resetToSeed, storageProblem } from '../engines/store/localStore.js'
 import { SEED_EMPLOYEE } from '../engines/store/seed.js'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
+import { APP_VERSION } from '../appVersion.js'
 
 const MODE_OPTIONS = [
   { value: 'system', label: 'Auto' },
@@ -321,6 +322,10 @@ export default function SetupScreen() {
         onClick={() => setShowOfflineHelp(true)}
         trailing={<Icon name="right" size={20} />}
       />
+
+      {/* The first thing anyone asks about a beta build. Read from
+          package.json at build time, so it cannot disagree with what shipped. */}
+      <ListItem title="Version" support={APP_VERSION} />
 
       <div className="section-head">Account</div>
       <ListItem icon="users" title={employee.name} support={ROLE_LABEL[employee.role]} />

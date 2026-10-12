@@ -1,32 +1,51 @@
-import { Fragment } from 'react'
-import { TopBar, Button, Divider, EmptyState, StatusPill, Icon } from '../ui'
+import { useState } from 'react'
+import { TopBar, Button, Divider, EmptyState, StatusPill, Icon, Collapsible, ListItem } from '../ui'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
-import { useConflicts, differences, describe } from '../features/conflicts/useConflicts.js'
+import { useConflicts } from '../features/conflicts/useConflicts.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 
 /*
  * Conflict resolution. Both versions are kept and the worker chooses — never
  * last-write-wins, never a silent merge. Resolution is a queued write, so this
  * works with no signal.
+ *
+ * Most conflicts have nothing to decide: the same edit landed twice, so the
+ * version moved and no field changed. Those get one line and one tap, and can
+ * be cleared in bulk. Only a real disagreement opens into the comparison.
+ *
+ * The comparison is stacked, not three columns. At 360px a
+ * `field | mine | theirs` grid squeezes two values into ~120px each, which is
+ * how a worker ends up choosing without reading.
  */
 
-const FIELD_LABEL = {
-  name: 'Name', city: 'City', phone: 'Phone', email: 'Email',
-  postal_code: 'Postal code', address: 'Address',
-  motor_type: 'Motor', model: 'Model', licence: 'Licence',
-  trailer_licence: 'Trailer licence', length_ft: 'Length',
-  storage_type: 'Storage type', storage_building: 'Building',
-  storage_row: 'Row', storage_col: 'Column', boathouse_no: 'Boathouse',
-  slip_no: 'Slip', remarks: 'Remarks', other_work: 'Other work',
-  pickup_delivery: 'Pickup / delivery', date_in: 'Date in', date_out: 'Date out',
-  status: 'Status', wrap_required: 'Shrink wrap', unwrap_done: 'Unwrapped',
-  work_order_no: 'Work order', season_year: 'Season',
+function stateOf(conflict) {
+  if (!conflict.server_payload) return 'waiting'
+  return conflict.rows.length ? 'differs' : 'same'
 }
 
 export default function ConflictsScreen() {
   const { goBack } = useRouter()
   const { resolve, online } = useSync()
-  const { conflicts } = useConflicts()
+  const { conflicts, refresh } = useConflicts()
+  const [busy, setBusy] = useState(false)
+
+  const settled = conflicts.filter((c) => stateOf(c) === 'same')
+
+  const acceptAll = async () => {
+    setBusy(true)
+    for (const c of settled) {
+      /* kept_server, because the two versions are the same. Nothing is
+         re-written and nothing is lost. */
+      await resolve(c.id, { resolution: 'kept_server' })
+    }
+    await refresh()
+    setBusy(false)
+  }
+
+  const act = async (id, resolution) => {
+    await resolve(id, { resolution })
+    await refresh()
+  }
 
   return (
     <div>
@@ -43,116 +62,113 @@ export default function ConflictsScreen() {
           <div className="offline-bar" role="status">
             <Icon name="alert" size={18} />
             {conflicts.length} change{conflicts.length === 1 ? '' : 's'} kept — nothing was lost
+            {settled.length ? (
+              <>
+                <span className="spacer" />
+                <Button variant="text" size="sm" onClick={acceptAll} loading={busy} disabled={busy}>
+                  Accept {settled.length} identical
+                </Button>
+              </>
+            ) : null}
           </div>
 
           {conflicts.map((c) => (
-            <Conflict key={c.id} conflict={c} onResolve={resolve} online={online} />
+            <Row key={c.id} conflict={c} onResolve={act} />
           ))}
 
-          {!online ? (
-            <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-6)' }}>
-              You are offline. Your choice is saved on this device and pushed when you get signal.
-            </p>
-          ) : null}
+          <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: 'var(--space-2) var(--space-4) var(--space-6)' }}>
+            {online
+              ? 'Your choice is pushed to the server on the next sync.'
+              : 'You are offline. Your choice is saved on this device and pushed when you get signal.'}
+          </p>
         </>
       )}
     </div>
   )
 }
 
-function Conflict({ conflict, onResolve, online }) {
-  const rows = differences(conflict)
-  const busy = null
+function Row({ conflict, onResolve }) {
+  const state = stateOf(conflict)
+  const heading = conflict.detail ? `${conflict.type} · ${conflict.detail}` : conflict.type
+
+  if (state === 'same') {
+    return (
+      <ListItem
+        title={heading}
+        support={[conflict.record, 'No differences'].filter(Boolean).join(' · ')}
+        trailing={
+          <Button variant="text" size="sm" onClick={() => onResolve(conflict.id, 'kept_server')}>
+            Accept
+          </Button>
+        }
+      />
+    )
+  }
+
+  if (state === 'waiting') {
+    return (
+      <ListItem
+        title={heading}
+        support={[conflict.record, 'Waiting for this device to pull the other version'].filter(Boolean).join(' · ')}
+        trailing={
+          <StatusPill tone="neutral" shape="square">
+            Not comparable yet
+          </StatusPill>
+        }
+      />
+    )
+  }
 
   return (
-    <section style={{ paddingBottom: 'var(--space-4)' }}>
-      <div style={{ padding: 'var(--space-4) var(--space-4) var(--space-2)' }}>
-        <div className="row">
-          <span style={{ font: 'var(--label-m)', color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {describe(conflict.entity)}
-          </span>
-          <span className="spacer" />
-          <StatusPill tone="warn" shape="diamond">
-            Both kept
-          </StatusPill>
+    <>
+      <Collapsible title={heading} count={conflict.rows.length} summary={conflict.record}>
+        <div style={{ padding: '0 var(--space-4) var(--space-2)' }}>
+          {conflict.rows.map((r) => (
+            <div key={r.field} style={{ padding: 'var(--space-3) 0', boxShadow: 'inset 0 1px 0 var(--outline-variant)' }}>
+              <div style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {r.label}
+              </div>
+              <Side label="This device" value={r.mine} kind="mine" />
+              <Side label="Server" value={r.theirs} kind="theirs" />
+            </div>
+          ))}
         </div>
-        <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', marginTop: 'var(--space-1)' }}>
-          {new Date(conflict.detected_at).toLocaleString()}
-        </p>
-      </div>
 
-      {!rows.length ? (
-        <p style={{ font: 'var(--body-m)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-3)' }}>
-          {conflict.server_payload
-            ? 'Both versions agree on every field worth showing.'
-            : 'Waiting for this device to pull the other version so you can compare.'}
-        </p>
-      ) : (
-        <div style={{ padding: '0 var(--space-4)' }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(80px, 1fr) 1fr 1fr',
-              gap: 'var(--space-2) var(--space-3)',
-            }}
-          >
-            <span style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)' }}>Field</span>
-            <span style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)' }}>This device</span>
-            <span style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)' }}>Server</span>
-
-            {rows.map((r) => (
-              <Fragment key={r.field}>
-                <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>
-                  {FIELD_LABEL[r.field] ?? r.field}
-                </span>
-                <span
-                  style={{
-                    font: 'var(--body-m)',
-                    background: 'var(--secondary-container)',
-                    color: 'var(--on-secondary-container)',
-                    padding: 'var(--space-1) var(--space-2)',
-                    borderRadius: 'var(--corner-s)',
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {r.mine}
-                </span>
-                <span
-                  style={{
-                    font: 'var(--body-m)',
-                    background: 'var(--surface-container-high)',
-                    color: 'var(--on-surface)',
-                    padding: 'var(--space-1) var(--space-2)',
-                    borderRadius: 'var(--corner-s)',
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {r.theirs}
-                </span>
-              </Fragment>
-            ))}
-          </div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-1) var(--space-4) var(--space-4)' }}>
+          <Button variant="tonal" size="sm" onClick={() => onResolve(conflict.id, 'kept_local')}>
+            Keep mine
+          </Button>
+          <Button variant="text" size="sm" onClick={() => onResolve(conflict.id, 'kept_server')}>
+            Keep theirs
+          </Button>
         </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-4) 0' }}>
-        <Button
-          variant="tonal"
-          fullWidth
-          onClick={() => onResolve(conflict.id, { resolution: 'kept_local' })}
-        >
-          Keep mine
-        </Button>
-        <Button
-          variant="outlined"
-          fullWidth
-          onClick={() => onResolve(conflict.id, { resolution: 'kept_server' })}
-        >
-          Keep theirs
-        </Button>
-      </div>
-
+      </Collapsible>
       <Divider />
-    </section>
+    </>
+  )
+}
+
+/* Stacked, mine above theirs, each named. Two columns of prose side by side on
+   a phone is a design that assumes the reader is comparing, which they are not
+   — they are reading one, then the other. */
+function Side({ label, value, kind }) {
+  return (
+    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'baseline', marginTop: 'var(--space-1)' }}>
+      <span style={{ font: 'var(--label-s)', color: 'var(--on-surface-variant)', minWidth: 64, flexShrink: 0 }}>
+        {label}
+      </span>
+      <span
+        style={{
+          font: 'var(--body-m)',
+          background: kind === 'mine' ? 'var(--secondary-container)' : 'var(--surface-container-high)',
+          color: kind === 'mine' ? 'var(--on-secondary-container)' : 'var(--on-surface)',
+          padding: 'var(--space-1) var(--space-2)',
+          borderRadius: 'var(--corner-s)',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value}
+      </span>
+    </div>
   )
 }

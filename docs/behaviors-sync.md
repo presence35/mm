@@ -79,15 +79,25 @@ Per-op results:
 { "op_id": "01J…", "result": "rejected", "reason": "entity_not_found" }
 ```
 
+`applied` covers two cases that a client must not distinguish: the write changed the row, and the write matched the row exactly so nothing needed changing. Both mean "your data is safely on the server, drain this op".
+
 Rejection reasons are a closed set: `unauthorized_role`, `unauthorized_entity`, `entity_not_found`, `validation_failed`, `payload_too_large`.
 
 `op_id` is consumed even for rejections, so a rejected op cannot be replayed into acceptance by a stale retry.
 
 ## Conflicts
 
-**Trigger:** server `version != op.rev` on an upsert.
+**Trigger:** server `version != op.rev` on an upsert, **and the payload would change something.**
 
-Server behaviour:
+A write whose payload matches what the server already holds is not a disagreement, so it does not raise a conflict. It is acknowledged as `applied` at the version already held, and writes **no `change_log` row** — nothing changed, so there is nothing to tell other devices about.
+
+This matters more than it looks. The common source is the same edit arriving twice: a device that queued its bootstrap snapshot again, or two people who happened to type the same value. Before this rule the server raised a conflict for each, the conflict screen could not show a difference (there was none), and a worker was asked to choose between two identical versions — or, on a child entity, between two versions the screen could not display at all.
+
+The write rule is mirrored exactly: `payload[c] ?? existing[c]`, evaluated per syncable column, so an absent or `null` field means "leave it as it is" rather than "set it to null". Comparison goes through the same numeric normalisation as a read, so `1` and `"1.0"` are not mistaken for a difference.
+
+**This is not an auto-merge and not last-write-wins.** A stale `rev` whose payload *does* change something is still a conflict, both versions are still kept, and the server's copy still stands. The rule only removes conflicts where there was never anything to decide.
+
+Server behaviour on a real conflict:
 1. Do **not** apply the incoming payload to the entity.
 2. Write both versions to `card_conflicts`.
 3. Return `result: "conflict"`.

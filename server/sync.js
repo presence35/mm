@@ -138,6 +138,33 @@ async function applyOp(db, ctx) {
   return finish(await applyUpsert(db, ctx, op))
 }
 
+const BINDABLE_META = new Set(['rev', 'version', 'updated_at', 'updated_by', 'device_id', 'deleted_at'])
+
+/*
+ * Is this write a no-op?
+ *
+ * The conflict rule is `version != rev`, which is correct for concurrency and
+ * wrong for this: the same edit arriving twice — a snapshot queued twice, or
+ * two devices that happened to type the same value — moves the version without
+ * changing a single field. Raising a conflict there asks a worker to choose
+ * between two identical values, and on a child entity (received item, work
+ * log, authorised work) it asks them to choose between two versions the
+ * conflict screen cannot even display.
+ *
+ * Mirrors the write rule exactly: `payload[c] ?? existing[c]`, so an absent or
+ * null field means "leave it as it is", not "set it to null". Compared through
+ * normaliseRead so that 1 and "1.0" are not mistaken for a difference.
+ */
+function sameContent(entity, payload, existing) {
+  for (const c of syncColumnsFor(entity)) {
+    if (BINDABLE_META.has(c)) continue
+    const incoming = payload[c]
+    if (incoming === undefined || incoming === null) continue
+    if (normaliseRead(entity, c, bindable(c, incoming)) !== normaliseRead(entity, c, existing[c])) return false
+  }
+  return true
+}
+
 async function applyUpsert(db, { deviceId, actorId, op }) {
   const spec = ALL_TABLES[op.entity]
   /* Also the write side: a client cannot set a PIN by pushing a row, which would
@@ -149,6 +176,12 @@ async function applyUpsert(db, { deviceId, actorId, op }) {
   /* Concurrency: the client says "I saw version N". If the server is not at
      N, someone else wrote first. Keep both — never silently overwrite. */
   if (existing && Number(existing.version) !== Number(op.rev)) {
+    /* Unless the write changes nothing, in which case there is no disagreement
+       to keep. Acknowledged at the version already held, and no change_log row
+       is written because no change happened. */
+    if (sameContent(op.entity, op.payload ?? {}, existing)) {
+      return { result: 'applied', version: Number(existing.version), seq: await headSeq(db) }
+    }
     return conflict(db, op, existing, 'version_moved')
   }
   if (!existing && Number(op.rev) !== 0) {

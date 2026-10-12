@@ -159,6 +159,86 @@ test('a stale edit does not overwrite and preserves both versions', async () => 
   assert.equal(JSON.parse(conflicts[0].server_payload).city, 'Comox')
 })
 
+test('a write that changes nothing is applied, not raised as a conflict', async () => {
+  const db = freshDb()
+  const op = customer()
+  const [created] = await push(db, { ...ADMIN, ops: [op] })
+
+  /* The same edit arriving again at a stale rev — a snapshot queued twice, or
+     two devices that typed the same thing. The version has moved; no field
+     has. Asking a human to choose between two identical values is not a
+     conflict, it is noise. */
+  const [again] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-again', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { id: 'c-1', name: 'Marcus Reyes', phone: '250-555-0142' } }],
+  })
+
+  assert.equal(again.result, 'applied')
+  assert.equal(again.version, created.version)
+  assert.equal((await db.all(`SELECT * FROM ${T('card_conflicts')}`)).length, 0)
+})
+
+test('a partial write that repeats what is already there is also a no-op', async () => {
+  const db = freshDb()
+  const [created] = await push(db, { ...ADMIN, ops: [customer()] })
+  await push(db, { ...ADMIN, ops: [{ op_id: 'op-city', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: created.version, payload: { city: 'Comox' } }] })
+
+  /* Sends only the city, at a rev two versions stale, with the city the server
+     already holds. An absent field means "leave it", so nothing differs. */
+  const [again] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-city-again', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { city: 'Comox' } }],
+  })
+
+  assert.equal(again.result, 'applied')
+  assert.equal((await db.all(`SELECT * FROM ${T('card_conflicts')}`)).length, 0)
+})
+
+test('a no-op writes no change_log row, so nothing is pushed to other devices', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer()] })
+  const before = await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)
+
+  await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-same', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { id: 'c-1', name: 'Marcus Reyes', phone: '250-555-0142' } }],
+  })
+
+  const after = await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)
+  assert.equal(after.seq, before.seq)
+})
+
+/* The no-op check must not become a way to overwrite. A stale rev with
+   different content is still a conflict, and the server still keeps both. */
+test('the no-op rule does not swallow a real disagreement', async () => {
+  const db = freshDb()
+  const [created] = await push(db, { ...ADMIN, ops: [customer()] })
+
+  const [stale] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-real', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: 0, payload: { name: 'Someone Else' } }],
+  })
+
+  assert.equal(stale.result, 'conflict')
+  assert.equal(created.version, 1)
+})
+
+test('a no-op on a child entity is settled rather than shown as a choice', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer()] })
+  await push(db, { ...ADMIN, ops: [
+    { op_id: 'op-card', entity: 'service_cards', entity_id: 'k-1', op: 'upsert', rev: 0, payload: { id: 'k-1', boat_id: 'b-1', status: 'intake' } },
+  ] })
+
+  const item = { op_id: 'op-item', entity: 'received_items', entity_id: 'ri-1', op: 'upsert', rev: 0, payload: { id: 'ri-1', card_id: 'k-1', item: 'paddles', present: 1 } }
+  const [created] = await push(db, { ...ADMIN, ops: [item] })
+
+  const [again] = await push(db, { ...ADMIN, ops: [{ ...item, op_id: 'op-item-2', rev: 0 }] })
+  assert.equal(again.result, 'applied')
+  assert.equal(again.version, created.version)
+  assert.equal((await db.all(`SELECT * FROM ${T('card_conflicts')}`)).length, 0)
+})
+
 test('pull returns only what changed since the cursor', async () => {
   const db = freshDb()
   const [first] = await push(db, { ...ADMIN, ops: [customer()] })
