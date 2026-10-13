@@ -48,6 +48,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2}'],
         navigateFallback: 'index.html',
+        /* The previous marina app lives under /legacy/ on the same origin.
+           Without this, the root worker serves the new shell for /legacy/
+           navigations on phones where the PWA is installed — the exact
+           report that motivated it. The legacy subtree has its own worker. */
+        navigateFallbackDenylist: [/^\/legacy\//],
         runtimeCaching: [
           {
             // The app shell is local-first; API traffic is the server's business.
