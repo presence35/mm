@@ -382,8 +382,6 @@ export default function SetupScreen() {
         trailing={<Icon name="right" size={20} />}
       />
 
-      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}
-
       {/* Footnote, not a setting. Read from package.json at build time, so it
           cannot disagree with what shipped. The bottom padding clears the
           navigation bar so it is readable rather than tucked under it. */}
