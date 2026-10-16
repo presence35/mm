@@ -271,7 +271,7 @@ async function logChange(db, { op_id, entity, entity_id, op, version, row, actor
 
 export async function pull(db, { cursor = 0, limit = 200 }) {
   const size = Math.min(Number(limit) || 200, PULL_LIMIT_CAP)
-  const stale = await cursorBelowFloor(db, cursor, nowMs())
+  const stale = await cursorBelowFloor(db, cursor)
 
   if (stale) {
     /* Full rehydrate: the client missed changes we no longer keep. This is the
@@ -303,21 +303,35 @@ export async function pull(db, { cursor = 0, limit = 200 }) {
 
 /*
  * A cursor we cannot serve from the delta stream must produce a full rehydrate.
- * There are two ways to be unservable, and only one of them used to be checked:
- *
- *   - below the GC floor: the changes were collected.
- *   - **above the head**: the log was rebuilt — a reset, or a restored backup —
- *     and this device is looking past the end of it. `seq > cursor` then
- *     matches nothing, so the device stops receiving changes and says nothing.
- *
- * The second is silent by construction: every delta query succeeds and returns
- * an empty list, which is indistinguishable from a quiet marina. Nothing in the
- * delta path can notice, so it is noticed here.
  */
-async function cursorBelowFloor(db, cursor, now) {
+async function cursorBelowFloor(db, cursor) {
   const at = Number(cursor) || 0
-  const head = await headSeq(db)
+  const bounds = await db.get(`SELECT MIN(seq) AS oldest, MAX(seq) AS head FROM ${T('change_log')}`)
+  const head = Number(bounds?.head ?? 0)
+  const oldest = bounds?.oldest == null ? 0 : Number(bounds.oldest)
+
+  /* Two ways the log stops being able to answer a delta query, and only one
+     used to be checked:
+
+       - the cursor is past the end: the log was rebuilt — a reset, or a
+         restored backup.
+       - **the cursor is below the beginning**: rows were collected, so `seq >
+         cursor` starts mid-history. A device holding nothing asked for
+         `cursor=0` and was served whatever survived GC, which for a migrated
+         marina is a fragment of child rows and none of the cards they belong
+         to.
+
+     The second is silent by construction: the query succeeds and returns a
+     short list. Comparing the cursor against the *devices* table cannot catch
+     it — a device that just registered holds 0, so MIN(last_cursor) is 0 and
+     `0 < 0` is false. The floor is the oldest row that still exists.
+
+     `at < oldest - 1` rather than `at < oldest`: a device at cursor N already
+     holds everything up to N locally, so it only needs the rows the log still
+     has. Forcing a rehydrate there would be safe but would re-download the
+     marina every time GC moved the floor. */
   if (at > head) return true
+  if (at < oldest - 1) return true
 
   const row = await db.get(`SELECT MIN(last_cursor) AS oldest FROM ${T('sync_devices')} WHERE revoked_at IS NULL`)
   if (!row || row.oldest == null) return at > 0 && head === 0
@@ -327,6 +341,22 @@ async function cursorBelowFloor(db, cursor, now) {
 async function headSeq(db) {
   const row = await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)
   return Number(row?.seq ?? 0)
+}
+
+export async function syncState(db) {
+  const bounds = await db.get(`SELECT MIN(seq) AS oldest, MAX(seq) AS head, COUNT(*) AS rows FROM ${T('change_log')}`)
+  const devices = await db.all(`SELECT device_id, last_cursor, last_seen_at, revoked_at FROM ${T('sync_devices')} ORDER BY last_cursor ASC`)
+  const counts = {}
+  for (const [entity, spec] of Object.entries(ALL_TABLES)) {
+    const row = await db.get(`SELECT COUNT(*) AS n FROM ${T(spec.table)}`)
+    counts[entity] = Number(row?.n ?? 0)
+  }
+  return {
+    log: { oldest: Number(bounds?.oldest ?? 0), head: Number(bounds?.head ?? 0), rows: Number(bounds?.rows ?? 0) },
+    gc_floor_days: GC_FLOOR_DAYS,
+    counts,
+    devices,
+  }
 }
 
 export function nowMs() {

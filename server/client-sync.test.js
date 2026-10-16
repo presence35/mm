@@ -282,6 +282,55 @@ test('rows this device creates are queued once each, and converge after a joinin
   assert.equal(store.getCustomer(customer.id).customer.name, 'Round Trip')
 })
 
+/* One page is not one marina. The server caps a page and reports has_more; a
+   client that ignores it stores a fragment and reports success, which is how a
+   device ends up "up to date" holding 200 of 1100 rows with no error anywhere. */
+test('a pull follows has_more to exhaustion instead of keeping only the first page', async () => {
+  const store = await import('../src/engines/store/localStore.js')
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await store.hydrate()
+
+  /* Enough rows that one page cannot hold them. The client asks for PULL_LIMIT
+     (200) per pull, so the count has to clear that for paging to happen at
+     all — which is the point: the old client stopped at one page whatever the
+     size of the log. */
+  const MANY = 210
+  for (let i = 0; i < MANY; i += 1) {
+    store.createCustomer({ name: `Paged ${i}`, city: 'Comox' })
+  }
+  await transport.drain(token, 'dev-paged')
+
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await store.reload()
+
+  const out = await transport.pullAll(token, 'dev-paged-2')
+  assert.ok(out.pages > 1, `expected more than one page, took ${out.pages}`)
+  assert.equal(out.caughtUp, true, 'the client must reach the end of the log, not stop short of it')
+
+  /* The projection reads IndexedDB, and the sync cycle rebuilds it after the
+     pull — not before it. Asserting on the store without this reload would be
+     asserting on the page we loaded, not on what the pull wrote. */
+  await store.reload()
+  const names = store.listCustomers().map((c) => c.name).filter((n) => n.startsWith('Paged '))
+  assert.equal(names.length, MANY, `device holds ${names.length} of ${MANY} rows the server has`)
+})
+
+test('a pull reports rows it could not store instead of warning into a console nobody opens', async () => {
+  const store = await import('../src/engines/store/localStore.js')
+  await idb.wipe()
+  await idb.setMeta('cursor', 0)
+  await store.hydrate()
+  store.createCustomer({ name: 'Reportable', city: 'Comox' })
+  await transport.drain(token, 'dev-report')
+
+  const out = await transport.pullAll(token, 'dev-report-2')
+  assert.ok(Array.isArray(out.applyErrors), 'applyErrors must reach the caller, not just console.warn')
+  assert.equal(typeof out.caughtUp, 'boolean', 'and so must whether the log was drained')
+  assert.ok(out.pages >= 1, 'and how many pages it took')
+})
+
 test('a work log survives the round trip as its own entity', async () => {
   const store = await import('../src/engines/store/localStore.js')
   await idb.wipe()
@@ -403,6 +452,21 @@ test('an employees change arrives via the reference store and does not wedge the
  * combination. It must land as an ordinary convergent write at
  * server_version + 1, carrying the chosen fields from each side.
  */
+/* The server caps a pull at one page and says so with has_more. A test reading
+   "the latest change for X" off a single `pull(token, 0)` is asserting on the
+   first page and only passes while the shared log happens to fit in one — which
+   is the very defect the client had. Page until the server says it is done. */
+async function pullAllChanges(cursor = 0, deviceId = '') {
+  const changes = []
+  let at = cursor
+  for (;;) {
+    const res = await transport.pull(token, at, deviceId)
+    changes.push(...res.changes)
+    at = res.cursor
+    if (!res.has_more) return changes
+  }
+}
+
 test('a per-field merged resolution keeps the chosen field from each side', async () => {
   const ID = 'c-merge-probe'
   await idb.putAndQueue('customers', { id: ID, name: 'Merge Person', city: 'Comox', version: 0 })
@@ -423,8 +487,8 @@ test('a per-field merged resolution keeps the chosen field from each side', asyn
   assert.equal(conflict.result, 'conflict')
   await idb.ackOps([queued[1].op_id])
 
-  const remote = await transport.pull(token, 0, '')
-  const latest = remote.changes
+  const remote = await pullAllChanges()
+  const latest = remote
     .filter((c) => c.entity === 'customers' && c.entity_id === ID)
     .pop()
 
@@ -438,8 +502,8 @@ test('a per-field merged resolution keeps the chosen field from each side', asyn
   assert.equal(out.results[0].result, 'applied')
   assert.equal(out.results[0].version, latest.version + 1, 'an ordinary convergent write')
 
-  const after = await transport.pull(token, 0, '')
-  const final = after.changes
+  const after = await pullAllChanges()
+  const final = after
     .filter((c) => c.entity === 'customers' && c.entity_id === ID)
     .pop()
   assert.equal(final.payload.name, 'Merge Person Jr', 'the chosen field came from this device')

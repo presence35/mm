@@ -194,8 +194,18 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
       setConflicts(open.length)
 
       attempts.current = 0
-      setFailure(null)
       setLastSyncedAt(new Date())
+
+      /* A pull that quietly dropped rows, or that stopped with pages still
+         waiting on the server, is not a clean sync. Say which, in the Setup
+         sync row, instead of a console.warn nobody opens. */
+      if (out.applyErrors.length) {
+        setFailure(`${out.applyErrors.length} row${out.applyErrors.length === 1 ? '' : 's'} refused by this device`)
+      } else if (!out.caughtUp) {
+        setFailure('Still downloading — more changes are waiting on the server')
+      } else {
+        setFailure(null)
+      }
       /* Derived from what is actually still open, not from conflicts created
          this cycle. Those may already have been resolved, which produced a
          'Needs review — 0 changes conflicted' state that cannot exist. */

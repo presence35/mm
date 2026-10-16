@@ -165,12 +165,23 @@ CREATE TABLE sync_devices (
 
 **GC rule.** A `change_log` row may be deleted only when `seq < MIN(last_cursor)` across all non-revoked devices **and** `seq` is older than 90 days. The floor protects devices that have been dark — including a phone iOS evicted whose employee has not yet re-synced.
 
-**Full rehydrate.** A device gets `full_sync: true` and a complete entity dump instead of a delta in **two** cases:
+**Migrated history is old at birth.** Imported rows keep their original timestamps, so a legacy marina's change log is older than the 90-day floor the moment it lands and GC consumes it on the next pass. The log then starts partway in — at `seq` 657, or 1200, never 1. This is expected for a migration, not a fault, and it is why the rehydrate rule below is written against the log and not against the devices.
 
-- Its cursor sits **below the GC floor** — the changes it needs have been collected. This is the path a user hits after an iOS eviction.
-- Its cursor sits **above the head of the log** — the log was rebuilt, by a reset or a restored backup, and the device is looking past the end of it. `seq > cursor` then matches nothing, so the device would stop receiving changes and report no error at all. Nothing in the delta path can detect that; the check has to be made before the query runs.
+**Full rehydrate.** A device gets `full_sync: true` and a complete entity dump instead of a delta in **three** cases:
 
-Both are supported paths, not error cases, and both **must be exercised in testing**.
+- Its cursor sits **below the oldest surviving log row** — `cursor < MIN(seq) - 1`. The changes it needs are gone. `seq > cursor` would still succeed and return a short list, so nothing in the delta path can notice; the check has to be made before the query runs.
+- Its cursor sits **above the head of the log** — the log was rebuilt, by a reset or a restored backup, and the device is looking past the end of it.
+- Its cursor sits **below the log's start with nothing held locally** — a device at cursor 0 against a log starting at 657. The first rule covers this arithmetically (`0 < 656`), and it is spelled out because it is the case that emptied a phone holding a migrated marina.
+
+`MIN(seq) - 1` and not `MIN(seq)`: a device at cursor N already holds everything up to N, so it only needs what the log still has. Rehydrating a device that is merely behind the floor would re-download the marina on every GC pass.
+
+**The floor is the log, not the devices.** `MIN(last_cursor)` cannot detect a hole at the front of the log: a device that just registered holds 0, so the minimum is 0, and `0 < 0` is false. It declares the device fresh and serves it a fragment — which for a migrated marina is child rows with none of the cards they belong to, and no error anywhere.
+
+All are supported paths, not error cases, and all **must be exercised in testing**.
+
+**A pull is paged to exhaustion.** The server caps a pull at `limit` and reports `has_more`. A client that keeps only the first page stores a fragment and reports success — the same "up to date, holding 200 of 1100 rows" failure by a second route. The client loops while `has_more`, bounded, and reports `caughtUp: false` if it stops short.
+
+**A refused row is visible.** A row the client cannot store is recorded and skipped, and the cursor still advances past it, so one poison row cannot wedge the stream. The count reaches the caller and appears in Setup's sync row; a `console.warn` nobody opens is not a report. Losing one row loudly beats losing every later change silently.
 
 ## Reference data
 

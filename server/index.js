@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 
 import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertProductionReady } from './db/index.js'
-import { push, pull, registerDevice, touchDevice, collectGarbage } from './sync.js'
+import { push, pull, registerDevice, touchDevice, collectGarbage, syncState } from './sync.js'
 import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
 import { listStaff, createStaff, setStaffActive, resetPin, changeOwnPin } from './staff.js'
@@ -489,6 +489,19 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
     adminOnly,
     uploadsRoot: join(ROOT, 'uploads'),
     log,
+  })
+
+  /* TEMPORARY — why a device disagrees with the server. Half of every sync
+     investigation is the client holding half the picture: it knows its cursor,
+     the server knows the log. Open this in a browser and both are in one place.
+     Read-only. Delete with the import. */
+  app.get('/api/admin/sync-state', authenticate, adminOnly, async (_req, res) => {
+    try {
+      res.json(await syncState(database))
+    } catch (e) {
+      log('sync-state failed', e?.message)
+      res.status(500).json({ error: 'sync_state_failed', detail: e?.message ?? 'unknown' })
+    }
   })
 
   /* Legacy app (the previous marina manager) mounted at /legacy. It reads

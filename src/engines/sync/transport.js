@@ -210,71 +210,92 @@ export async function drain(token, deviceId, now = new Date()) {
   return { applied: results.filter((r) => r.result === 'applied').length, conflicts, rejected }
 }
 
+/* One page is not one marina. The server caps a page at PULL_LIMIT and says so
+   with has_more; a client that ignores it stores a fragment and reports success,
+   which is how a device ends up "up to date" holding 200 of 1100 rows. */
+const MAX_PAGES = 25
+
 export async function pullAll(token, deviceId, now = new Date()) {
-  const cursor = Number(await idb.getMeta('cursor', 0)) || 0
-  const res = await pull(token, cursor, deviceId)
-  /* One poison row must never wedge the cursor again: a failed row is
-     recorded and skipped, and the cursor still advances past it. Losing one
-     row with a logged warning beats losing every later change in silence. */
   const applyErrors = []
-
-  if (res.full_sync) {
-    await idb.wipe()
-    await idb.setMeta('cursor', 0)
-    const grouped = {}
-    for (const change of res.changes) {
-      ;(grouped[change.entity] ??= []).push({ ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
-    }
-    for (const [entity, rows] of Object.entries(grouped)) {
-      try {
-        if (idb.REFERENCE_ENTITIES.has(entity)) {
-          if (rows.length) await idb.putReference({ [entity]: rows })
-        } else if (rows.length) {
-          await idb.putMany(entity, rows)
-        }
-      } catch (e) {
-        applyErrors.push({ entity, error: e?.message ?? String(e) })
-      }
-    }
-    await idb.setMeta('cursor', res.cursor)
-    if (applyErrors.length) console.warn('pull skipped rows:', applyErrors)
-    return { applied: res.changes.length, full: true, applyErrors }
-  }
-
+  let cursor = Number(await idb.getMeta('cursor', 0)) || 0
   let applied = 0
-  for (const change of res.changes) {
-    try {
-      if (idb.REFERENCE_ENTITIES.has(change.entity)) {
-        if (change.op === 'delete') await idb.removeReferenceRow(change.entity, change.entity_id)
-        else await idb.putReferenceRow(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
-        applied += 1
-        continue
+  let pages = 0
+  let caughtUp = true
+
+  for (;;) {
+    const res = await pull(token, cursor, deviceId)
+
+    if (res.full_sync) {
+      await idb.wipe()
+      await idb.setMeta('cursor', 0)
+      const grouped = {}
+      for (const change of res.changes) {
+        ;(grouped[change.entity] ??= []).push({ ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
       }
-      if (change.op === 'delete') {
-        await idb.removeLocal(change.entity, change.entity_id)
-      } else {
-        const queued = await idb.pendingOps()
-        const pendingHere = queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)
-        /* Never clobber a row with unsynced local edits. */
-        if (!pendingHere) {
-          await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+      for (const [entity, rows] of Object.entries(grouped)) {
+        try {
+          if (idb.REFERENCE_ENTITIES.has(entity)) {
+            if (rows.length) await idb.putReference({ [entity]: rows })
+          } else if (rows.length) {
+            await idb.putMany(entity, rows)
+          }
+        } catch (e) {
+          applyErrors.push({ entity, error: e?.message ?? String(e) })
+        }
+      }
+      await idb.setMeta('cursor', res.cursor)
+      await idb.setMeta('last_pull_at', new Date(now).toISOString())
+      await idb.attachServerPayloads()
+      const settled = await idb.closeSettledConflicts()
+      return { applied: res.changes.length, full: true, pages: 1, caughtUp: true, applyErrors, settled }
+    }
+
+    for (const change of res.changes) {
+      try {
+        if (idb.REFERENCE_ENTITIES.has(change.entity)) {
+          if (change.op === 'delete') await idb.removeReferenceRow(change.entity, change.entity_id)
+          else await idb.putReferenceRow(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
           applied += 1
+          continue
+        }
+        if (change.op === 'delete') {
+          await idb.removeLocal(change.entity, change.entity_id)
         } else {
-          /* The server may already hold this edit — a second device seeding the
-             same bootstrap snapshot, for instance. Drop the duplicate rather
-             than pushing it into a conflict with ourselves. */
-          const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
-          if (dropped && !pendingHere) {
+          const queued = await idb.pendingOps()
+          const pendingHere = queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)
+          /* Never clobber a row with unsynced local edits. */
+          if (!pendingHere) {
             await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
             applied += 1
+          } else {
+            /* The server may already hold this edit — a second device seeding the
+               same bootstrap snapshot, for instance. Drop the duplicate rather
+               than pushing it into a conflict with ourselves. */
+            const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
+            if (dropped && !pendingHere) {
+              await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+              applied += 1
+            }
           }
         }
+      } catch (e) {
+        applyErrors.push({ entity: change.entity, entity_id: change.entity_id, error: e?.message ?? String(e) })
       }
-    } catch (e) {
-      applyErrors.push({ entity: change.entity, entity_id: change.entity_id, error: e?.message ?? String(e) })
+    }
+
+    cursor = res.cursor
+    await idb.setMeta('cursor', cursor)
+    pages += 1
+
+    if (!res.has_more) break
+    if (pages >= MAX_PAGES) {
+      /* More exists than one cycle should hold open. Say so rather than
+         reporting a quiet marina while the rest of the log waits. */
+      caughtUp = false
+      break
     }
   }
-  await idb.setMeta('cursor', res.cursor)
+
   await idb.setMeta('last_pull_at', new Date(now).toISOString())
   await idb.attachServerPayloads()
   /* With both sides now on hand, close the ones with nothing to decide. A
@@ -282,7 +303,7 @@ export async function pullAll(token, deviceId, now = new Date()) {
      question for a worker, and there is no version to choose between. */
   const settled = await idb.closeSettledConflicts()
   if (applyErrors.length) console.warn('pull skipped rows:', applyErrors)
-  return { applied, full: false, applyErrors, settled }
+  return { applied, full: false, pages, caughtUp, applyErrors, settled }
 }
 
 export { MAX_ATTEMPTS }

@@ -131,6 +131,81 @@ test('a non-scalar payload field is stored as JSON rather than killing the serve
   assert.equal(row.name, '{"weird":true}')
 })
 
+/* The bug that emptied a phone. `collectGarbage` deletes log rows below every
+   device's cursor AND older than the floor. The legacy import writes rows
+   carrying the *original* 2026 timestamps, so a migrated marina's history is
+   older than a 90-day floor the moment it lands and the log starts partway in.
+   A device holding nothing asked for cursor=0 and was served whatever survived
+   — a fragment of child rows, none of the cards they belong to, and every query
+   succeeded while doing it. */
+test('a device holding nothing gets a rehydrate when the log no longer starts at 1', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer('c-1')] })
+  await push(db, { ...ADMIN, ops: [customer('c-2')] })
+  const head = Number((await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)).seq)
+  assert.ok(head >= 2)
+
+  /* Collect everything, as GC does for a migrated marina's front of the log. */
+  await db.run(`DELETE FROM ${T('change_log')} WHERE seq < ?`, [head])
+
+  /* It just registered, so it holds 0 and MIN(last_cursor) is 0. Comparing the
+     cursor against the devices table says 0 < 0 is false and serves a
+     fragment. Comparing it against the log says the rows are gone. */
+  await registerDevice(db, { deviceId: 'fresh', label: 'Phone', platform: 'ios', employeeId: 'emp-admin' })
+  await touchDevice(db, 'fresh', 0)
+
+  const result = await pull(db, { cursor: 0 })
+  assert.equal(result.full_sync, true, 'a hole at the front of the log must force a rehydrate')
+  assert.ok(result.changes.some((c) => c.entity_id === 'c-1'), 'and it must carry the rows the log lost')
+  assert.ok(result.changes.some((c) => c.entity_id === 'c-2'))
+})
+
+/* The other side of it: an intact log starting at 1 must still be served by
+   delta, or every fresh device re-downloads the whole marina for nothing. */
+test('an intact log still serves a device holding nothing by delta', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer('c-1'), customer('c-2')] })
+  await registerDevice(db, { deviceId: 'fresh', label: 'Phone', platform: 'ios', employeeId: 'emp-admin' })
+  await touchDevice(db, 'fresh', 0)
+
+  const result = await pull(db, { cursor: 0 })
+  assert.equal(result.full_sync, false)
+  assert.equal(result.changes.length, 2)
+})
+
+/* A device that already holds everything up to its cursor does not need the
+   rows GC removed — they are already on it. Rehydrating there would make every
+   GC pass re-download the marina for every device. */
+test('a device ahead of the GC floor is served by delta, not rehydrated', async () => {
+  const db = freshDb()
+  await push(db, { ...ADMIN, ops: [customer('c-1'), customer('c-2'), customer('c-3')] })
+  await registerDevice(db, { deviceId: 'ahead', label: 'Phone', platform: 'ios', employeeId: 'emp-admin' })
+  await touchDevice(db, 'ahead', 2)
+  await db.run(`DELETE FROM ${T('change_log')} WHERE seq < 2`)
+
+  const result = await pull(db, { cursor: 2 })
+  assert.equal(result.full_sync, false)
+  assert.ok(result.changes.length >= 1)
+})
+
+test('a pull page says whether more is waiting, and the client is expected to read it', async () => {
+  const db = freshDb()
+  const ops = Array.from({ length: 5 }, (_, i) => customer(`c-${i}`))
+  await push(db, { ...ADMIN, ops })
+
+  const first = await pull(db, { cursor: 0, limit: 2 })
+  assert.equal(first.full_sync, false)
+  assert.equal(first.changes.length, 2)
+  assert.equal(first.has_more, true, 'the server must say the page is partial')
+  assert.equal(first.cursor, 2)
+
+  const second = await pull(db, { cursor: first.cursor, limit: 2 })
+  assert.equal(second.has_more, true)
+
+  const last = await pull(db, { cursor: second.cursor, limit: 2 })
+  assert.equal(last.has_more, false, 'and say when it is not')
+})
+
 test('a stale edit does not overwrite and preserves both versions', async () => {
   const db = freshDb()
   const [created] = await push(db, { ...ADMIN, ops: [customer()] })

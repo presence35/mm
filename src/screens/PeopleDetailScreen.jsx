@@ -43,7 +43,7 @@ export default function PeopleDetailScreen({ params = {} }) {
 
       <Divider />
 
-      <div className="section-head">Boats</div>
+      <div className="section-head">Boats · {boats.length}</div>
       {!boats.length ? (
         <EmptyState icon="boat" title="No boats on file" />
       ) : (
@@ -60,7 +60,7 @@ export default function PeopleDetailScreen({ params = {} }) {
 
       <Divider />
 
-      <div className="section-head">Service history</div>
+      <div className="section-head">Service history · {cards.length}</div>
       {!cards.length ? (
         <EmptyState
           icon="cards"

@@ -63,7 +63,12 @@ async function listTables(database) {
 
 async function readLiveTables(database, warnings) {
   const tables = new Map()
-  const names = await listTables(database)
+  /* Only the unprefixed legacy tables are source. Our own `mm_` tables sit in
+     the same schema, and plan() reports every table it cannot map as unmapped —
+     so without this filter a plan against a migrated database prints one
+     `mm_customers: NOT MIGRATED` line per entity and reads like a total
+     failure. resetMmTables below already filters the same way. */
+  const names = (await listTables(database)).filter((n) => !n.startsWith(PREFIX))
   for (const name of names) {
     const rows = await database.all(`SELECT * FROM \`${name}\``)
     const columns = rows.length ? Object.keys(rows[0]) : []
