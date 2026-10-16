@@ -318,7 +318,9 @@ Grows as code lands. Grouped by subsystem; every file with its responsibility; a
 
 ```
 src/
-  appVersion.js  — the version string, injected at build time from package.json
+  appVersion.js  — the version string the client shows. Vite injects it from
+                   version.js at build time; it carries the commit, so a deploy
+                   that only changed code still reads as a different build.
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
              StageStrip, Collapsible, SlotGrid,
@@ -374,6 +376,11 @@ src/
              Cards, CardDetail, NewCard, Invoice, People, PeopleDetail, Boats,
              Boat, Map, Setup, Scan, Admin, Conflicts, Login, PublicCard,
              Schedule
+
+version.js — the build's version, derived from the commit: `<pkg>+<count>.<sha>`,
+             or package.json when there is no git. Node-only; the client receives
+             the same string through Vite's define. Both sides kept their own copy
+             of this number before, and neither moved on a push.
 
 server/
   index.js   routes; the only place that knows HTTP

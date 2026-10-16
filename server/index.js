@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 
 import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertProductionReady } from './db/index.js'
+import { APP_VERSION } from '../version.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage, syncState } from './sync.js'
 import { referenceSnapshot } from './reference.js'
 import { storePhoto } from './photos.js'
@@ -461,7 +462,7 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
     res.set('Cache-Control', 'no-store')
     res.json({
       name: 'marina-manager',
-      version: readFileSync(join(ROOT, 'package.json'), 'utf8').match(/"version":\s*"([^"]+)"/)?.[1] ?? 'unknown',
+      version: APP_VERSION,
       /* Set by the host if it exposes one. Absent locally, which is honest. */
       build: process.env.BUILD_ID ?? null,
       booted_at: bootedAt,

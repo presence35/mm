@@ -1,16 +1,13 @@
 import { defineConfig } from 'vite'
-import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-
-/* The version Setup shows comes from package.json, injected at build time.
-   Read rather than hardcoded so there is exactly one place to bump it, and it
-   cannot drift from what was actually built. */
-const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+import { APP_VERSION } from './version.js'
 
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    /* Carries the commit, so a deploy that changed nothing but code still
+       shows a different build on Setup. See version.js. */
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   server: {
     proxy: {
