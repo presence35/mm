@@ -98,7 +98,7 @@ export default function CardsScreen({ embedded = false }) {
     <div>
       {!embedded ? (
         <TopBar
-          title="Cards"
+          title={`Cards · ${rows.length}`}
           actions={
             <>
               <IconButton icon="calendar" label="Schedule" onClick={() => navigate('schedule')} />

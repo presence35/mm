@@ -54,7 +54,7 @@ export default function BoatsScreen() {
 
   return (
     <div>
-      <TopBar title="Boats" />
+      <TopBar title={`Boats · ${shown.length}`} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search name, model, licence, owner" />
 
       {!shown.length ? (

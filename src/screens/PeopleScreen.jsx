@@ -27,7 +27,7 @@ export default function PeopleScreen() {
 
   return (
     <div>
-      <TopBar title="People" />
+      <TopBar title={`People · ${rows.length}`} />
       <SearchBar value={query} onChange={setQuery} placeholder="Search name, phone, email" />
       {rows.map((c) => (
         <ListItem
