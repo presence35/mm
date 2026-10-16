@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet } from '../ui'
+import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet, Dialog } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
@@ -47,6 +47,238 @@ function PalettePicker({ palette, onChange }) {
   )
 }
 
+
+/* TEMPORARY legacy import — delete with server/legacy/import-live.js after
+   the one production import. Plans from the live legacy tables sharing this
+   database, shows the dry-run report, then applies once. Admin-only.
+
+   No photos path field. The server owns DEFAULT_PHOTOS_DIR and the report
+   echoes back the directory it actually used, so there is nothing to type and
+   nothing that can be typed wrong.
+
+   Deliberately no "reset mm tables" button. It was the cause of a lost
+   migration: the only DROP TABLE in the codebase, one tap from a phone, for an
+   operation that should happen once. The endpoint stays at
+   server/legacy/import-live.js for an operator who needs it by hand. */
+function LegacyImportPanel() {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [report, setReport] = useState(null)
+  const [result, setResult] = useState(null)
+  const [confirmApply, setConfirmApply] = useState(false)
+  const [confirmRecord, setConfirmRecord] = useState(false)
+
+  const call = async (path, body) => {
+    let token = ''
+    try {
+      token = localStorage.getItem('mm.token') ?? ''
+    } catch {
+      token = ''
+    }
+    const res = await fetch(`/api/admin/legacy-import/${path}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const parsed = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(parsed.detail || parsed.error || `${path} failed: ${res.status}`)
+    return parsed
+  }
+
+  const planImport = async () => {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    setReport(null)
+    setResult(null)
+    try {
+      setReport(await call('plan', {}))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyImport = async () => {
+    if (!report || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setResult(await call('apply', { id: report.id }))
+      setReport(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+      setConfirmApply(false)
+    }
+  }
+
+  /* The first import ran before the marker table existed, so a finished target
+     looks exactly like a half-written one. This records what is already true
+     instead of re-importing a schedule the marina is already using. */
+  const recordComplete = async () => {
+    if (!report || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const body = await call('complete', { id: report.id, confirm: 'record-complete' })
+      setResult({ ok: true, counts: {}, copied: 0, recorded: body })
+      setReport(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+      setConfirmRecord(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="section-head">Legacy import (temporary)</div>
+      <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+        <Button fullWidth variant="tonal" onClick={planImport} disabled={busy} loading={busy}>
+          Plan from live tables
+        </Button>
+        {error ? (
+          <div className="offline-bar offline-bar--conflict" role="alert">
+            <Icon name="alert" size={18} />
+            {error}
+          </div>
+        ) : null}
+        {report ? (
+          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
+            <div>
+              <strong>{report.rows} rows</strong> to import across {report.entities.length} entities
+            </div>
+
+            {/* Which state the target is actually in.
+                "Rows present and no marker" is not evidence that a run failed —
+                the first one finished before the marker table existed — so
+                count the two sides and say what they show. */}
+            {report.state?.imported ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                A previous import finished {new Date(report.state.completedAt).toLocaleString()}. Importing again would
+                duplicate every row.
+              </div>
+            ) : report.state?.verdict === 'complete' ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                This database already holds everything this plan would write
+                {report.state.targetRows ? ` (${report.state.targetRows} rows)` : ''}. The migration has run; it was just
+                never recorded.
+              </div>
+            ) : report.state?.verdict === 'partial' ? (
+              <div style={{ color: 'var(--on-surface-variant)' }}>
+                This database holds some of it and no finished import. Short:{' '}
+                {report.state.missing.map((m) => `${m.entity} ${m.have}/${m.want}`).join(', ')}.
+              </div>
+            ) : (
+              <div style={{ color: 'var(--on-surface-variant)' }}>The target is empty. Nothing has been imported yet.</div>
+            )}
+
+            {!report.state?.imported && report.state?.verdict === 'complete' ? (
+              <Button fullWidth variant="tonal" onClick={() => setConfirmRecord(true)} disabled={busy}>
+                Record this import as complete
+              </Button>
+            ) : null}
+
+            <details>
+              <summary style={{ font: 'var(--label-m)', padding: 'var(--space-2) 0' }}>
+                What is already in the target, entity by entity
+              </summary>
+              <table style={{ width: '100%', borderCollapse: 'collapse', font: 'var(--body-s)' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: 'var(--on-surface-variant)' }}>
+                    <th style={{ padding: 'var(--space-1) 0' }}>Entity</th>
+                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>To import</th>
+                    <th style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>Already there</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...new Set([...report.entities, ...Object.keys(report.targetCounts ?? {})])].map((e) => (
+                    <tr key={e}>
+                      <td style={{ padding: 'var(--space-1) 0' }}>{e}</td>
+                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>{report.sourceCounts?.[e] ?? 0}</td>
+                      <td style={{ padding: 'var(--space-1) 0', textAlign: 'right' }}>
+                        {report.targetCounts?.[e] ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+
+            <div>
+              Photos from {report.photosDir}: {report.photosToCopy} to copy, {report.photosMissingTotal} without a file
+              {report.photosDirFound ? null : ' (directory not readable on the server)'}
+            </div>
+            {report.notes.map((n) => (
+              <div key={n} style={{ color: 'var(--on-surface-variant)' }}>
+                {n}
+              </div>
+            ))}
+            {report.warnings.map((w) => (
+              <div key={w}>! {w}</div>
+            ))}
+            {report.warningTotal > report.warnings.length ? <div>…and {report.warningTotal - report.warnings.length} more</div> : null}
+            <Button fullWidth variant="destructive" onClick={() => setConfirmApply(true)} disabled={busy}>
+              Apply import
+            </Button>
+          </div>
+        ) : null}
+        {result ? (
+          <div style={{ font: 'var(--body-m)', display: 'grid', gap: 'var(--space-2)' }}>
+            <div>
+              <strong>
+                {result.recorded ? 'Recorded as complete.' : `Import ${result.ok ? 'complete' : 'finished with problems'}.`}
+              </strong>{' '}
+              {result.copied ? `Photos copied: ${result.copied}` : null}
+            </div>
+            {Object.entries(result.counts ?? {}).map(([entity, n]) => (
+              <div key={entity}>
+                {entity}: {n}
+              </div>
+            ))}
+            {(result.problems ?? []).map((p) => (
+              <div key={p}>! {p}</div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <Dialog
+        open={confirmRecord}
+        title="Record this import as complete?"
+        body="Marks the legacy migration as done without writing anything. It says the target already holds everything the plan would write, so the only thing missing is the record. Nothing is copied, nothing is deleted."
+        onDismiss={() => setConfirmRecord(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmRecord(false)}>
+              Cancel
+            </Button>
+            <Button onClick={recordComplete}>Record as complete</Button>
+          </>
+        }
+      />
+      <Dialog
+        open={confirmApply}
+        title="Apply legacy import?"
+        body="Every legacy row is inserted into the live database once. This cannot be undone — a second run is refused, so a partial failure needs manual repair."
+        onDismiss={() => setConfirmApply(false)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setConfirmApply(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={applyImport}>
+              Apply
+            </Button>
+          </>
+        }
+      />
+    </div>
+  )
+}
 
 export default function SetupScreen() {
   const { palette, setPalette, mode, setMode } = useTheme()
@@ -149,6 +381,8 @@ export default function SetupScreen() {
         onClick={signOut}
         trailing={<Icon name="right" size={20} />}
       />
+
+      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? <LegacyImportPanel /> : null}
 
       {/* Footnote, not a setting. Read from package.json at build time, so it
           cannot disagree with what shipped. The bottom padding clears the
