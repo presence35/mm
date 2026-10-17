@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet, Dialog } from '../ui'
+import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet, Dialog, ThemeIcon } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
@@ -15,23 +15,13 @@ const MODE_OPTIONS = [
   { value: 'dark', label: 'Dark' },
 ]
 
-const SWATCHES = {
-  legacy: ['#0a4f6e', '#e8b42e', '#2da84f'],
-  'deep-water': ['#00639b', '#8b5000', '#146c2e'],
-  'sunset-harbour': ['#a83f0d', '#00639b', '#146c2e'],
-  'storm-watch': ['#00694a', '#8a5a00', '#146c2e'],
-  'coral-bay': ['#a8203f', '#00694a', '#146c2e'],
-}
-
 function PalettePicker({ palette, onChange }) {
   return (
     <div className="palette-grid" role="radiogroup" aria-label="Colour palette">
       {PALETTES.map((p) => (
         <button key={p.id} className="palette-option" role="radio" aria-checked={palette === p.id} onClick={() => onChange(p.id)}>
-          <span className="palette-option__swatches" aria-hidden="true">
-            {SWATCHES[p.id].map((c) => (
-              <span key={c} className="palette-option__dot" style={{ background: c }} />
-            ))}
+          <span className="palette-option__mark">
+            <ThemeIcon palette={p.id} />
           </span>
           <span className="palette-option__text">
             <span className="palette-option__name">{p.name}</span>

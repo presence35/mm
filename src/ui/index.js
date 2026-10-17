@@ -6,6 +6,8 @@ export { default as Checkbox } from './Checkbox'
 export { TextField, SelectField, SearchBar } from './TextField'
 export { Snackbar, Dialog, Sheet, TopBar } from './Feedback'
 export { default as StageStrip } from './StageStrip'
+export { default as ThemeIcon } from './ThemeIcon'
+export { default as ProgressMeter } from './ProgressMeter'
 export { default as SlotGrid } from './SlotGrid'
 export { default as Collapsible } from './Collapsible'
 export {

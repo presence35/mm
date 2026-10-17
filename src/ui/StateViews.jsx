@@ -63,16 +63,21 @@ export function ErrorState({ title = 'Something went wrong', body, onRetry }) {
   )
 }
 
-/* Offline is persistent and non-blocking — reads still work. */
-export function OfflineBar({ state, pending }) {
+/* Offline is persistent and non-blocking — reads still work.
+   `floating` puts the notice over the content instead of above it: a sync
+   notice that reflows the page every time it appears is worse than one that
+   has to be rendered over the top of it. */
+export function OfflineBar({ state, pending, floating = false }) {
   if (state === 'synced' || state === 'idle') return null
+
+  const cls = `offline-bar${floating ? ' offline-bar--floating' : ''}`
 
   if (state === 'conflict') {
     /* Never render a count of zero: if nothing is open, there is nothing to
        review and this bar should not exist. */
     if (!pending) return null
     return (
-      <div className="offline-bar offline-bar--conflict" role="status">
+      <div className={`${cls} offline-bar--conflict`} role="status">
         <Icon name="alert" size={18} />
         Needs review — {pending} change{pending === 1 ? '' : 's'} conflicted
       </div>
@@ -81,7 +86,7 @@ export function OfflineBar({ state, pending }) {
 
   if (state === 'syncing') {
     return (
-      <div className="offline-bar offline-bar--syncing" role="status" aria-live="polite">
+      <div className={`${cls} offline-bar--syncing`} role="status" aria-live="polite">
         <Icon name="sync" size={18} />
         Syncing…
       </div>
@@ -89,7 +94,7 @@ export function OfflineBar({ state, pending }) {
   }
 
   return (
-    <div className="offline-bar" role="status">
+    <div className={cls} role="status">
       <Icon name="offline" size={18} />
       Offline — {pending} change{pending === 1 ? '' : 's'} saved on this device
     </div>

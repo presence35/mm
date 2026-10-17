@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, IconButton } from '../ui'
-import { useCards } from '../features/card/useCard.js'
+import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton } from '../ui'
+import { useCards, useRecentCards } from '../features/card/useCard.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
+import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
 import { statusMeta, countsByStatus } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
@@ -18,8 +19,10 @@ const FILTERS = [
 export default function CardsScreen({ embedded = false }) {
   const cards = useCards()
   const { navigate } = useRouter()
+  const { employee } = useAuth()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
+  const recentIds = useRecentCards(employee?.id)
 
   /* The count belongs on the chip: "In storage 4" answers "do I need to open
      this filter" without opening it, which is the whole value of the number. */
@@ -63,11 +66,23 @@ export default function CardsScreen({ embedded = false }) {
     }))
   }, [rows])
 
+  /* The shortcut back to the card you were just on. It is not a search result,
+     so it stands aside while the list is being filtered — "Recent" sitting
+     above "Nothing matches" would be a lie about what the screen is showing.
+     An id whose card has left the store (synced away, or never arrived here)
+     drops out rather than rendering a dead row. */
+  const recentRows = useMemo(() => {
+    if (filter !== 'all' || query.trim()) return []
+    const byId = new Map(rows.map((row) => [row.card.id, row]))
+    return recentIds.map((id) => byId.get(id)).filter(Boolean)
+  }, [recentIds, rows, query, filter])
+
   const renderRow = ({ card, boat, customer }) => {
     const meta = statusMeta(card.status)
     return (
       <ListItem
         key={card.id}
+        tone={meta.tone}
         title={`${card.work_order_no} · ${boat?.name || boat?.model || 'Unnamed boat'}`}
         support={[customer?.name, locationSummary(card)].filter(Boolean).join(' · ')}
         onClick={() => navigate('card', { id: card.id })}
@@ -120,6 +135,14 @@ export default function CardsScreen({ embedded = false }) {
           )
         })}
       </ChipRow>
+
+      {recentRows.length ? (
+        <div style={{ marginTop: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+          <Collapsible title="Recent" count={recentRows.length} defaultOpen>
+            {recentRows.map(renderRow)}
+          </Collapsible>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="state-view">

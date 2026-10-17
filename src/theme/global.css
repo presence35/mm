@@ -79,7 +79,7 @@ html {
 
 body {
   margin: 0;
-  background: var(--surface);
+  background: var(--surface-page);
   color: var(--on-surface);
   font: var(--body-m);
   -webkit-font-smoothing: antialiased;
@@ -91,7 +91,10 @@ h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd {
   margin: 0;
 }
 
-ul[class], ol[class] {
+/* Deliberately zero-specificity: `ul[class]` outranked `.stage-strip` and
+   silently ate its padding, so a component rule could never put spacing back
+   on a list. :where() keeps the reset a default, not an override. */
+:where(ul[class], ol[class]) {
   list-style: none;
   margin: 0;
   padding: 0;

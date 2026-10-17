@@ -1000,6 +1000,24 @@ button.slot:active { filter: brightness(0.94); }
 .offline-bar--syncing { background: var(--primary-container); color: var(--on-primary-container); }
 .offline-bar--conflict { background: var(--error-container); color: var(--on-error-container); }
 
+/* In the shell the notice floats: the content underneath never moves, so a
+   sync cycle cannot reflow the list a worker is reading. Fixed rather than
+   absolute so it does not scroll away with the content, and it is silent to
+   the pointer because it is a status, not a control. */
+.offline-bar--floating {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + var(--top-bar-height) + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: max-content;
+  max-width: min(92vw, 30rem);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--corner-full);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+}
+
 .progress-circular {
   width: 32px;
   height: 32px;
@@ -1054,13 +1072,7 @@ button.slot:active { filter: brightness(0.94); }
   color: var(--on-primary-container);
 }
 
-.palette-option__swatches { display: flex; gap: var(--space-1); flex-shrink: 0; }
-.palette-option__dot {
-  width: 16px;
-  height: 16px;
-  border-radius: var(--corner-full);
-  box-shadow: inset 0 0 0 1px var(--outline-variant);
-}
+.palette-option__mark { display: flex; flex-shrink: 0; }
 .palette-option__text { min-width: 0; flex: 1; }
 .palette-option__name { display: block; font: var(--title-s); }
 .palette-option__desc { display: block; font: var(--body-s); color: var(--on-surface-variant); }
@@ -1106,22 +1118,54 @@ button.slot:active { filter: brightness(0.94); }
   .split { flex-direction: column; }
   .split__list { width: 100%; border-right: 0; }
 }
+/* ---------------------------------------------------- Stage / progress -- */
+
+/* The one-line meter under the stage strip: same fact, small horizontal bar.
+   Fill is the primary colour paired with the "4 of 9" word — the bar alone
+   never has to be read. */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+}
+
+.meter__track {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--corner-full);
+  background: var(--surface-container-highest);
+  overflow: hidden;
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--corner-full);
+  background: var(--primary);
+}
+
+.meter__word {
+  font: var(--label-s);
+  color: var(--on-surface-variant);
+  flex-shrink: 0;
+}
+
 /* ----------------------------------------------------------- Stage strip -- */
 
-/* One row, horizontally scrollable. Nine stages will not fit on a phone, and
-   wrapping them into a wall of capsules costs more vertical space than the bar
-   it replaced. */
+/* Wraps. It used to scroll horizontally on one line, which hid the later
+   stages behind a scrollbar we deliberately suppress: on a phone the far right
+   capsule looked like the end of the list. Wrapping costs vertical space and is
+   the only honest option when the control offers nothing to say it continues. */
 .stage-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
-  overflow-x: auto;
-  scrollbar-width: none;
   list-style: none;
   margin: 0;
 }
 
-.stage-strip::-webkit-scrollbar { display: none; }
 .stage-strip__item { flex: 0 0 auto; }
 
 .stage {
@@ -1129,7 +1173,7 @@ button.slot:active { filter: brightness(0.94); }
   align-items: center;
   gap: var(--space-1);
   min-height: 32px;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   border-radius: var(--corner-full);
   font: var(--label-m);
   white-space: nowrap;
@@ -1139,7 +1183,10 @@ button.slot:active { filter: brightness(0.94); }
 }
 
 /* The 48px target lives outside the 32px capsule, so the strip stays dense
-   without shrinking the hit area under a glove. */
+   without shrinking the hit area under a glove. It has to stay clickable —
+   with pointer-events: none it was decoration, and the real target was the
+   capsule. Rows now wrap, so the band has room without being clipped, and
+   stacked rows only ever meet edge to edge. */
 .stage::before {
   content: '';
   position: absolute;
@@ -1148,7 +1195,6 @@ button.slot:active { filter: brightness(0.94); }
   top: 50%;
   height: var(--target-min);
   transform: translateY(-50%);
-  pointer-events: none;
 }
 
 .stage__mark {
@@ -1260,10 +1306,8 @@ button.slot:active { filter: brightness(0.94); }
    the other four palettes keep the Material treatment untouched, and token
    valued so no screen or stylesheet picks a literal. */
 
-:root[data-palette='legacy'] body {
-  background: var(--surface-container);
-}
-
+/* The page tint is the palette's own now (tokens.css, --surface-page), so every
+   palette paints its ground rather than only legacy. White flat cards stay. */
 :root[data-palette='legacy'] .card {
   background: var(--surface-container-lowest);
   border: 1px solid var(--outline-variant);
@@ -1290,6 +1334,39 @@ button.slot:active { filter: brightness(0.94); }
   font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: 0.06em;
+}
+
+/* Row as card (legacy). Rows that carry a lifecycle — the toned items the
+   card/boat/owner lists render — close with a status-coloured leading edge the
+   way the retired app's cards did. Colour rides the same `statusMeta.tone` the
+   trailing pill shows, so the two cannot disagree, and the pill keeps the
+   label so the edge is never the only signal. Plain rows (logs, staff) keep
+   the hairline-divider look. */
+:root[data-palette='legacy'] .list-item[data-tone] {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-left: 3px solid var(--outline);
+  border-radius: var(--corner-l);
+  margin-block: var(--space-2);
+  box-shadow: none;
+}
+
+:root[data-palette='legacy'] .list-item[data-tone='progress'] { border-left-color: var(--primary); }
+:root[data-palette='legacy'] .list-item[data-tone='action'] { border-left-color: var(--tertiary); }
+:root[data-palette='legacy'] .list-item[data-tone='done'] { border-left-color: var(--success); }
+:root[data-palette='legacy'] .list-item[data-tone='warn'] { border-left-color: var(--warning); }
+:root[data-palette='legacy'] .list-item[data-tone='error'] { border-left-color: var(--error); }
+
+/* A toned row is its own card, so the row hairline never runs through one. */
+:root[data-palette='legacy'] .list-item[data-tone] + .list-item { box-shadow: none; }
+
+/* When a card exists only to group toned rows (the same boat's several
+   seasons), it drops its own frame: the rows are the cards now, and a bordered
+   box around bordered boxes reads as a mistake. Its head text stays. */
+:root[data-palette='legacy'] .card:has(.list-item[data-tone]) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* ---------------------------------------------------------------- Checkbox --

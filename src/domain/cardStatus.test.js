@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, countsByStatus, OPTIONAL_STAGES, activeCardFor } from './cardStatus.js'
+import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, stageProgress, countsByStatus, OPTIONAL_STAGES, activeCardFor } from './cardStatus.js'
 
 /* No-mirror rule: every status pairs colour (tone) with a label and a shape. */
 test('every status carries label + tone + shape, so colour never stands alone', () => {
@@ -66,6 +66,13 @@ test('stage phase is positional: behind is done, equal is current, ahead is futu
 test('an unknown status yields no current stage instead of a wrong one', () => {
   assert.equal(stagePhase('bogus', 'intake'), 'future')
   assert.equal(stagePhase('intake', 'bogus'), 'future')
+})
+
+test('the progress bar counts positionally, and an unknown status gets no bar', () => {
+  assert.deepEqual(stageProgress('intake'), { done: 1, total: 9 })
+  assert.deepEqual(stageProgress('service'), { done: 5, total: 9 })
+  assert.deepEqual(stageProgress('archived'), { done: 9, total: 9 })
+  assert.equal(stageProgress('bogus'), null)
 })
 
 test('counts bucket every card, including an unrecognised status', () => {

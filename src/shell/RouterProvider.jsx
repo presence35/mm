@@ -1,6 +1,8 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, Button } from '../ui'
 import { holdReload } from '../engines/pwa/update.js'
+import { useAuth } from '../engines/auth/AuthProvider.jsx'
+import { rememberCard } from '../engines/recents.js'
 
 /*
  * Router — a plain module, not a ported dependency.
@@ -21,9 +23,21 @@ export function RouterProvider({ children }) {
   const dirtyRef = useRef(false)
   const [pending, setPending] = useState(null)
 
+  const { employee } = useAuth()
+
   useEffect(() => {
     window.history.replaceState({ idx: 0 }, '')
   }, [])
+
+  /* Recents are recorded here rather than in each screen that opens a card:
+     one choke point, so a new entry point (a map cell, a boat's row, a
+     schedule) cannot forget to record. This watches what actually became the
+     current screen, so a navigation the worker cancels never lands in the
+     list. */
+  useEffect(() => {
+    const top = stack[stack.length - 1]
+    if (top?.screen === 'card' && top.params?.id) rememberCard(employee?.id, top.params.id)
+  }, [stack, employee])
 
   const perform = useCallback((fn) => {
     fn()

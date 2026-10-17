@@ -70,6 +70,7 @@ export default function BoatsScreen() {
             <ListItem
               key={boat.id}
               icon="boat"
+              tone={meta?.tone}
               title={boat.name || boat.model || 'Unnamed boat'}
               support={[
                 [boat.model, boat.motor_type].filter(Boolean).join(' · '),

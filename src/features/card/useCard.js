@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as store from '../../engines/store/localStore.js'
+import * as recents from '../../engines/recents.js'
 import { setRating, setNote } from './conditionModel.js'
 
 /* Feature-level data access.
@@ -14,6 +15,21 @@ export function useCards() {
   }, [])
 
   return cards
+}
+
+/* The cards this worker last opened, newest first. Re-read when the employee
+   changes as well as when the list does — a shared phone changes hands without
+   the app reloading. */
+export function useRecentCards(employeeId) {
+  const [ids, setIds] = useState(() => recents.readRecents(employeeId))
+
+  useEffect(() => {
+    const refresh = () => setIds(recents.readRecents(employeeId))
+    refresh()
+    return recents.subscribeRecents(refresh)
+  }, [employeeId])
+
+  return ids
 }
 
 export function useCard(id) {

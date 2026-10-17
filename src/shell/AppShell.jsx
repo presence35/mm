@@ -121,7 +121,7 @@ export default function AppShell() {
           ? current.screen
           : null
 
-  const offline = <OfflineBar state={sync.state} pending={sync.pending} />
+  const offline = <OfflineBar state={sync.state} pending={sync.pending} floating />
 
   if (split) {
     return (

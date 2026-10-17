@@ -16,10 +16,13 @@ export function Divider({ className = '' }) {
   return <hr className={`divider ${className}`.trim()} />
 }
 
-export function ListItem({ icon, title, support, trailing, onClick, disabled, children, ...rest }) {
+/* `tone`, when passed, comes from the same statusMeta call that drives the
+   trailing StatusPill — one source, one read. It only paints the legacy
+   palette's leading edge; every other attribute on the item is untouched. */
+export function ListItem({ icon, title, support, trailing, onClick, disabled, tone, children, ...rest }) {
   const Wrapper = onClick ? 'button' : 'div'
   return (
-    <Wrapper className="list-item" onClick={onClick} disabled={disabled || undefined} {...rest}>
+    <Wrapper className="list-item" onClick={onClick} disabled={disabled || undefined} data-tone={tone ?? undefined} {...rest}>
       {icon ? (
         <span className="list-item__leading">
           <Icon name={icon} size={24} />

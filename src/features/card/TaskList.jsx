@@ -1,4 +1,4 @@
-import { ListItem, StatusPill, Chip, ChipRow, IconButton } from '../../ui'
+import { ListItem, StatusPill, Chip, ChipRow, Button } from '../../ui'
 
 /* Intake + authorized work.
    Received items are filter chips (toggling presence). Authorized work is a
@@ -38,12 +38,11 @@ export function ReceivedItems({ items, selected, onToggle, onPhotograph }) {
         >
           <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>Photograph what was handed over:</span>
           {selected.map((item) => (
-            <IconButton
-              key={item}
-              icon="camera"
-              label={`Photograph ${words(item)}`}
-              onClick={() => onPhotograph?.(item)}
-            />
+            /* Named, not a bare camera glyph: the button opens a file picker,
+               so it has to say what the photo is of before it is tapped. */
+            <Button key={item} variant="tonal" size="sm" icon="camera" onClick={() => onPhotograph?.(item)}>
+              {words(item)}
+            </Button>
           ))}
         </div>
       ) : null}

@@ -75,6 +75,7 @@ export default function PeopleDetailScreen({ params = {} }) {
           return (
             <ListItem
               key={c.id}
+              tone={meta.tone}
               title={`${c.work_order_no} · ${boat?.name || boat?.model || 'Unnamed boat'}`}
               support={`${locationSummary(c)} · in ${c.date_in ?? '—'}`}
               onClick={() => navigate('card', { id: c.id })}

@@ -2,11 +2,12 @@
    Marina Manager — design tokens
    Material Design 3. Semantic roles only. No screen may reference a literal.
 
-   A palette is four variables: a primary hue, its chroma, and the same for
-   the tertiary accent. Everything else — every surface, every container, the
-   whole neutral family — is derived from that one hue. Adding a palette costs
-   four lines instead of forty, and no palette can drift out of contrast with
-   the rest of the ramp because they all share the same lightness profile.
+   A palette is five variables: a primary hue, its chroma, the same for the
+   tertiary accent, how hard the hue tints the neutral family, and how hard it
+   tints the page. Everything else — every surface, every container, the whole
+   neutral family — is derived from those. Adding a palette costs five lines
+   instead of forty, and no palette can drift out of contrast with the rest of
+   the ramp because they all share the same lightness profile.
 
    Lightness is set once per mode. Roles are defined once. A palette only ever
    moves hue and chroma, never lightness, so contrast holds everywhere.
@@ -37,6 +38,11 @@
      not a global one: the legacy palettes tint their greys far harder than the
      derived ones, which is most of what made them look warm rather than grey. */
   --neutral-chroma: 18%;
+
+  /* And how hard it bleeds into the page. Higher than the neutral tint on
+     purpose — a surface one step off white needs more chroma to read as a
+     colour than a text-bearing grey does. */
+  --page-chroma: 18%;
 
   /* --- Mode: light lightness profile ------------------------------------- */
   --l-primary: 40%;
@@ -70,6 +76,9 @@
   --l-on-error-container: 15%;
 
   --l-surface: 99%;
+  /* The page is one step below the surfaces that sit on it, in both modes —
+     that step is what lets a palette be seen at all. */
+  --l-page: 95%;
   --l-on-surface: 12%;
   --l-surface-variant: 90%;
   --l-on-surface-variant: 36%;
@@ -95,9 +104,22 @@
   --shadow-4: 0 2px 3px rgba(0, 0, 0, 0.28), 0 6px 10px 4px rgba(0, 0, 0, 0.13);
   --shadow-5: 0 4px 4px rgba(0, 0, 0, 0.28), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
 
-  /* --- Roles --------------------------------------------------------------
-     Defined once. Every value below is a function of the palette and mode
-     above; this block never changes per palette. */
+}
+
+/* --- Roles --------------------------------------------------------------
+   Defined once. Every value is a function of the palette and mode variables
+   above; nothing here changes per palette.
+
+   The selector is `[data-palette], :root` rather than `:root` on purpose. A
+   custom property is substituted where it is declared, so a role written only
+   on `:root` bakes in the root's `--hue` and inherits down as a fixed colour —
+   re-declaring a palette on a descendant would change nothing. Matching any
+   palette-carrying element recomputes the roles wherever a palette is set,
+   which is what lets the picker draw five palettes inside a page using one of
+   them. Lightness still comes from the mode on `:root`, so a nested palette
+   previews hue and chroma at the mode you are in. */
+[data-palette],
+:root {
   --primary: hsl(var(--hue) var(--chroma) var(--l-primary));
   --on-primary: hsl(var(--hue) 40% var(--l-on-primary));
   --primary-container: hsl(var(--hue) calc(var(--chroma) * 0.85) var(--l-primary-container));
@@ -131,6 +153,12 @@
   --on-error-container: hsl(var(--hue-error) var(--chroma-error) var(--l-on-error-container));
 
   --surface: hsl(var(--hue) var(--neutral-chroma) var(--l-surface));
+  /* The page, and the reason a palette is visible at all: the ground you stand
+     on carries the hue far harder than the M3 ramp above it does. Without it a
+     palette changed the buttons and left the screen white — five themes that
+     looked like one. Its lightness is a mode property (light paper, dark paper)
+     and its chroma is a palette property. */
+  --surface-page: hsl(var(--hue) var(--page-chroma) var(--l-page));
   --on-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-on-surface));
   --surface-variant: hsl(var(--hue) var(--neutral-chroma) var(--l-surface-variant));
   --on-surface-variant: hsl(var(--hue) var(--neutral-chroma) var(--l-on-surface-variant));
@@ -150,7 +178,9 @@
   --inverse-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-inverse-surface));
   --inverse-on-surface: hsl(var(--hue) var(--neutral-chroma) var(--l-inverse-on-surface));
   --inverse-primary: hsl(var(--hue) var(--chroma) var(--l-inverse-primary));
+}
 
+:root {
   /* --- Typography: fluid, mobile-first, capped on desktop ---------------- */
   --font-brand: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
@@ -243,11 +273,18 @@
 /* ============================================================================
    Palettes — five lines each. Names carry over from the previous app so staff
    recognise them; the default is now `legacy`, the colouring the retired app
-   actually shipped. Only hue, chroma and the neutral tint move; contrast is
-   guaranteed by the shared lightness profile above.
+   actually shipped. Only hue, chroma and the tints move; contrast is guaranteed
+   by the shared lightness profile above.
+
+   Selector note: these are deliberately NOT scoped to `:root`. Any element can
+   carry a palette, which is what lets the picker draw each option in the
+   colours of the palette it is advertising — through the same tokens, rather
+   than a second copy of this derivation kept in a table of hex codes in a
+   screen. Lightness stays with the mode, so a nested palette previews hue and
+   chroma only.
    ========================================================================= */
 
-:root[data-palette='legacy'] {
+[data-palette='legacy'] {
   --hue: 198;
   /* 62% measured 4.50:1 against white — the AA floor, with nothing to spare.
      56% keeps the saturation and sits at 4.62:1. */
@@ -255,6 +292,7 @@
   --hue-tertiary: 30;
   --chroma-tertiary: 68%;
   --neutral-chroma: 18%;
+  --page-chroma: 18%;
 
   /* The retired app's faces: Bebas Neue headlines (it has no lowercase, so
      headings read uppercase by construction), Barlow Condensed controls.
@@ -268,36 +306,45 @@
   --title-l: 600 1.1875rem / 1.3 var(--font-brand);
 }
 
-:root[data-palette='deep-water'] {
+[data-palette='deep-water'] {
   --hue: 205;
   --chroma: 42%;
   --hue-tertiary: 30;
   --chroma-tertiary: 44%;
   --neutral-chroma: 12%;
+  /* Deep water behind a pale blue page. Hue 198 is the legacy teal, so this one
+     needs more chroma to read as its own colour rather than as legacy. */
+  --page-chroma: 42%;
 }
 
-:root[data-palette='sunset-harbour'] {
+[data-palette='sunset-harbour'] {
   --hue: 24;
   --chroma: 48%;
   --hue-tertiary: 205;
   --chroma-tertiary: 40%;
   --neutral-chroma: 12%;
+  /* Golden hour paper. */
+  --page-chroma: 32%;
 }
 
-:root[data-palette='storm-watch'] {
+[data-palette='storm-watch'] {
   --hue: 158;
   --chroma: 26%;
   --hue-tertiary: 62;
   --chroma-tertiary: 30%;
   --neutral-chroma: 12%;
+  /* Rugged and quiet: the page is tinted, not painted. */
+  --page-chroma: 26%;
 }
 
-:root[data-palette='coral-bay'] {
+[data-palette='coral-bay'] {
   --hue: 352;
   --chroma: 40%;
   --hue-tertiary: 168;
   --chroma-tertiary: 38%;
   --neutral-chroma: 12%;
+  /* Bright and tropical: the strongest page of the five. */
+  --page-chroma: 40%;
 }
 
 /* ============================================================================
@@ -339,6 +386,7 @@
   --l-on-error-container: 90%;
 
   --l-surface: 8%;
+  --l-page: 13%;
   --l-on-surface: 91%;
   --l-surface-variant: 26%;
   --l-on-surface-variant: 78%;
@@ -401,6 +449,7 @@
     --l-on-error-container: 90%;
 
     --l-surface: 8%;
+    --l-page: 13%;
     --l-on-surface: 91%;
     --l-surface-variant: 26%;
     --l-on-surface-variant: 78%;

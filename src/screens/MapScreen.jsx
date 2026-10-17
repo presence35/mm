@@ -61,8 +61,8 @@ export default function MapScreen() {
 
   const views = [
     { value: 'list', label: 'List' },
-    ...(buildings.length ? [{ value: 'buildings', label: 'Buildings' }] : []),
-    ...(hasBoathouses ? [{ value: 'boathouses', label: 'Boathouses' }] : []),
+    ...(buildings.length ? [{ value: 'buildings', label: 'Building' }] : []),
+    ...(hasBoathouses ? [{ value: 'boathouses', label: 'Boathouse' }] : []),
   ]
   /* A view can stop being offered while it is selected — the last boat leaves
      the buildings, or a sync replaces the layout. Fall back rather than render

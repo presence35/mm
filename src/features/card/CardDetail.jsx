@@ -11,8 +11,9 @@ import {
   Divider,
   Collapsible,
   StageStrip,
+  ProgressMeter,
 } from '../../ui'
-import { STAGES, stagePhase, canTransition } from '../../domain/cardStatus.js'
+import { STAGES, stagePhase, stageProgress, canTransition } from '../../domain/cardStatus.js'
 import { locationSummary, STORAGE_TYPES } from '../../domain/storageLocation.js'
 import { SEED_RECEIVED_ITEMS, SEED_AUTHORIZED_WORK, SEED_CONDITIONS } from '../../engines/store/seed.js'
 import ConditionEditor, { summarise } from './ConditionEditor.jsx'
@@ -63,6 +64,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
     selectable: canTransition(card.status, s.key),
   }))
   const canMove = stages.some((s) => s.selectable)
+  const progress = stageProgress(card.status)
 
   const received = card.received_items ?? []
   const authorized = (card.authorized_work ?? []).filter((w) => w.authorized)
@@ -112,6 +114,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
       {/* The stage control is also the way forward and back. Legal targets are
           the only ones rendered as buttons, and legality lives in
           domain/cardStatus.js, not here. */}
+      {progress ? <ProgressMeter done={progress.done} total={progress.total} /> : null}
       <StageStrip stages={stages} onSelect={(key) => actions.patch({ status: key })} />
       <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4)' }}>
         {canMove ? 'Tap the next stage to move this card on.' : 'This card is archived. Nothing further to do.'}

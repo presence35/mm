@@ -78,7 +78,7 @@ Five top-level destinations. M3 caps a navigation bar at five; we are at the lim
 
 | Destination | Contents | Primary action |
 |---|---|---|
-| **Cards** | The work queue, filtered by status, boat, customer. | Open a card |
+| **Cards** | The work queue, filtered by status, boat, customer. A **Recent** section sits above the list — the cards this worker last opened, on this device. | Open a card |
 | **People** | Customers and their boats. | Open a customer |
 | **Map** | Where a boat physically is, by storage type. | Locate a slip / row / column |
 | **Setup** | Theme, offline state, sync queue, account. | — |
@@ -87,6 +87,8 @@ Five top-level destinations. M3 caps a navigation bar at five; we are at the lim
 Contextual only, never in navigation: Card detail · New card wizard · New log · **Schedule** · New appointment · Invoice · **Needs review (conflicts)** · Admin (`admin` only) · Customer public view.
 
 **Schedule is contextual, not a sixth destination.** M3 caps a navigation bar at five and we are at the limit, so the schedule board is reached from Cards and from a card, and adopts the Cards destination for navigation highlighting.
+
+**Recents is a section, not a destination.** The same cap keeps it inside Cards: a strip above the list, five entries, per worker and per device, gone if the browser clears its storage. It is a shortcut back, not a record — nothing about it is synced.
 
 ### Navigation by window size
 
@@ -216,9 +218,11 @@ Justified seams — exactly three:
 
 Semantic roles only, defined in `src/theme/tokens.css`. No literal values in screens.
 
-**Colour** — `surface` · `surfaceDim` · `surfaceBright` · `surfaceContainerLowest` · `surfaceContainerLow` · `surfaceContainer` · `surfaceContainerHigh` · `surfaceContainerHighest` · `onSurface` · `onSurfaceVariant` · `outline` · `outlineVariant` · `primary` · `onPrimary` · `primaryContainer` · `onPrimaryContainer` · `secondary` · `onSecondary` · `secondaryContainer` · `onSecondaryContainer` · `tertiary` · `onTertiary` · `error` · `onError` · `errorContainer` · `onErrorContainer` · `scrim` · `inverseSurface` · `inverseOnSurface` · `inversePrimary`
+**Colour** — `surface` · `surfacePage` · `surfaceDim` · `surfaceBright` · `surfaceContainerLowest` · `surfaceContainerLow` · `surfaceContainer` · `surfaceContainerHigh` · `surfaceContainerHighest` · `onSurface` · `onSurfaceVariant` · `outline` · `outlineVariant` · `primary` · `onPrimary` · `primaryContainer` · `onPrimaryContainer` · `secondary` · `onSecondary` · `secondaryContainer` · `onSecondaryContainer` · `tertiary` · `onTertiary` · `error` · `onError` · `errorContainer` · `onErrorContainer` · `scrim` · `inverseSurface` · `inverseOnSurface` · `inversePrimary`
 
 > M3 has no `success` role. The READY and archived card states need one. Define it as a **deliberate extension**, documented here — not smuggled in as a raw green.
+
+**Palettes** — a palette is a hue, its chroma, a tertiary hue and chroma, and how hard the hue tints the neutral family and the page. It never carries lightness: light and dark are the modes' business, so every palette has a version of both and no palette can drag its own contrast out of the shared ramp. `surfacePage` is the page itself — one step below the surfaces that sit on it, and deliberately tinted harder than they are, because the M3 ramp suppresses chroma far too much at 95% lightness for a theme to be visible through it. The theme picker shows each palette's own colours in a mark, and gets them from the palette itself: `ThemeIcon` sets `data-palette` on its own element, so the same tokens are recomputed there. There is no swatch table in the screen — a second copy of five palettes would be wrong the first time a hue was retuned, and the picker would be advertising the old one.
 
 **Type** — `displayL/M/S` · `headlineL/M/S` · `titleL/M/S` · `bodyL/M/S` · `labelL/M/S`. Fluid via `clamp()`, capped so desktop does not balloon.
 
@@ -322,9 +326,15 @@ src/
                    version.js at build time; it carries the commit, so a deploy
                    that only changed code still reads as a different build.
   theme/     tokens.css, global.css, ThemeProvider.jsx
-  ui/        Icon, Button, Checkbox, Surface, Chip, TextField, Feedback,
-             StateViews, StageStrip, Collapsible, SlotGrid,
-             ui.css, index.js               — stateless, token-driven
+  ui/        Icon, ThemeIcon, Button, Checkbox, Surface, Chip, TextField,
+             Feedback, StateViews, StageStrip, ProgressMeter, Collapsible,
+             SlotGrid, ui.css, index.js     — stateless, token-driven
+             *Note:* ThemeIcon is the one primitive that sets `data-palette` on
+             itself, so the palette blocks in tokens.css resolve again inside
+             it and each mark is drawn in the colours of the palette it
+             advertises. That is why those blocks are `[data-palette='x']` and
+             not `:root[data-palette='x']`, and why the derived colour roles
+             live under `[data-palette], :root`.
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
              *Note:* AppShell.NAV is the only list of destinations. The router
              used to export a second one; nothing imported it, and a new tab had
@@ -346,6 +356,13 @@ src/
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
+    recents.js — the cards this worker last opened, on this device: five, newest
+             first, keyed by employee so a shared phone does not mix two people's
+             lists. localStorage, not the card store, because it is a fact about
+             this phone and must never reach the outbox, a push or a conflict.
+             Recorded in the router's navigate, the one place that knows a card
+             was actually opened. recents.test.js pins the cap, the per-worker
+             key and the behaviour on corrupt storage.
     media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js, schedule.js, conflictDiff.js
               — pure, deterministic

@@ -104,6 +104,16 @@ export function stagePhase(current, stage) {
   return at < now ? 'done' : 'future'
 }
 
+/* The small progress bar's numbers, so the meter and the strip cannot disagree.
+   Positional like stagePhase: the bar measures where the card sits, and an
+   optional stage skipped stays without a dent. Unknown status → null — no bar
+   rather than a wrong one. */
+export function stageProgress(status) {
+  const at = STATUS_ORDER.indexOf(status)
+  if (at < 0) return null
+  return { done: at + 1, total: STATUS_ORDER.length }
+}
+
 /* Counts for the Cards filter chips. Every card lands in exactly one bucket,
    so the counts sum to the list length; an unrecognised status still gets a
    bucket rather than vanishing from a total. */
