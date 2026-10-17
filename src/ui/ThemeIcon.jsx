@@ -109,7 +109,7 @@ const MARKS = {
   ),
 }
 
-export default function ThemeIcon({ palette, size = 28 }) {
+export default function ThemeIcon({ palette, size = 48 }) {
   const mark = MARKS[palette]
   if (!mark) return null
   return (

@@ -25,13 +25,7 @@ function PalettePicker({ palette, onChange }) {
           </span>
           <span className="palette-option__text">
             <span className="palette-option__name">{p.name}</span>
-            <span className="palette-option__desc">{p.desc}</span>
           </span>
-          {palette === p.id ? (
-            <span className="palette-option__check">
-              <Icon name="check" size={18} />
-            </span>
-          ) : null}
         </button>
       ))}
     </div>

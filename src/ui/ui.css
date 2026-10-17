@@ -1074,11 +1074,18 @@ button.slot:active { filter: brightness(0.94); }
 
 .palette-option__mark { display: flex; flex-shrink: 0; }
 .palette-option__text { min-width: 0; flex: 1; }
-.palette-option__name { display: block; font: var(--title-s); }
-.palette-option__desc { display: block; font: var(--body-s); color: var(--on-surface-variant); }
-.palette-option[aria-checked='true'] .palette-option__desc { color: inherit; opacity: 0.8; }
-.palette-option__check { flex-shrink: 0; color: var(--primary); }
-.palette-option[aria-checked='true'] .palette-option__check { color: var(--on-primary-container); }
+/* Two lines, no more. Every option is therefore the same height: the mark is a
+   fixed 48px and the name clamps to two lines, so a long name cannot make one
+   option taller than the rest. */
+.palette-option__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: block;
+  font: var(--title-s);
+  overflow: hidden;
+  word-break: break-word;
+}
 
 /* ------------------------------------------------------------ Key/value -- */
 
@@ -1237,6 +1244,13 @@ button.slot:active { filter: brightness(0.94); }
 
 /* ------------------------------------------------------------ Collapsible -- */
 
+.collapsible {
+  /* A closed section is a white band with a hairline under its head; an open
+     one is a tinted band, so the head reads as part of the panel it reveals.
+     The chevron turns over with it. */
+  border-radius: var(--corner-m);
+}
+
 .collapsible__head {
   display: flex;
   align-items: center;
@@ -1249,9 +1263,28 @@ button.slot:active { filter: brightness(0.94); }
   font: var(--label-l);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  transition: background-color var(--duration-short-2) var(--easing-standard),
+              color var(--duration-short-2) var(--easing-standard);
 }
 
-.collapsible__chevron { flex-shrink: 0; }
+.collapsible[data-open='false'] .collapsible__head {
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.collapsible[data-open='true'] .collapsible__head {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.collapsible__chevron {
+  flex-shrink: 0;
+  transition: transform var(--duration-short-2) var(--easing-standard);
+}
+
+.collapsible[data-open='true'] .collapsible__chevron {
+  transform: rotate(180deg);
+}
+
 .collapsible__title { flex-shrink: 0; }
 
 /* The count answers "is there anything in here" without opening the section. */
@@ -1264,6 +1297,11 @@ button.slot:active { filter: brightness(0.94); }
   color: var(--on-secondary-container);
   font: var(--label-s);
   text-align: center;
+}
+
+.collapsible[data-open='true'] .collapsible__count {
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
 }
 
 /* One line when closed. Truncates rather than wrapping, so a long summary
@@ -1281,6 +1319,10 @@ button.slot:active { filter: brightness(0.94); }
   white-space: nowrap;
 }
 
+.collapsible__panel {
+  border-top: 1px solid var(--outline-variant);
+  border-bottom: 1px solid var(--outline-variant);
+}
 .collapsible__panel[hidden] { display: none; }
 /* Count riding on a filter chip. Answers "is this filter worth opening"
    without opening it. */

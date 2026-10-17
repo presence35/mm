@@ -19,7 +19,7 @@ export default function Collapsible({ title, summary, count, defaultOpen = false
   const buttonId = `${id}-button`
 
   return (
-    <section className="collapsible">
+    <section className="collapsible" data-open={open ? 'true' : 'false'}>
       <h3 style={{ margin: 0 }}>
         <button
           id={buttonId}
@@ -29,7 +29,7 @@ export default function Collapsible({ title, summary, count, defaultOpen = false
           aria-controls={panelId}
           onClick={() => setOpen((v) => !v)}
         >
-          <Icon name={open ? 'down' : 'right'} size={20} className="collapsible__chevron" />
+          <Icon name="down" size={24} className="collapsible__chevron" />
           <span className="collapsible__title">{title}</span>
           {typeof count === 'number' && count > 0 ? <span className="collapsible__count">{count}</span> : null}
           {!open && summary ? <span className="collapsible__summary">{summary}</span> : null}

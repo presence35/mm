@@ -7,11 +7,11 @@ const PALETTE_KEY = 'mm.palette'
 const MODE_KEY = 'mm.theme'
 
 export const PALETTES = [
-  { id: 'legacy', name: 'Legacy', desc: 'The old app, teal on cream' },
-  { id: 'deep-water', name: 'Deep Water', desc: 'Classic nautical' },
-  { id: 'sunset-harbour', name: 'Sunset Harbour', desc: 'Warm & golden' },
-  { id: 'storm-watch', name: 'Storm Watch', desc: 'Rugged & green' },
-  { id: 'coral-bay', name: 'Coral Bay', desc: 'Bright & tropical' },
+  { id: 'legacy', name: 'Legacy' },
+  { id: 'deep-water', name: 'Deep Water' },
+  { id: 'sunset-harbour', name: 'Sunset Harbour' },
+  { id: 'storm-watch', name: 'Storm Watch' },
+  { id: 'coral-bay', name: 'Coral Bay' },
 ]
 
 const PALETTE_IDS = new Set(PALETTES.map((p) => p.id))
