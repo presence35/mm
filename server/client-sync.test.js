@@ -28,6 +28,7 @@ const idb = await import('../src/engines/store/idb.js')
 
 let base
 let token
+let employeeId
 let server
 
 test.after(() => {
@@ -50,6 +51,7 @@ test('setup: server up, session in', async () => {
   const body = await res.json()
   assert.equal(res.status, 200)
   token = body.token
+  employeeId = body.employee.id
   assert.equal(body.employee.role, 'admin')
 })
 
@@ -106,21 +108,23 @@ test('two devices editing offline: both survive, conflict is flagged', async () 
   /* Device 2 already has the row at version 1. */
   const starting = await idb.get('customers', 'c-1')
 
-  /* Two devices go offline and each edit the same field. */
-  await idb.putAndQueue('customers', { ...starting, city: 'Courtney' })
+  /* Device 2 writes through its own connection. The local outbox is this
+     device's intent only — a second device is rehearsed with a raw push, not
+     by double-queueing into the same outbox. */
+  await transport.push(token, 'dev-2', [{
+    op_id: 'op-dev2-courtney',
+    entity: 'customers', entity_id: 'c-1', op: 'upsert',
+    rev: starting.version,
+    payload: { ...toPayload(starting), city: 'Courtney' },
+  }])
+
+  /* This device edited offline. */
   await idb.putAndQueue('customers', { ...starting, city: 'Nanaimo' })
-
-  const queued = await idb.pendingOps()
-  assert.equal(queued.length, 2)
-
-  /* Device 2 reconnects first and takes the row. */
-  const win = await transport.push(token, 'dev-2', [toOp(queued[0])])
-  assert.equal(win[0].result, 'applied')
-  assert.equal(win[0].version, 2)
-  await idb.ackOps([queued[0].op_id])
+  const queued = (await idb.pendingOps()).filter((o) => o.entity_id === 'c-1')
+  assert.equal(queued.length, 1)
 
   /* Device 1 now pushes with a rev the server has moved past. */
-  const lose = await transport.push(token, 'dev-1', [toOp(queued[1])])
+  const lose = await transport.push(token, 'dev-1', [toOp(queued[0])])
   assert.equal(lose[0].result, 'conflict')
   assert.ok(lose[0].conflict_id)
 })
@@ -210,13 +214,18 @@ test('a conflict gains the server payload after a pull, so it can be compared', 
   const starting = await idb.get('customers', ID)
   assert.equal(starting.version, 1)
 
-  await idb.putAndQueue('customers', { ...starting, city: 'Courtney' })
-  await idb.putAndQueue('customers', { ...starting, city: 'Nanaimo' })
-  const queued = await idb.pendingOps()
-  assert.equal(queued.length, 2)
+  /* Device 2 wins the row through its own connection while this one
+     edits offline. */
+  await transport.push(token, 'dev-2', [{
+    op_id: 'op-probe-dev2',
+    entity: 'customers', entity_id: ID, op: 'upsert',
+    rev: starting.version,
+    payload: { ...toPayload(starting), city: 'Courtney' },
+  }])
 
-  await transport.push(token, 'dev-2', [toOp(queued[0])])
-  await idb.ackOps([queued[0].op_id])
+  await idb.putAndQueue('customers', { ...starting, city: 'Nanaimo' })
+  const queued = (await idb.pendingOps()).filter((o) => o.entity_id === ID)
+  assert.equal(queued.length, 1)
 
   /* Draining records the conflict; the following pull brings the server's
      side so a worker can actually choose between the two. */
@@ -230,6 +239,8 @@ test('a conflict gains the server payload after a pull, so it can be compared', 
   assert.equal(c.local_payload.city, 'Nanaimo')
   assert.ok(c.server_payload, 'the server side was attached')
   assert.equal(c.server_payload.city, 'Courtney')
+  assert.equal(c.server_changed_by, employeeId, 'the server copy knows whose edit it is')
+  assert.ok(c.server_changed_at, 'and when it was changed')
 })
 
 test('a conflict can be resolved offline without a network call', async () => {
@@ -311,6 +322,7 @@ test('a pull follows has_more to exhaustion instead of keeping only the first pa
   for (let i = 0; i < MANY; i += 1) {
     store.createCustomer({ name: `Paged ${i}`, city: 'Comox' })
   }
+  await settleWrites()
   await transport.drain(token, 'dev-paged')
 
   await idb.wipe()
@@ -359,6 +371,7 @@ test('a work log survives the round trip as its own entity', async () => {
 
   /* A mechanic writes a log entry with no signal. */
   store.addLog(card.id, { id: 'test-1', employee_id: 'emp-1', name: 'Bo', date: '2026-10-03', description: 'Lower unit drained' })
+  await settleWrites()
 
   const withLog = store.getCard(card.id).card
   assert.equal(withLog.logs.length, before + 1)
@@ -386,6 +399,7 @@ test('ticking the same task twice updates one row, not two', async () => {
   const store = await import('../src/engines/store/localStore.js')
   /* Self-contained: nothing is seeded, so this device creates the card it ticks. */
   const card = await store.createCard({ boat_id: 'b-1', work_order_no: 'WO-TICK', season_year: 2026 })
+  await settleWrites()
   await store.reload()
 
   const rows = () => (store.getCard(card.id).card.authorized_work ?? []).filter((w) => w.key === 'tune_up').length
@@ -428,6 +442,21 @@ test('the transport reports offline rather than failing a write', async () => {
 
 function toOp(o) {
   return { op_id: o.op_id, entity: o.entity, entity_id: o.entity_id, op: o.op, rev: o.rev, payload: o.payload, conflict_id: o.conflict_id }
+}
+
+/* A row as it would arrive from the store, without the metadata the outbox
+   strips before queueing. */
+function toPayload(row) {
+  const { version, updated_at, local_pending, ...p } = row
+  return p
+}
+
+/* The store's writes are fire-and-forget by design (the UI reads memory, never
+   storage), so a test that wants to observe *durable* state must first let
+   delivery land: request callbacks are microtasks, transaction completion a
+   macrotask — one macrotask of patience settles every write issued so far. */
+function settleWrites() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 test('an employees change arrives via the reference store and does not wedge the pull', async () => {
@@ -487,17 +516,23 @@ test('a per-field merged resolution keeps the chosen field from each side', asyn
   const starting = await idb.get('customers', ID)
   assert.equal(starting.version, 1)
 
-  /* Two devices diverge, each on a different field. */
-  await idb.putAndQueue('customers', { ...starting, city: 'Courtney' })
+  /* Two devices diverge, each on a different field. Device 2 writes through
+     its own connection; this device edits offline. */
+  await transport.push(token, 'dev-2', [{
+    op_id: 'op-merge-dev2',
+    entity: 'customers', entity_id: ID, op: 'upsert',
+    rev: starting.version,
+    payload: { ...toPayload(starting), city: 'Courtney' },
+  }])
+
   await idb.putAndQueue('customers', { ...starting, name: 'Merge Person Jr' })
 
-  const queued = await idb.pendingOps()
-  await transport.push(token, 'dev-2', [toOp(queued[0])])
-  await idb.ackOps([queued[0].op_id])
+  const queued = (await idb.pendingOps()).filter((o) => o.entity_id === ID)
+  assert.equal(queued.length, 1)
 
-  const [conflict] = await transport.push(token, 'dev-1', [toOp(queued[1])])
+  const [conflict] = await transport.push(token, 'dev-1', [toOp(queued[0])])
   assert.equal(conflict.result, 'conflict')
-  await idb.ackOps([queued[1].op_id])
+  await idb.ackOps([queued[0].op_id])
 
   const remote = await pullAllChanges()
   const latest = remote
@@ -574,4 +609,33 @@ test('a conflict with nothing to decide closes itself; a real one does not', asy
   assert.equal(closed.entity, 'received_items')
   assert.ok(closed.local_payload && closed.server_payload)
   assert.equal(closed.detected_at, at)
+})
+
+test('quick repeated edits are one op, and the final state is what pushes', async () => {
+  /* The ghost: toggle a received item quickly and every step used to reach
+     the server. An intermediate delete arrived with a rev its own earlier
+     upsert had already moved past, the server raised a conflict against
+     content this device no longer held, and auto-settling flipped the chip
+     back on its own. The outbox holds one statement per row — the newest. */
+  const ID = 'c-quick-toggle'
+  await idb.putAndQueue('customers', { id: ID, name: 'Quick Toggle', city: 'Comox', version: 0 })
+  await idb.putAndQueue('customers', { id: ID, name: 'Quick Toggle', city: 'Courtney', version: 0 })
+  await idb.removeAndQueue('customers', ID)
+  await idb.putAndQueue('customers', { id: ID, name: 'Quick Toggle', city: 'Nanaimo', version: 0 })
+
+  const queued = (await idb.pendingOps()).filter((o) => o.entity_id === ID)
+  assert.equal(queued.length, 1, 'the outbox holds the newest statement only')
+  assert.equal(queued[0].op, 'upsert', 'no tombstone is left behind')
+  assert.equal(queued[0].payload.city, 'Nanaimo')
+
+  const out = await transport.push(token, 'dev-1', [toOp(queued[0])])
+  assert.equal(out[0].result, 'applied', 'the final state pushes cleanly, no conflict')
+  await idb.ackOps([queued[0].op_id])
+
+  const changes = await pullAllChanges()
+  const latest = changes
+    .filter((c) => c.entity === 'customers' && c.entity_id === ID)
+    .pop()
+  assert.equal(latest.op, 'upsert', 'the log never saw the intermediate states')
+  assert.equal(latest.payload.city, 'Nanaimo')
 })

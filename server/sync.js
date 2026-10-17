@@ -279,7 +279,7 @@ export async function pull(db, { cursor = 0, limit = 200 }) {
     const entities = []
     for (const [entity, spec] of Object.entries(ALL_TABLES)) {
       const rows = await db.all(`SELECT * FROM ${T(spec.table)} WHERE deleted_at IS NULL`)
-      for (const row of rows) entities.push({ entity, entity_id: row[spec.pk], op: 'upsert', version: row.version, payload: rowToPayload(entity, row), changed_at: row.updated_at })
+      for (const row of rows) entities.push({ entity, entity_id: row[spec.pk], op: 'upsert', version: row.version, payload: rowToPayload(entity, row), changed_at: row.updated_at, changed_by: row.updated_by })
     }
     const head = await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)
     return { changes: entities, cursor: head?.seq ?? 0, has_more: false, full_sync: true }
@@ -294,6 +294,7 @@ export async function pull(db, { cursor = 0, limit = 200 }) {
     version: Number(r.version),
     payload: r.payload ? JSON.parse(r.payload) : null,
     changed_at: r.changed_at,
+    changed_by: r.updated_by,
   }))
   const head = await db.get(`SELECT MAX(seq) AS seq FROM ${T('change_log')}`)
   const latest = changes.length ? changes[changes.length - 1].seq : Number(cursor) || 0

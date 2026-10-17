@@ -322,8 +322,8 @@ src/
                    version.js at build time; it carries the commit, so a deploy
                    that only changed code still reads as a different build.
   theme/     tokens.css, global.css, ThemeProvider.jsx
-  ui/        Icon, Button, Surface, Chip, TextField, Feedback, StateViews,
-             StageStrip, Collapsible, SlotGrid,
+  ui/        Icon, Button, Checkbox, Surface, Chip, TextField, Feedback,
+             StateViews, StageStrip, Collapsible, SlotGrid,
              ui.css, index.js               — stateless, token-driven
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
              *Note:* AppShell.NAV is the only list of destinations. The router

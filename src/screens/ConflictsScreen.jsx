@@ -127,6 +127,9 @@ function Row({ conflict, onResolve }) {
         {conflict.record ? (
           <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>{conflict.record}</p>
         ) : null}
+        {conflict.changedBy ? (
+          <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>{conflict.changedBy}</p>
+        ) : null}
       </section>
 
       <div style={{ padding: 'var(--space-2) var(--space-4) 0' }}>

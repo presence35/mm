@@ -3,6 +3,64 @@
    Reset + base element styling + layout primitives. Components live in ui/.
    ========================================================================= */
 
+/* --- Type ------------------------------------------------------------------
+   Self-hosted so the app keeps its face with no signal: a Google Fonts link
+   would degrade to system-ui exactly when a mechanic is at the dock. Faces
+   are latin-subset woff2 in public/fonts, precached by the shell
+   (vite.config.js globPatterns already covers woff2). All three families are
+   SIL OFL, so bundling them is permitted; only latin is bundled.
+   Bebas Neue is display only — it has no lowercase, so headings run uppercase.
+   Barlow Condensed is the label voice: uppercase, condensed, 700 on controls. */
+
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/fonts/bebas-neue-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/barlow-condensed-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/barlow-condensed-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/barlow-condensed-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow';
+  src: url('/fonts/barlow-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow';
+  src: url('/fonts/barlow-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Barlow';
+  src: url('/fonts/barlow-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -150,6 +208,16 @@ a {
   letter-spacing: 0.08em;
   color: var(--on-surface-variant);
   padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+/* The legacy palette's section heads were Bebas Neue — bigger and display-faced
+   than the M3 label voice. Uppercase comes free: the face has no lowercase. */
+:root[data-palette='legacy'] .section-head {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.25;
+  letter-spacing: 0.09em;
 }
 
 .divider {

@@ -46,13 +46,15 @@ Delta. Every change since `cursor`.
 {
   "changes": [
     { "seq": 1041, "entity": "service_cards", "entity_id": "01J…",
-      "op": "upsert", "version": 3, "payload": { }, "changed_at": "2026-10-02T14:03:11Z" }
+      "op": "upsert", "version": 3, "payload": { }, "changed_at": "2026-10-02T14:03:11Z", "changed_by": "emp-…" }
   ],
   "cursor": 1041,
   "has_more": false,
   "full_sync": false
 }
 ```
+
+`changed_at` / `changed_by` are the row's `updated_at` / `updated_by`: when the change happened and the employee who made it. They are provenance, not content columns — the client keeps them beside the row so the conflict screen can show whose edit the server copy is.
 
 `op` ∈ `upsert` | `delete`. On `delete`, `payload` is `null` and only `entity_id`, `seq` and `version` matter.
 
@@ -219,6 +221,16 @@ An assignment's id is derived from the boat and the employee (`ba-<boat_id>-<emp
 
 The write path is gated: editing a boat and assigning work are `office`/`admin` capabilities and **do not queue offline** (behaviours-auth.md constraint 5). Both are refused with `unauthorized_role` rather than drained later.
 
+## The outbox is one device's own intent
+
+Each queued op is a statement about exactly one row, and only the newest statement matters. Queueing an upsert or delete for a row **retires every older pending op for that same row**, in the same transaction that writes the new op. A worker who toggles "battery" on, off, and on before a sync cycle runs has made one statement (present), not three.
+
+Without this, the intermediate ops still push, and an intermediate delete arrives at the server with a rev its own earlier upsert has already moved past. The server then raises a conflict against content the device no longer holds; auto-settling picks a version, and the chip flips on and off on its own as each stale op settles — the reported "quick toggles ghost themselves" defect.
+
+Coalescing is per row, not per entity, and never crosses devices: a second device's write is its own op, and a conflict between devices is still raised normally. It also does not remove tombstones already applied to the server — it only prevents this device from queueing a sequence its user never meant.
+
+A server delete change still never clobbers a row with pending unsynced writes (same rule as the pull/upsert path). The row survives locally until the conflict is raised on push.
+
 ## Retention
 
 Device-local retention: entities this device has touched, plus anything changed in the last 30 days. Older untouched records are evicted from the local store, never from the server. Eviction must not delete a row that has pending unsynced writes.
@@ -226,3 +238,6 @@ Device-local retention: entities this device has touched, plus anything changed 
 ## Change log for this file
 
 Any change to endpoints, row metadata, conflict semantics or GC rules lands here **before** code, on both sides. Client and server are written against this document independently; if they disagree, this file is wrong and gets fixed first.
+
+- Outbox coalescing (§The outbox is one device's own intent): queueing an op for a row retires the row's older pending ops in the same transaction. Added after quick repeated edits manufactured stale-delete conflicts and auto-settling made chips flip on and off by themselves. The pull-side delete rule ("never clobber a pending row") is now explicit too. Test: `server/client-sync.test.js` "quick repeated edits are one op".
+- Pull carries `changed_at` / `changed_by` on every change (§`GET /api/sync/pull`): when the change happened and the employee who made it, stored beside the row client-side. The conflict screen joins it to the roster so the server copy reads "changed by Bo · Oct 17, 2:14 pm" — a worker resolves knowing whose edit they are keeping. Provenance only; never merged into content payloads.

@@ -149,32 +149,61 @@ export async function clear(entity) {
 
 /* ---------------------------------------------------------------- writes */
 
-/* Every mutation lands here first and is queued. Nothing reaches the network
-   from this module — that is the whole point. */
-export async function putAndQueue(entity, row, { op = 'upsert', conflictId } = {}) {
-  const db = await open()
-  const now = new Date()
-  const next = { ...row, updated_at: row.updated_at ?? now.toISOString(), local_pending: true }
-  /* One id, used as both the store key and the idempotency key. Two different
-     values means ackOps deletes by a key that was never written and the
-     outbox drains forever without ever emptying. */
-  const opId = newId('op')
+/* The outbox is one device's own intent. Each queued op is a statement about
+   exactly one row, and only the newest statement matters: a worker who toggles
+   "battery" on, off, and on before a sync cycle runs has made one statement
+   (present), not three. Without this, the intermediate ops still push — and an
+   intermediate delete arrives at the server with a rev its own earlier upsert
+   has already moved past, so the server raises a conflict on content this
+   device no longer holds. The conflict page then sets whichever version
+   survived, and the chip flips on and off on its own as each stale op
+   settles. So queueing a new op for a row retires every older one — scanned
+   in the same readwrite transaction, chained on request events rather than
+   promises, because two rapid taps must see each other and the transaction
+   must not commit between the scan and the write. */
 
-  await tx(db, [entity, 'outbox'], 'readwrite', (t) => {
-    t.objectStore(entity).put(next)
-    t.objectStore('outbox').put({
-      id: opId,
-      op_id: opId,
-      entity,
-      entity_id: row.id,
-      op,
-      rev: Number(row.version ?? 0),
-      payload: stripMeta(row),
-      conflict_id: conflictId,
-      queued_at: now.toISOString(),
-    })
+function replacingQueue(db, entity, entityId, apply) {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction([entity, 'outbox'], 'readwrite')
+    const outbox = t.objectStore('outbox')
+    t.onerror = () => reject(t.error)
+    t.onabort = () => reject(t.error)
+    const all = outbox.getAll()
+    all.onerror = () => reject(all.error)
+    all.onsuccess = () => {
+      for (const prior of all.result) {
+        if (prior.entity === entity && prior.entity_id === entityId) outbox.delete(prior.id)
+      }
+      apply(t, outbox, resolve, reject)
+    }
   })
-  return next
+}
+
+export function putAndQueue(entity, row, { op = 'upsert', conflictId } = {}) {
+  return open().then((db) =>
+    replacingQueue(db, entity, row.id, (t, outbox, resolve, reject) => {
+      const now = new Date()
+      const next = { ...row, updated_at: row.updated_at ?? now.toISOString(), local_pending: true }
+      /* One id, used as both the store key and the idempotency key. Two
+         different values means ackOps deletes by a key that was never written
+         and the outbox drains forever without ever emptying. */
+      const opId = newId('op')
+      t.objectStore(entity).put(next)
+      const done = outbox.put({
+        id: opId,
+        op_id: opId,
+        entity,
+        entity_id: row.id,
+        op,
+        rev: Number(row.version ?? 0),
+        payload: stripMeta(row),
+        conflict_id: conflictId,
+        queued_at: now.toISOString(),
+      })
+      done.onsuccess = () => resolve(next)
+      done.onerror = () => reject(done.error)
+    }),
+  )
 }
 
 /* Server-side tombstone. No outbox entry: this is the server telling us. */
@@ -187,10 +216,10 @@ export async function removeAndQueue(entity, id) {
   const db = await open()
   const row = await get(entity, id)
   if (!row) return
-  const opId = newId('op')
-  await tx(db, [entity, 'outbox'], 'readwrite', (t) => {
+  return replacingQueue(db, entity, id, (t, outbox, resolve, reject) => {
     t.objectStore(entity).delete(id)
-    t.objectStore('outbox').put({
+    const opId = newId('op')
+    const done = outbox.put({
       id: opId,
       op_id: opId,
       entity,
@@ -200,6 +229,8 @@ export async function removeAndQueue(entity, id) {
       payload: {},
       queued_at: new Date().toISOString(),
     })
+    done.onsuccess = () => resolve()
+    done.onerror = () => reject(done.error)
   })
 }
 
@@ -325,6 +356,11 @@ export async function attachServerPayloads() {
     if (row) {
       const { version, rev, updated_at, updated_by, device_id, deleted_at, local_pending, ...server } = row
       c.server_payload = server
+      /* Who last wrote the server's copy — shown on the conflict screen, so a
+         worker resolves knowing whose edit they are keeping. The pull wire
+         carries the actor as `changed_by`; the row stores it as `updated_by`. */
+      c.server_changed_by = updated_by ?? null
+      c.server_changed_at = updated_at ?? null
       await tx(db, ['conflicts'], 'readwrite', (t) => reqp(t.objectStore('conflicts').put(c)))
     }
   }

@@ -45,6 +45,22 @@ function detailOf(conflict, payload) {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
+/* Whose edit the server copy is, in the worker's words: "changed by Bo, 2:14 pm".
+   The actor id is stored on the conflict when the server's version arrives on a
+   pull; the name is joined here against the roster. An id the roster no longer
+   holds (staff left) or no actor at all falls back to wording that explains
+   why there is no name rather than guessing one. */
+function changedByLine(conflict) {
+  const id = conflict.server_changed_by
+  const at = conflict.server_changed_at
+  if (!id && !at) return null
+  const name = id ? store.staffName(id) : null
+  const person = name ?? (id ? 'staff not on this device' : 'another device')
+  if (!at) return `changed by ${person}`
+  const time = new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return `changed by ${person} · ${time}`
+}
+
 function decorate(conflict) {
   const payload = conflict.server_payload ?? conflict.local_payload ?? {}
   return {
@@ -53,6 +69,7 @@ function decorate(conflict) {
     record: recordOf(conflict, payload),
     detail: detailOf(conflict, payload),
     rows: differences(conflict),
+    changedBy: changedByLine(conflict),
   }
 }
 

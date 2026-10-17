@@ -213,6 +213,13 @@ export function listStaff() {
   return db.employees.filter((e) => Number(e.active) === 1 && !e.deleted_at)
 }
 
+/* Display name for an actor id one of the server's \"changed by\" lines. The
+   whole roster, not the active-filtered one: the person who edited a card may
+   have been since deactivated, and their name still answers whose edit it was. */
+export function staffName(id) {
+  return db.employees.find((e) => e.id === id)?.name ?? null
+}
+
 /* Who can be given a boat to work on. The role test lives in permissions.js —
    nothing outside that file compares a role string. */
 export function listAssignableStaff() {

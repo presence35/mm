@@ -232,7 +232,7 @@ export async function pullAll(token, deviceId, now = new Date()) {
       await idb.setMeta('cursor', 0)
       const grouped = {}
       for (const change of res.changes) {
-        ;(grouped[change.entity] ??= []).push({ ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
+        ;(grouped[change.entity] ??= []).push({ ...change.payload, id: change.entity_id, version: change.version, updated_at: change.changed_at ?? null, updated_by: change.changed_by ?? null })
       }
       for (const [entity, rows] of Object.entries(grouped)) {
         try {
@@ -256,18 +256,26 @@ export async function pullAll(token, deviceId, now = new Date()) {
       try {
         if (idb.REFERENCE_ENTITIES.has(change.entity)) {
           if (change.op === 'delete') await idb.removeReferenceRow(change.entity, change.entity_id)
-          else await idb.putReferenceRow(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at })
+          else await idb.putReferenceRow(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.changed_at ?? null })
           applied += 1
           continue
         }
         if (change.op === 'delete') {
-          await idb.removeLocal(change.entity, change.entity_id)
+          /* Never let a server tombstone clobber unsynced local edits — the
+             same rule as the upsert path below. A coalesced, still-pending
+             row is this device's newest statement; applying someone else's
+             delete over it without a conflict is how a toggle you just made
+             silently undoes itself. */
+          const queued = await idb.pendingOps()
+          if (!queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)) {
+            await idb.removeLocal(change.entity, change.entity_id)
+          }
         } else {
           const queued = await idb.pendingOps()
           const pendingHere = queued.some((o) => o.entity === change.entity && o.entity_id === change.entity_id)
           /* Never clobber a row with unsynced local edits. */
           if (!pendingHere) {
-            await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+            await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.changed_at ?? null, updated_by: change.changed_by ?? null, local_pending: false })
             applied += 1
           } else {
             /* The server may already hold this edit — a second device seeding the
@@ -275,7 +283,7 @@ export async function pullAll(token, deviceId, now = new Date()) {
                than pushing it into a conflict with ourselves. */
             const dropped = await idb.dropSuperseded(change.entity, change.entity_id, change)
             if (dropped && !pendingHere) {
-              await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.updated_at, local_pending: false })
+              await idb.put(change.entity, { ...change.payload, id: change.entity_id, version: change.version, updated_at: change.changed_at ?? null, updated_by: change.changed_by ?? null, local_pending: false })
               applied += 1
             }
           }

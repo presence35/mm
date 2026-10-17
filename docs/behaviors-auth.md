@@ -62,6 +62,26 @@ here — it gates offline work from a cached permission snapshot, not identity.
 
 The permission snapshot is what `unlocked` reads. It is written on every successful login and every `/auth/me` validation, and carries an expiry.
 
+## Session persistence — the sign-in screen's checkbox
+
+The sign-in screen carries **"Keep me signed in on this device"**, on by default.
+It decides one thing: which storage holds the token and the remembered employee
+id.
+
+| Choice | Storage | Effect |
+|---|---|---|
+| Ticked (default) | `localStorage` | The 30-day sliding session survives reloads and app closes. The only exits are Setup → Sign out, remote deactivation, or a month of not opening the app. |
+| Unticked | `sessionStorage` | The session dies with the tab. Offline unlock is **unavailable** — it needs the cached token — and the checkbox says so in plain words. |
+
+Both keys (`mm.token`, `mm.employee`) go to the same store and writes scrub the
+other, so a device cannot be half-persisted — a token that outlives its identity
+or the reverse reads as the app having forgotten you. The choice is made once at
+sign-in and carried for the session: sliding renewals land where the original
+did.
+
+Boot restores from whichever store holds the keys; an unticked session comes
+back only inside the tab that signed in.
+
 ## Offline unlock
 
 Client-side only:
@@ -114,3 +134,4 @@ The old `constants.js` defined five (`cleaner`, `wrapper`). Those are gone — c
 Changes to endpoints, role capabilities, snapshot lifetime or offline-unlock behaviour land here before code, on both sides.
 
 - Session lifetime: 12h flat → 30 days sliding. `/auth/me` now returns a replacement token. Chosen because a flat lifetime logged branch devices out daily. The offline snapshot expiry (12h) is deliberately unchanged.
+- Session persistence is now a visible choice: "keep me signed in" on the sign-in screen, token + remembered id in one store (`localStorage`/`sessionStorage`, never both). Offline unlock needs the persisted path; the checkbox says so.

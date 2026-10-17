@@ -107,13 +107,16 @@ export function AuthProvider({ children }) {
       may,
       refuseReason,
       signOut,
-      setEmployee: (e) => {
+      setEmployee: (e, opts) => {
         setEmployee(e)
         setState('online')
         setSnapshotAt(new Date())
         /* Remembered on success, not on selection. Picking someone and backing
-           out must not change who this device belongs to. */
-        if (e?.id) rememberEmployeeId(e.id)
+           out must not change who this device belongs to. `opts` carries the
+           sign-in screen's "keep me signed in" choice: a session-only session
+           must not leave an identity in localStorage, or the device would look
+           persisted the moment it closes. */
+        if (e?.id) rememberEmployeeId(e.id, opts)
       },
       CAPABILITIES,
     }),

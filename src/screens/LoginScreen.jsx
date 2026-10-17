@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, TextField, ListItem, Divider, Icon } from '../ui'
+import { Button, TextField, ListItem, Divider, Icon, Checkbox } from '../ui'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
-import { resolveRemembered, rememberEmployeeId } from '../engines/auth/session.js'
+import { resolveRemembered } from '../engines/auth/session.js'
 import * as store from '../engines/store/localStore.js'
 
 /*
@@ -32,6 +32,9 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  /* Defaults on: the dock device is the normal case, and the unticked path
+     costs the wearer their offline unlock. The support line says so. */
+  const [keep, setKeep] = useState(true)
   const pinRef = useRef(null)
 
   useEffect(() => {
@@ -93,11 +96,8 @@ export default function LoginScreen() {
     setBusy(true)
     setError(null)
     try {
-      const employee = await sync.signIn(pin, chosen.id)
-      setEmployee(employee)
-      /* Written here, and only here: the server is the authority on who this
-         token belongs to, and its id is what a reload restores. */
-      rememberEmployeeId(employee?.id ?? chosen.id)
+      const employee = await sync.signIn(pin, chosen.id, { persist: keep })
+      setEmployee(employee, { persist: keep })
     } catch (e) {
       setError(
         {
@@ -174,6 +174,17 @@ export default function LoginScreen() {
             {sync.online ? 'Sign in' : 'Unlock'}
           </Button>
         </div>
+
+        {sync.online ? (
+          <div style={{ padding: '0 var(--space-4)' }}>
+            <Checkbox
+              checked={keep}
+              onChange={setKeep}
+              label="Keep me signed in on this device"
+              support="Off: you sign in again when the app closes, and offline unlock will not work."
+            />
+          </div>
+        ) : null}
 
         {staff.length > 1 ? (
           <>

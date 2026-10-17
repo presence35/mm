@@ -771,6 +771,12 @@ select.field__input { cursor: pointer; }
   max-height: 88dvh;
   display: flex;
   flex-direction: column;
+  /* The content area scrolls, not the sheet chrome — the handle and title
+     stay put while a long form slides underneath. Without this a sheet taller
+     than the viewport is a dead end: you can see the top of the content and
+     nothing else (the condition assessment was exactly that). */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: var(--space-2) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom));
   border-radius: var(--corner-xl) var(--corner-xl) 0 0;
   background: var(--surface-container-low);
@@ -797,6 +803,7 @@ select.field__input { cursor: pointer; }
 .sheet__title {
   font: var(--title-l);
   margin-bottom: var(--space-3);
+  flex-shrink: 0;
 }
 
 /* ------------------------------------------------------------------ Badge -- */
@@ -1245,4 +1252,106 @@ button.slot:active { filter: brightness(0.94); }
 .chip[aria-pressed='true'] .chip__count {
   background: var(--on-secondary-container);
   color: var(--secondary-container);
+}
+/* --------------------------------------------- Legacy palette (look) ------
+   The `legacy` palette carries the retired app's appearance, not only its
+   hues: tinted page behind white, hairline-bordered, flat cards; tighter
+   corner on controls; display-faced section heads. Scoped by attribute so
+   the other four palettes keep the Material treatment untouched, and token
+   valued so no screen or stylesheet picks a literal. */
+
+:root[data-palette='legacy'] body {
+  background: var(--surface-container);
+}
+
+:root[data-palette='legacy'] .card {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  box-shadow: none;
+  border-radius: var(--corner-l);
+}
+
+:root[data-palette='legacy'] .card--elevated,
+:root[data-palette='legacy'] .card--filled {
+  background: var(--surface-container-lowest);
+}
+
+:root[data-palette='legacy'] .btn,
+:root[data-palette='legacy'] .text-field input,
+:root[data-palette='legacy'] .list-item,
+:root[data-palette='legacy'] .icon-btn {
+  border-radius: var(--corner-m);
+}
+
+/* The old app's boat names and screen titles were the display face, not the
+   body face. The label voice above already covers buttons and chips. */
+:root[data-palette='legacy'] .list-item__title,
+:root[data-palette='legacy'] .top-bar__title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+
+/* ---------------------------------------------------------------- Checkbox --
+   Native input visually hidden but focusable; the box is a sibling decoy the
+   input drives from :checked, so keyboard and assistive state stay real. */
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+  padding: var(--space-2) 0;
+  cursor: pointer;
+}
+
+.checkbox__control {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.checkbox:focus-within .checkbox__box {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.checkbox__box {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: var(--space-2);
+  border: 2px solid var(--outline);
+  border-radius: var(--corner-s);
+  color: var(--on-primary);
+  transition: background-color var(--duration-short-2) var(--easing-standard),
+    border-color var(--duration-short-2) var(--easing-standard);
+}
+
+.checkbox__control:checked + .checkbox__box {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox__control:disabled + .checkbox__box { opacity: 0.38; }
+
+.checkbox__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.checkbox__label {
+  font: var(--title-m);
+  color: var(--on-surface);
+}
+
+.checkbox__support {
+  font: var(--body-s);
+  color: var(--on-surface-variant);
 }

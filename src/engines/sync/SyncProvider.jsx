@@ -2,6 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useMemo, useRef, use
 import * as transport from './transport.js'
 import * as store from '../store/localStore.js'
 import * as idb from '../store/idb.js'
+import { readToken, writeToken, forgetToken } from '../auth/session.js'
 
 /*
  * Sync state machine — the single owner of connectivity, pending writes and
@@ -23,7 +24,6 @@ const SyncCtx = createContext(null)
 const POLL_MS = 60_000
 const BACKOFF_MS = 30_000
 const MAX_ATTEMPTS = 5
-const TOKEN_KEY = 'mm.token'
 
 export function SyncProvider({ children }) {
   const [state, setState] = useState('idle')
@@ -42,16 +42,14 @@ export function SyncProvider({ children }) {
  * from an effect, so every boot flashed the sign-in screen before the app
  * appeared — and on a reload that flash looked exactly like being logged out.
  */
-const [hasCachedSession, setHasCachedSession] = useState(() => {
-  try {
-    return Boolean(localStorage.getItem(TOKEN_KEY))
-  } catch {
-    return false
-  }
-})
+const [hasCachedSession, setHasCachedSession] = useState(() => Boolean(readToken()))
 
   const token = useRef(null)
   const deviceId = useRef(null)
+  /* Which store this device's session lives in, decided by the "keep me signed
+     in" checkbox at sign-in and carried for the life of the session: sliding
+     renewals must land where the original did, or the next boot reads nothing. */
+  const persisting = useRef(true)
 
   const online = !forceOffline && (typeof navigator === 'undefined' || navigator.onLine)
 
@@ -62,24 +60,16 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
      stays signed in indefinitely, while a phone left in a drawer lapses a
      month after it was last opened. In memory first: if storage refuses, the
      session still works for this page. */
-  const adoptToken = useCallback((next) => {
+  const adoptToken = useCallback((next, { persist } = {}) => {
     if (!next || next === token.current) return
     token.current = next
-    try {
-      localStorage.setItem(TOKEN_KEY, next)
-    } catch {
-      /* private mode — the session lasts this page only */
-    }
+    writeToken(next, { persist: persist ?? persisting.current })
   }, [])
 
   const ensureSession = useCallback(async () => {
     if (token.current) return token.current
     let t = null
-    try {
-      t = localStorage.getItem(TOKEN_KEY)
-    } catch {
-      t = null
-    }
+    t = readToken()
 
     /* No token at all: this device has never signed in, and must not appear to
        have a session. A cached token is what makes offline unlock possible. */
@@ -107,11 +97,7 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
          capability checks fall back to canOffline. */
       if (!e?.unauthorized) return t
 
-      try {
-        localStorage.removeItem(TOKEN_KEY)
-      } catch {
-        /* ignore */
-      }
+      forgetToken()
       token.current = null
       setHasCachedSession(false)
       return null
@@ -131,12 +117,7 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
          machine on boot — it starts idle and only enters syncing when a write
          happens — so without this a valid token still lands on the login
          screen with no way past it. */
-      let cached = null
-      try {
-        cached = localStorage.getItem(TOKEN_KEY)
-      } catch {
-        cached = null
-      }
+      const cached = readToken()
       if (cached) {
         setHasCachedSession(true)
         setState('syncing')
@@ -294,14 +275,13 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
 
   /* -------------------------------------------------------------- actions */
 
-  const signIn = useCallback(async (pin, employeeId) => {
+  const signIn = useCallback(async (pin, employeeId, { persist = true } = {}) => {
     const { token: t, employee } = await transport.login(pin, employeeId)
-    try {
-      localStorage.setItem(TOKEN_KEY, t)
-    } catch {
-      /* private mode — the session lasts this page only */
-    }
+    persisting.current = persist
     token.current = t
+    /* Written before the cycle starts so a cycle that completes before this
+       returns finds the token where it will also look on the next boot. */
+    writeToken(t, { persist })
     /* Set here, not only inside cycle(): if the machine is already 'syncing'
        the transition does not fire and we would stay on the login screen with
        a valid session. */
@@ -311,12 +291,9 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
   }, [])
 
   const signOut = useCallback(() => {
-    try {
-      localStorage.removeItem(TOKEN_KEY)
-    } catch {
-      /* ignore */
-    }
+    forgetToken()
     token.current = null
+    setHasCachedSession(false)
     setState('offline')
   }, [])
 
