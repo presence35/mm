@@ -15,11 +15,15 @@
 :root {
   color-scheme: light;
 
-  /* --- Palette: Deep Water (default) ------------------------------------- */
-  --hue: 205;
-  --chroma: 42%;
+  /* --- Palette: Legacy (default) ----------------------------------------
+     Ported from the retired app, which hand-authored every colour: a
+     saturated teal accent over tinted, warm-leaning surfaces. A purely
+     derived neutral family reads as grey beside it, so the default palette
+     is the legacy hues with the neutral family tinted harder than usual. */
+  --hue: 198;
+  --chroma: 56%;
   --hue-tertiary: 30;
-  --chroma-tertiary: 44%;
+  --chroma-tertiary: 68%;
 
   /* Semantic hues are fixed — success must read as success in every palette. */
   --hue-success: 142;
@@ -28,7 +32,11 @@
   --chroma-warning: 60%;
   --hue-error: 6;
   --chroma-error: 48%;
-  --neutral-chroma: 12%;
+
+  /* How much of the palette hue bleeds into the neutrals. A palette property,
+     not a global one: the legacy palettes tint their greys far harder than the
+     derived ones, which is most of what made them look warm rather than grey. */
+  --neutral-chroma: 18%;
 
   /* --- Mode: light lightness profile ------------------------------------- */
   --l-primary: 40%;
@@ -228,16 +236,28 @@
 }
 
 /* ============================================================================
-   Palettes — four lines each. Names carry over from the previous app so staff
-   recognise them. Only hue and chroma move; contrast is guaranteed by the
-   shared lightness profile above.
+   Palettes — five lines each. Names carry over from the previous app so staff
+   recognise them; the default is now `legacy`, the colouring the retired app
+   actually shipped. Only hue, chroma and the neutral tint move; contrast is
+   guaranteed by the shared lightness profile above.
    ========================================================================= */
+
+:root[data-palette='legacy'] {
+  --hue: 198;
+  /* 62% measured 4.50:1 against white — the AA floor, with nothing to spare.
+     56% keeps the saturation and sits at 4.62:1. */
+  --chroma: 56%;
+  --hue-tertiary: 30;
+  --chroma-tertiary: 68%;
+  --neutral-chroma: 18%;
+}
 
 :root[data-palette='deep-water'] {
   --hue: 205;
   --chroma: 42%;
   --hue-tertiary: 30;
   --chroma-tertiary: 44%;
+  --neutral-chroma: 12%;
 }
 
 :root[data-palette='sunset-harbour'] {
@@ -245,6 +265,7 @@
   --chroma: 48%;
   --hue-tertiary: 205;
   --chroma-tertiary: 40%;
+  --neutral-chroma: 12%;
 }
 
 :root[data-palette='storm-watch'] {
@@ -252,6 +273,7 @@
   --chroma: 26%;
   --hue-tertiary: 62;
   --chroma-tertiary: 30%;
+  --neutral-chroma: 12%;
 }
 
 :root[data-palette='coral-bay'] {
@@ -259,6 +281,7 @@
   --chroma: 40%;
   --hue-tertiary: 168;
   --chroma-tertiary: 38%;
+  --neutral-chroma: 12%;
 }
 
 /* ============================================================================

@@ -53,6 +53,18 @@ test('setup: server up, session in', async () => {
   assert.equal(body.employee.role, 'admin')
 })
 
+/* Sessions slide: validating renews. Without this the client keeps a token that
+   the server has already aged out, and a device that is used every day still
+   lands on the sign-in screen — the exact "app forgot me" complaint. */
+test('auth/me reissues a working token', async () => {
+  const first = await transport.me(token)
+  assert.ok(first.token, 'validation returns a replacement token')
+  assert.equal(first.employee.role, 'admin')
+
+  const second = await transport.me(first.token)
+  assert.equal(second.employee.id, first.employee.id, 'the replacement token is accepted')
+})
+
 test('a local write queues an op and does not need the network', async () => {
   await idb.putAndQueue('customers', { id: 'c-1', name: 'Marcus Reyes', city: 'Comox', version: 0 })
   const queued = await idb.pendingOps()

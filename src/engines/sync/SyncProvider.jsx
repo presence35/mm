@@ -57,6 +57,21 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
 
   /* ------------------------------------------------------------ session */
 
+  /* Sessions slide. The server reissues a token on every validation, and this
+     is where the newest one replaces the stored one — a device in daily use
+     stays signed in indefinitely, while a phone left in a drawer lapses a
+     month after it was last opened. In memory first: if storage refuses, the
+     session still works for this page. */
+  const adoptToken = useCallback((next) => {
+    if (!next || next === token.current) return
+    token.current = next
+    try {
+      localStorage.setItem(TOKEN_KEY, next)
+    } catch {
+      /* private mode — the session lasts this page only */
+    }
+  }, [])
+
   const ensureSession = useCallback(async () => {
     if (token.current) return token.current
     let t = null
@@ -80,7 +95,8 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
     try {
       /* Validates and refreshes permissions against the server. A cached
          snapshot is never trusted across a reconnect. */
-      await transport.me(t)
+      const { token: renewed } = (await transport.me(t)) ?? {}
+      adoptToken(renewed)
       return t
     } catch (e) {
       /* Only an actual rejection ends the session. Being unable to ask is not
@@ -100,22 +116,7 @@ const [hasCachedSession, setHasCachedSession] = useState(() => {
       setHasCachedSession(false)
       return null
     }
-
-    try {
-      /* Validates and refreshes permissions against the server. A cached
-         snapshot is never trusted across a reconnect. */
-      await transport.me(t)
-      token.current = t
-      return t
-    } catch {
-      try {
-        localStorage.removeItem(TOKEN_KEY)
-      } catch {
-        /* ignore */
-      }
-      return null
-    }
-  }, [])
+  }, [adoptToken])
 
   useEffect(() => {
     let alive = true

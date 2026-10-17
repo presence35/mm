@@ -25,7 +25,14 @@ const upload = multer({
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/* Sessions slide rather than expire. A branch device is signed in once and
+   stays signed in: the token is reissued on every /auth/me validation, and the
+   client keeps the newest one. The old flat 12h lifetime logged a device out
+   mid-shift and again every morning, which read as the app forgetting who you
+   were. Revocation is unchanged - `/auth/me` still refuses a deactivated
+   employee, and sync_devices.revoked_at still cuts a wiped or stolen phone. */
 const PIN_MAX_ATTEMPTS = 21
 const PIN_WINDOW_MS = 420 * 1000
 
@@ -152,7 +159,15 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       res.status(401).json({ error: 'unauthenticated' })
       return
     }
-    res.json(e)
+    /* Sliding renewal: validating the session is also what extends it. The role
+       is taken from the row just read, never from the presented token, so a
+       demotion takes effect at the next reconnect instead of surviving in the
+       claims. */
+    res.json({
+      employee: e,
+      token: issueToken({ employee_id: e.id, role: e.role }, SESSION_TTL_MS),
+      expires_at: Date.now() + SESSION_TTL_MS,
+    })
   })
 
   /* --------------------------------------------------------------- sync */

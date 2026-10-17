@@ -39,9 +39,26 @@ anonymous ──pin online──▶ online ──token expired──▶ expired
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/auth/login` | PIN → JWT + employee record |
-| `GET /api/auth/me` | Validate token, return fresh role and permissions |
+| `GET /api/auth/me` | Validate token, return fresh role and permissions, and **reissue the token** |
 
 PINs are hashed with a per-employee salt. Constant-time comparison. Failed attempts are counted per employee and per source address, with backoff.
+
+### Session lifetime — sliding, 30 days
+
+A device stays signed in. The token is valid for 30 days and every `/auth/me`
+validation issues a replacement, which the client adopts (`SyncProvider`
+`adoptToken`). A device in daily use never expires; one that is not opened for a
+month requires a real login.
+
+The role in the renewed token is read from the employee row, never copied from
+the presented token, so a demotion lands at the next reconnect rather than
+riding along in stale claims.
+
+Revocation is unchanged by the longer lifetime: `/auth/me` still refuses a
+deactivated employee, and `sync_devices.revoked_at` still cuts a device.
+
+The 12h `unlocked` snapshot expiry is a **separate** timer and is not extended
+here — it gates offline work from a cached permission snapshot, not identity.
 
 The permission snapshot is what `unlocked` reads. It is written on every successful login and every `/auth/me` validation, and carries an expiry.
 
@@ -95,3 +112,5 @@ The old `constants.js` defined five (`cleaner`, `wrapper`). Those are gone — c
 ## Change log for this file
 
 Changes to endpoints, role capabilities, snapshot lifetime or offline-unlock behaviour land here before code, on both sides.
+
+- Session lifetime: 12h flat → 30 days sliding. `/auth/me` now returns a replacement token. Chosen because a flat lifetime logged branch devices out daily. The offline snapshot expiry (12h) is deliberately unchanged.

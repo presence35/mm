@@ -7,6 +7,7 @@ const PALETTE_KEY = 'mm.palette'
 const MODE_KEY = 'mm.theme'
 
 export const PALETTES = [
+  { id: 'legacy', name: 'Legacy', desc: 'The old app, teal on cream' },
   { id: 'deep-water', name: 'Deep Water', desc: 'Classic nautical' },
   { id: 'sunset-harbour', name: 'Sunset Harbour', desc: 'Warm & golden' },
   { id: 'storm-watch', name: 'Storm Watch', desc: 'Rugged & green' },
@@ -35,7 +36,7 @@ function apply(palette, mode) {
 const ThemeCtx = createContext(null)
 
 export function ThemeProvider({ children }) {
-  const [palette, setPaletteState] = useState(() => read(PALETTE_KEY, PALETTE_IDS, 'deep-water'))
+  const [palette, setPaletteState] = useState(() => read(PALETTE_KEY, PALETTE_IDS, 'legacy'))
   const [mode, setModeState] = useState(() => read(MODE_KEY, MODES, 'system'))
 
   useEffect(() => {

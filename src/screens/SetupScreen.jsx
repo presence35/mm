@@ -16,6 +16,7 @@ const MODE_OPTIONS = [
 ]
 
 const SWATCHES = {
+  legacy: ['#0a4f6e', '#e8b42e', '#2da84f'],
   'deep-water': ['#00639b', '#8b5000', '#146c2e'],
   'sunset-harbour': ['#a83f0d', '#00639b', '#146c2e'],
   'storm-watch': ['#00694a', '#8a5a00', '#146c2e'],

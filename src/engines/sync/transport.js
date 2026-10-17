@@ -107,6 +107,8 @@ export async function changeOwnPin(token, { currentPin, newPin }) {
 }
 
 export async function me(token) {
+  /* Returns { employee, token, expires_at }: validating the session is also
+     what renews it, so the caller must adopt the returned token. */
   return call('/auth/me', { token })
 }
 
