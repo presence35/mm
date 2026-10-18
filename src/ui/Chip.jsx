@@ -23,8 +23,8 @@ export function Chip({ icon, selected, onClick, disabled, tone, children, ...res
   )
 }
 
-export function ChipRow({ children }) {
-  return <div className="chip-row">{children}</div>
+export function ChipRow({ children, className = '' }) {
+  return <div className={`chip-row ${className}`.trim()}>{children}</div>
 }
 
 /* Segmented button — 2–5 mutually exclusive options that fit on screen. */

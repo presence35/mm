@@ -53,6 +53,7 @@ Treat these as a contract. If you change one, update **every** place that relies
 | Roles and capability checks | `auth/permissions.js` | every gated action |
 | Card status + legal transitions | `domain/cardStatus.js` | Cards list, Card detail, Map, public view |
 | Stage phases + per-status counts | `domain/cardStatus.js` | Cards list, Card detail |
+| Where a customer stands this season | `domain/dockState.js` | People list |
 | Appointment legality + shared capacity | `domain/schedule.js` | Schedule board, Card detail |
 | Storage layout (buildings, slips, rows) | server reference data | card wizard, Map, filters |
 | Checklist + cleaning item sets | server reference data | Card detail |
@@ -328,7 +329,12 @@ src/
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, ThemeIcon, ModeIcon, Button, Checkbox, Surface, Chip,
              TextField, Feedback, StateViews, StageStrip, ProgressMeter,
-             Collapsible, SlotGrid, ui.css, index.js — stateless, token-driven
+             Collapsible, FilterSheet, SlotGrid, ui.css, index.js — stateless,
+             token-driven
+             *Note:* FilterSheet is the filter for every list with one: the
+             options, their counts and the chosen value are the caller's, and each
+             option carries the dot shape of the row it matches, so two stages
+             that share a tone are still told apart without colour.
              *Note:* ThemeIcon is the one primitive that sets `data-palette` on
              itself, so the palette blocks in tokens.css resolve again inside
              it and each mark is drawn in the colours of the palette it
@@ -376,20 +382,27 @@ src/
              collapseState.test.js pins the fallback, the per-key isolation and
              the behaviour on corrupt or unwritable storage.
     media/   photos.js                       — capture, compress, upload
-  domain/    cardStatus.js, storageLocation.js, schedule.js, conflictDiff.js
-              — pure, deterministic
-              *Note:* storageLocation.js also builds the Map's views —
-              groupByStorageType, buildingsToDraw, buildingGrid, boathouseGrid.
-              The grid is a rule about position codes, not a layout detail, so
-              the list and the grid cannot disagree about who is in Metal 2 row 3.
-              It takes the marina's shape as an argument: it never reads the seed.
-              cardStatus.js owns activeCardFor — a boat's row opens the card that
-              is neither invoiced nor archived, and the owner when there is none.
-              cardStatus.test.js, storageLocation.test.js, schedule.test.js,
-              conflictDiff.test.js — beat tests pinning the lifecycle, the
-              unrepresentable-combination rule, the label+tone+shape pairing
-              (oko ThreatEngineTest pattern) and the shared ramp/drop-off
-              capacity pool
+  domain/    cardStatus.js, storageLocation.js, dockState.js, schedule.js,
+             conflictDiff.js — pure, deterministic
+             *Note:* storageLocation.js also builds the Map's views —
+             groupByStorageType, buildingsToDraw, buildingGrid, boathouseGrid.
+             The grid is a rule about position codes, not a layout detail, so
+             the list and the grid cannot disagree about who is in Metal 2 row 3.
+             It takes the marina's shape as an argument: it never reads the seed.
+             A building is drawn the way the shed is stencilled — the letters run
+             down the side and the numbers across — while the cell code stays
+             "building/row/column", so nothing downstream knows which axis it is
+             drawn on.
+             cardStatus.js owns activeCardFor — a boat's row opens the card that
+             is neither invoiced nor archived, and the owner when there is none.
+             dockState.js answers where a customer stands this season — Docked,
+             Ashore, Lapsed, None — in one place and with `now` explicit, so the
+             People rows, its filter counts and its filter all read one answer.
+             cardStatus.test.js, storageLocation.test.js, dockState.test.js,
+             schedule.test.js, conflictDiff.test.js — beat tests pinning the
+             lifecycle, the unrepresentable-combination rule, the label+tone+shape
+             pairing (oko ThreatEngineTest pattern), the shared ramp/drop-off
+             capacity pool and the season boundary
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js

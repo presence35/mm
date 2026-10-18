@@ -86,9 +86,9 @@ export function SelectField({ label, value, onChange, options, required, ...rest
   )
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search' }) {
+export function SearchBar({ value, onChange, placeholder = 'Search', trailing, className = '' }) {
   return (
-    <div className="search-bar">
+    <div className={`search-bar ${className}`.trim()}>
       <Icon name="search" size={20} />
       <input
         type="search"
@@ -97,6 +97,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search' }) {
         placeholder={placeholder}
         aria-label={placeholder}
       />
+      {trailing}
     </div>
   )
 }

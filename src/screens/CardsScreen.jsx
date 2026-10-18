@@ -1,20 +1,11 @@
 import { useMemo, useState } from 'react'
-import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton } from '../ui'
+import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton, FilterSheet } from '../ui'
 import { useCards, useRecentCards } from '../features/card/useCard.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta, countsByStatus } from '../domain/cardStatus.js'
+import { statusMeta, statusOptions, countsByStatus } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
-
-const FILTERS = [
-  { value: 'all', label: 'All' },
-  { value: 'intake', label: 'Intake' },
-  { value: 'storage', label: 'Storage' },
-  { value: 'service', label: 'Service' },
-  { value: 'ready', label: 'Ready' },
-  { value: 'invoiced', label: 'Invoiced' },
-]
 
 export default function CardsScreen({ embedded = false }) {
   const cards = useCards()
@@ -22,11 +13,25 @@ export default function CardsScreen({ embedded = false }) {
   const { employee } = useAuth()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
+  const [filterOpen, setFilterOpen] = useState(false)
   const recentIds = useRecentCards(employee?.id)
 
-  /* The count belongs on the chip: "Storage 4" answers "do I need to open
-     this filter" without opening it, which is the whole value of the number. */
+  /* The count belongs on the option: "Storage 4" answers "do I need to open this
+     filter" without opening it, which is the whole value of the number. Every
+     stage is offered, in lifecycle order, from the one place stages are
+     declared — the row of chips that used to do this job could only hold the
+     six that fitted on a line. */
   const counts = useMemo(() => countsByStatus(cards), [cards])
+
+  const filterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All', count: cards.length },
+      ...statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
+    ],
+    [cards.length, counts],
+  )
+
+  const activeFilter = filterOptions.find((o) => o.value === filter) ?? filterOptions[0]
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -123,23 +128,47 @@ export default function CardsScreen({ embedded = false }) {
         />
       ) : null}
 
-      <SearchBar value={query} onChange={setQuery} placeholder="Search work order, boat, customer" />
-      <ChipRow>
-        {FILTERS.map((f) => {
-          const n = f.value === 'all' ? cards.length : counts[f.value] ?? 0
-          return (
-            <Chip
-              key={f.value}
-              selected={filter === f.value}
-              tone={f.value === 'all' ? undefined : statusMeta(f.value).tone}
-              onClick={() => setFilter(f.value)}
-            >
-              {f.label}
-              <span className="chip__count">{n}</span>
-            </Chip>
-          )
-        })}
-      </ChipRow>
+      <SearchBar
+        className="search-bar--flush"
+        value={query}
+        onChange={setQuery}
+        placeholder="Search work order, boat, customer"
+        trailing={
+          <IconButton
+            icon="filter"
+            label={activeFilter.value === 'all' ? 'Filter by stage' : `Showing ${activeFilter.label}`}
+            onClick={() => setFilterOpen(true)}
+          />
+        }
+      />
+
+      {/* A filter that is on has to be readable without opening the sheet again:
+          one chip, named, with its count, that clears when it is tapped. */}
+      {activeFilter.value === 'all' ? null : (
+        <ChipRow className="chip-row--flush">
+          <Chip
+            icon="close"
+            tone={activeFilter.tone}
+            aria-label={`Clear the ${activeFilter.label} filter`}
+            onClick={() => setFilter('all')}
+          >
+            {activeFilter.label}
+            <span className="chip__count">{activeFilter.count}</span>
+          </Chip>
+        </ChipRow>
+      )}
+
+      <FilterSheet
+        open={filterOpen}
+        title="Show stage"
+        options={filterOptions}
+        value={filter}
+        onSelect={(value) => {
+          setFilter(value)
+          setFilterOpen(false)
+        }}
+        onDismiss={() => setFilterOpen(false)}
+      />
 
       {recentRows.length ? (
         <div className="recent">

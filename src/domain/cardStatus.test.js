@@ -1,7 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, stageProgress, countsByStatus, OPTIONAL_STAGES, activeCardFor } from './cardStatus.js'
+import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, stageProgress, countsByStatus, OPTIONAL_STAGES, activeCardFor, statusOptions } from './cardStatus.js'
+
+test('every stage is offered as a filter, in lifecycle order', () => {
+  const options = statusOptions()
+
+  assert.equal(options.length, 9)
+  assert.deepEqual(options.map((o) => o.value), STATUS_ORDER)
+  assert.deepEqual(options.map((o) => o.step), [0, 1, 2, 3, 4, 5, 6, 7, 8])
+  /* Each option carries what its row mark needs, from the one place a stage is
+     declared. */
+  for (const option of options) {
+    assert.equal(option.label, CARD_STATUS[option.value].label)
+    assert.ok(option.tone)
+    assert.ok(option.shape)
+  }
+})
 
 /* No-mirror rule: every status pairs colour (tone) with a label and a shape. */
 test('every status carries label + tone + shape, so colour never stands alone', () => {

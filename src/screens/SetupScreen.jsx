@@ -380,7 +380,7 @@ export default function SetupScreen() {
       <div className="section-head">Account</div>
       {/* Your own PIN, so it is not gated behind being an admin. */}
       <ListItem
-        icon="pin"
+        icon="keypad"
         title="Change my PIN"
         support={sync.online ? 'Needs your current PIN' : 'Requires a network connection'}
         onClick={() => navigate('change-pin')}

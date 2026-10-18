@@ -126,3 +126,12 @@ export function countsByStatus(cards) {
   }
   return out
 }
+
+/* The stages as filter options, in lifecycle order. Derived from the map above
+   so a tenth stage appears in every filter sheet by existing, and no screen
+   keeps its own shorter list of the ones somebody remembered. */
+export function statusOptions() {
+  return Object.entries(CARD_STATUS)
+    .map(([value, meta]) => ({ value, ...meta }))
+    .sort((a, b) => a.step - b.step)
+}

@@ -10,6 +10,7 @@ export { default as ThemeIcon } from './ThemeIcon'
 export { default as ModeIcon } from './ModeIcon'
 export { default as ProgressMeter } from './ProgressMeter'
 export { default as SlotGrid } from './SlotGrid'
+export { default as FilterSheet } from './FilterSheet'
 export { default as Collapsible } from './Collapsible'
 export {
   Skeleton,

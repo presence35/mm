@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
-import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab } from '../ui'
+import { useEffect, useMemo, useState } from 'react'
+import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab, Chip, ChipRow, IconButton, FilterSheet } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta } from '../domain/cardStatus.js'
+import { statusMeta, statusOptions } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
 
 /*
@@ -25,6 +25,8 @@ export default function BoatsScreen() {
   const { navigate } = useRouter()
   const { may } = useAuth()
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [filterOpen, setFilterOpen] = useState(false)
   const [rows, setRows] = useState(() => store.listBoats())
   const mayAdd = may(CAPABILITIES.CREATE_BOAT)
 
@@ -33,14 +35,39 @@ export default function BoatsScreen() {
     return store.subscribe(refresh)
   }, [])
 
+  /* The stages a card can be in, offered the same way the Cards list offers
+     them, plus the boats that have no card at all — a boat can be on file
+     before anyone has written one. Counted over the boats, not the cards. */
+  const filterOptions = useMemo(() => {
+    const counts = Object.fromEntries(statusOptions().map((s) => [s.value, 0]))
+    let noCard = 0
+    for (const row of rows) {
+      const key = row.card?.status
+      if (!key || !(key in counts)) noCard += 1
+      else counts[key] += 1
+    }
+    return [
+      { value: 'all', label: 'All', count: rows.length },
+      ...statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
+      { value: 'none', label: 'No card', shape: 'square', count: noCard },
+    ]
+  }, [rows])
+
+  const activeFilter = filterOptions.find((o) => o.value === filter) ?? filterOptions[0]
+
   const q = query.trim().toLowerCase()
-  const shown = rows.filter(({ boat, customer }) =>
-    !q
-      ? true
-      : [boat.name, boat.model, boat.motor_type, boat.licence, customer?.name]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q)),
-  )
+  const matchesFilter = (card) => {
+    if (filter === 'all') return true
+    if (filter === 'none') return !card
+    return card?.status === filter
+  }
+  const shown = rows.filter(({ boat, customer, card }) => {
+    if (!matchesFilter(card)) return false
+    if (!q) return true
+    return [boat.name, boat.model, boat.motor_type, boat.licence, customer?.name]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q))
+  })
 
   const open = (row) => navigate('boat', { id: row.boat.id })
 
@@ -67,12 +94,52 @@ export default function BoatsScreen() {
         title={`Boats · ${shown.length}`}
         actions={mayAdd ? <Fab icon="plus" aria-label="Add a boat" onClick={() => navigate('new-boat')} /> : undefined}
       />
-      <SearchBar value={query} onChange={setQuery} placeholder="Search name, model, licence, owner" />
+      <SearchBar
+        className="search-bar--flush"
+        value={query}
+        onChange={setQuery}
+        placeholder="Search name, model, licence, owner"
+        trailing={
+          <IconButton
+            icon="filter"
+            label={activeFilter.value === 'all' ? 'Filter by stage' : `Showing ${activeFilter.label}`}
+            onClick={() => setFilterOpen(true)}
+          />
+        }
+      />
+
+      {activeFilter.value === 'all' ? null : (
+        <ChipRow className="chip-row--flush">
+          <Chip
+            icon="close"
+            tone={activeFilter.tone}
+            aria-label={`Clear the ${activeFilter.label} filter`}
+            onClick={() => setFilter('all')}
+          >
+            {activeFilter.label}
+            <span className="chip__count">{activeFilter.count}</span>
+          </Chip>
+        </ChipRow>
+      )}
+
+      <FilterSheet
+        open={filterOpen}
+        title="Show stage"
+        options={filterOptions}
+        value={filter}
+        onSelect={(value) => {
+          setFilter(value)
+          setFilterOpen(false)
+        }}
+        onDismiss={() => setFilterOpen(false)}
+      />
 
       {!shown.length ? (
         <div className="state-view">
           <p className="state-view__title">Nothing matches</p>
-          <p className="state-view__body">No boat matches “{query.trim()}”.</p>
+          <p className="state-view__body">
+            {q ? `No boat matches “${query.trim()}”.` : `No boat is in ${activeFilter.label}.`}
+          </p>
         </div>
       ) : (
         shown.map((row) => {

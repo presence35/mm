@@ -121,16 +121,6 @@ export default function MapScreen() {
           on the navigation bar the phone is displaying, so the bar was a
           caption for a screen nobody navigates to by name. The tabs take the
           space, full width. */}
-      {/* The whole marina on one line. A building's heading can say which of
-          its slots are taken, but only this says how full the place is. */}
-      {fill.capacity ? (
-        <ProgressMeter
-          done={fill.occupied}
-          total={fill.capacity}
-          label={`${fill.occupied} of ${fill.capacity} occupied`}
-        />
-      ) : null}
-
       <header className="map-head">
         {views.length > 1 ? (
           <Segmented options={views} value={active} onChange={setView} ariaLabel="Map view" />
@@ -138,6 +128,17 @@ export default function MapScreen() {
           <h1 className="map-head__title">Map</h1>
         )}
       </header>
+
+      {/* The whole marina on one line, under the view switcher. A building's
+          heading can say which of its slots are taken, but only this says how
+          full the place is. */}
+      {fill.capacity ? (
+        <ProgressMeter
+          done={fill.occupied}
+          total={fill.capacity}
+          label={`${fill.occupied} of ${fill.capacity} occupied`}
+        />
+      ) : null}
 
       {active === 'list' ? <ListView cards={cards} aboard={aboard} layout={layout} onOpen={openCard} /> : null}
 
@@ -284,31 +285,35 @@ function ListView({ cards, aboard, layout, onOpen }) {
                       </StatusPill>
                     }
                   />
-                  <div
-                    className="row"
-                    style={{
-                      gap: 'var(--space-2)',
-                      padding: 'var(--space-2) var(--space-4) var(--space-3)',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <StatusPill tone={size.tone} shape={size.shape}>
-                      {size.label}
-                    </StatusPill>
-                    {dims ? (
-                      <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>{dims}</span>
-                    ) : (
-                      <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>
-                        No dimensions recorded
-                      </span>
-                    )}
-                    {position?.prior_year_customer ? (
-                      <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>
-                        Last year: {position.prior_year_customer}
-                      </span>
-                    ) : null}
-                  </div>
+                  {/* The slot's measurements, not the boat's — so when the layout
+                      does not describe this position the row says nothing rather
+                      than wearing a "No size" pill that reads as the boat's own
+                      size. A prior-year name is still worth the line. */}
+                  {size.key === 'unknown' && !position?.prior_year_customer ? null : (
+                    <div
+                      className="row"
+                      style={{
+                        gap: 'var(--space-2)',
+                        padding: 'var(--space-2) var(--space-4) var(--space-3)',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {size.key === 'unknown' ? null : (
+                        <StatusPill tone={size.tone} shape={size.shape}>
+                          {size.label}
+                        </StatusPill>
+                      )}
+                      {dims ? (
+                        <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>{dims}</span>
+                      ) : null}
+                      {position?.prior_year_customer ? (
+                        <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>
+                          Last year: {position.prior_year_customer}
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
                 </Card>
               )
             })}

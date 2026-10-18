@@ -312,12 +312,17 @@
 .chip[aria-pressed='true'] .chip__check,
 .chip[aria-selected='true'] .chip__check { display: block; }
 
+/* Every control that sits above a list shares the list's inset, so the search
+   field, the filter chip and the rows below line up on one margin. In-card chip
+   rows are not above a list — they keep the wider inset the card body uses. */
 .chip-row {
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
   padding: 0 var(--space-4);
 }
+
+.chip-row--flush { padding: 0 var(--space-2); }
 
 /* One intake item and the camera that photographs it, as a single pill. The
    claim and its evidence are one object, so the camera can never be read as
@@ -646,6 +651,11 @@ select.field__input { cursor: pointer; }
   background: var(--surface-container-high);
   color: var(--on-surface-variant);
 }
+
+/* Above a list, the field takes the list's own inset: the search box, the
+   filter chip and the rows below then share one margin. Inside a sheet it keeps
+   the sheet's inset, which is what the rest of the sheet's content uses. */
+.search-bar--flush { margin-inline: var(--space-2); }
 
 .search-bar:focus-within { box-shadow: inset 0 0 0 2px var(--primary); }
 .search-bar input {
@@ -1467,6 +1477,72 @@ button.slot:active { filter: brightness(0.94); }
 .recent .collapsible__head,
 .recent .collapsible__panel { border-bottom: none; }
 
+/* ----------------------------------------------------------- Filter sheet --
+   One row per option, as tall as a target, so the whole set is reachable
+   whatever the phone's width. The mark is the option's own dot shape in the
+   tone that goes with it: two stages can share a tone, and then the shape is
+   what tells them apart. */
+.filter-list {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1) var(--space-3) var(--space-4);
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border-radius: var(--corner-s);
+  text-align: left;
+  color: var(--on-surface);
+  font: var(--body-l);
+  --option-tone: var(--on-surface-variant);
+  transition: background-color var(--duration-short-2) var(--easing-standard);
+}
+
+.filter-option:hover:not(:disabled) { background: var(--surface-container-high); }
+.filter-option:active:not(:disabled) { background: var(--surface-container-highest); }
+
+.filter-option[data-tone='progress'] { --option-tone: var(--primary); }
+.filter-option[data-tone='action'] { --option-tone: var(--tertiary); }
+.filter-option[data-tone='done'] { --option-tone: var(--success); }
+.filter-option[data-tone='warn'] { --option-tone: var(--warning); }
+.filter-option[data-tone='error'] { --option-tone: var(--error); }
+
+.filter-option .status-pill__dot { color: var(--option-tone); }
+.filter-option__mark { flex-shrink: 0; width: 10px; height: 10px; }
+
+.filter-option__label { flex: 1; min-width: 0; }
+
+.filter-option__count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 0 var(--space-1);
+  border-radius: var(--corner-full);
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+  font: var(--label-s);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The chosen one keeps its own fill and its check, so selection is never colour
+   alone — and the mark switches to the fill's on-colour so it stays legible. */
+.filter-option[aria-checked='true'] {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.filter-option[aria-checked='true'] .status-pill__dot { color: var(--on-secondary-container); }
+
+.filter-option[aria-checked='true'] .filter-option__count {
+  background: var(--on-secondary-container);
+  color: var(--secondary-container);
+}
+
 /* Rows are cards in legacy, and a card running to the screen edge loses its
    rounded corner and its left edge. One inset, shared by the Recent band and
    the list. */
@@ -1578,17 +1654,31 @@ button.slot:active { filter: brightness(0.94); }
    `statusMeta.tone` behind the row edge and the status pill — one derivation,
    three readings. The selected chip keeps its own fill and its check, so a
    tint is never what tells you a filter is on. */
+/* A row's status is read twice: its leading edge and its trailing pill. The edge
+   has to be the tone's own colour — a container edge at 88% lightness would not
+   be there at all on a white card — so the pill and the chip take that same
+   colour, with the on-colour for their text. One swatch, three places. */
 :root[data-palette='legacy'] .chip[data-tone]:not([aria-pressed='true']) {
-  background: var(--surface-container-highest);
   color: var(--on-surface);
   box-shadow: none;
 }
 
-:root[data-palette='legacy'] .chip[data-tone='progress']:not([aria-pressed='true']) { background: var(--primary-container); color: var(--on-primary-container); }
-:root[data-palette='legacy'] .chip[data-tone='action']:not([aria-pressed='true']) { background: var(--tertiary-container); color: var(--on-tertiary-container); }
-:root[data-palette='legacy'] .chip[data-tone='done']:not([aria-pressed='true']) { background: var(--success-container); color: var(--on-success-container); }
-:root[data-palette='legacy'] .chip[data-tone='warn']:not([aria-pressed='true']) { background: var(--warning-container); color: var(--on-warning-container); }
-:root[data-palette='legacy'] .chip[data-tone='error']:not([aria-pressed='true']) { background: var(--error-container); color: var(--on-error-container); }
+:root[data-palette='legacy'] .chip[data-tone]:not([aria-pressed='true']) .chip__count {
+  background: transparent;
+  color: inherit;
+}
+
+:root[data-palette='legacy'] .status-pill--progress { background: var(--primary); color: var(--on-primary); }
+:root[data-palette='legacy'] .status-pill--action { background: var(--tertiary); color: var(--on-tertiary); }
+:root[data-palette='legacy'] .status-pill--done { background: var(--success); color: var(--on-success); }
+:root[data-palette='legacy'] .status-pill--warn { background: var(--warning); color: var(--on-warning); }
+:root[data-palette='legacy'] .status-pill--error { background: var(--error); color: var(--on-error); }
+
+:root[data-palette='legacy'] .chip[data-tone='progress']:not([aria-pressed='true']) { background: var(--primary); color: var(--on-primary); }
+:root[data-palette='legacy'] .chip[data-tone='action']:not([aria-pressed='true']) { background: var(--tertiary); color: var(--on-tertiary); }
+:root[data-palette='legacy'] .chip[data-tone='done']:not([aria-pressed='true']) { background: var(--success); color: var(--on-success); }
+:root[data-palette='legacy'] .chip[data-tone='warn']:not([aria-pressed='true']) { background: var(--warning); color: var(--on-warning); }
+:root[data-palette='legacy'] .chip[data-tone='error']:not([aria-pressed='true']) { background: var(--error); color: var(--on-error); }
 
 /* ---------------------------------------------------------------- Checkbox --
    Native input visually hidden but focusable; the box is a sibling decoy the
