@@ -366,6 +366,15 @@ src/
              Recorded in the router's navigate, the one place that knows a card
              was actually opened. recents.test.js pins the cap, the per-worker
              key and the behaviour on corrupt storage.
+    collapseState.js — which sections are open, on this phone. Per phone rather
+             than per worker or per card: a section you always open is a fact
+             about how you read a card, and a per-card key would grow with every
+             work order the marina has ever had. Keys are literals at the
+             Collapsible's call site, so the stored set is bounded by the
+             sections that exist. No key means no memory, which is what a
+             section that only exists while something is true wants.
+             collapseState.test.js pins the fallback, the per-key isolation and
+             the behaviour on corrupt or unwritable storage.
     media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js, schedule.js, conflictDiff.js
               — pure, deterministic

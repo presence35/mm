@@ -127,7 +127,7 @@ export default function MapScreen() {
         )}
       </header>
 
-      {active === 'list' ? <ListView cards={cards} aboard={aboard} layout={layout} /> : null}
+      {active === 'list' ? <ListView cards={cards} aboard={aboard} layout={layout} onOpen={openCard} /> : null}
 
       {active === 'buildings' ? (
         <div>
@@ -233,17 +233,26 @@ export default function MapScreen() {
 
 /* The list keeps the detail the grid cannot carry: dimensions, the size class in
    words, and last year's occupant, who is a hint for who will ask for the spot
-   back and never a reservation. Rows are read-only, as they were before.
+   back and never a reservation. A row opens the card, the same as tapping a
+   cell in the grid does — the list used to be the one view of the map where
+   tapping a boat did nothing, and a list of boats that will not open one is a
+   dead end.
 
    Each storage type is a collapsible group rather than a heading and a run of
    cards, because the list is now long: a marina with several buildings buries
    the boathouses below the fold, and the group head is the only thing worth
    scanning. Closed, a group still reports how many boats are in it. */
-function ListView({ cards, aboard, layout }) {
+function ListView({ cards, aboard, layout, onOpen }) {
   return (
     <div>
       {groupByStorageType(cards).map((group) => (
-        <Collapsible key={group.type} title={group.label} count={group.items.length} defaultOpen>
+        <Collapsible
+          key={group.type}
+          title={group.label}
+          stateKey={`map.${group.type}`}
+          count={group.items.length}
+          defaultOpen
+        >
           <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {group.items.map((card) => {
               const loc = aboard.get(card.id)
@@ -253,18 +262,18 @@ function ListView({ cards, aboard, layout }) {
               const dims = dimensionSummary(position)
               return (
                 <Card key={card.id} variant="outlined">
-                  <div className="list-item" style={{ cursor: 'default' }}>
-                    <span className="list-item__text">
-                      <span className="list-item__title">{loc?.boat?.name || loc?.boat?.model || 'Unnamed boat'}</span>
-                      <span className="list-item__support">{locationSummary(card)}</span>
-                      {loc?.customer?.name ? <span className="list-item__support">{loc.customer.name}</span> : null}
-                    </span>
-                    <span className="list-item__trailing">
+                  <ListItem
+                    icon="boat"
+                    tone={meta.tone}
+                    title={loc?.boat?.name || loc?.boat?.model || 'Unnamed boat'}
+                    support={[locationSummary(card), loc?.customer?.name].filter(Boolean).join(' · ')}
+                    onClick={() => onOpen(card)}
+                    trailing={
                       <StatusPill tone={meta.tone} shape={meta.shape}>
                         {meta.label}
                       </StatusPill>
-                    </span>
-                  </div>
+                    }
+                  />
                   <div
                     className="row"
                     style={{

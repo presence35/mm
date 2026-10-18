@@ -10,9 +10,9 @@ export default function BoatScreen({ params = {} }) {
 
   useEffect(() => {
     const refresh = () => setRecord(store.getBoat(params.id))
-    store.subscribe(refresh)
+    const unsubscribe = store.subscribe(refresh)
     refresh()
-    return () => store.subscribe(refresh)
+    return unsubscribe
   }, [params.id])
 
   if (!record) {

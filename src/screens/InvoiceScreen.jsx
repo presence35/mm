@@ -25,9 +25,9 @@ export default function InvoiceScreen({ params = {} }) {
       setRecord(next)
       setItems(next?.card?.invoice_items ?? [])
     }
-    store.subscribe(refresh)
+    const unsubscribe = store.subscribe(refresh)
     refresh()
-    return () => store.subscribe(refresh)
+    return unsubscribe
   }, [params.id])
 
   if (!record) {

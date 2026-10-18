@@ -60,7 +60,9 @@ function NavBar({ active, onSelect }) {
           aria-current={active === n.key ? 'page' : undefined}
           onClick={() => onSelect(n.key)}
         >
-          <Icon name={n.icon} size={24} />
+          <span className="nav-bar__icon">
+            <Icon name={n.icon} size={24} />
+          </span>
           <span className="nav-bar__label">{n.label}</span>
         </button>
       ))}
@@ -78,7 +80,9 @@ function NavRail({ active, onSelect }) {
           aria-current={active === n.key ? 'page' : undefined}
           onClick={() => onSelect(n.key)}
         >
-          <Icon name={n.icon} size={24} />
+          <span className="nav-bar__icon">
+            <Icon name={n.icon} size={24} />
+          </span>
           <span className="nav-bar__label">{n.label}</span>
         </button>
       ))}

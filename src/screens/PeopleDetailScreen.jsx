@@ -11,9 +11,9 @@ export default function PeopleDetailScreen({ params = {} }) {
 
   useEffect(() => {
     const refresh = () => setRecord(store.getCustomer(params.id))
-    store.subscribe(refresh)
+    const unsubscribe = store.subscribe(refresh)
     refresh()
-    return () => store.subscribe(refresh)
+    return unsubscribe
   }, [params.id])
 
   if (!record?.customer) {

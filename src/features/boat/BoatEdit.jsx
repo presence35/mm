@@ -81,7 +81,6 @@ export default function BoatEdit({ record }) {
   const [saved, setSaved] = useState(null)
 
   const canEdit = may(CAPABILITIES.EDIT_BOAT)
-  const canAssign = may(CAPABILITIES.ASSIGN_BOAT)
 
   const dirty = isDirty(draft, draftSerials, boat, serials)
   const dirtyRef = useRef(dirty)
@@ -274,7 +273,6 @@ export default function BoatEdit({ record }) {
                 <Button
                   variant={assigned ? 'tonal' : 'text'}
                   size="sm"
-                  disabled={!canAssign}
                   onClick={() => toggleAssignment(person)}
                 >
                   {assigned ? 'Unassign' : 'Assign'}
@@ -286,7 +284,9 @@ export default function BoatEdit({ record }) {
       )}
 
       <div style={{ padding: 'var(--space-4) var(--space-4) var(--space-6)' }}>
-        <Button fullWidth disabled={!dirty || !canEdit} onClick={save}>
+        {/* Disabled only for "there is nothing to save". A button that refuses
+            because of the role stays pressable and says why — see save(). */}
+        <Button fullWidth disabled={!dirty} onClick={save}>
           Save changes
         </Button>
       </div>

@@ -1,9 +1,9 @@
-import { ListItem, StatusPill, Chip, ChipRow, Button } from '../../ui'
+import { ListItem, StatusPill, Icon, ChipRow } from '../../ui'
 
 /* Intake + authorized work.
-   Received items are filter chips (toggling presence). Authorized work is a
-   list, because each row carries completion state that must survive greyscale
-   — the check and the label, not the colour.
+   Received items are one pill per item — the claim and its evidence together.
+   Authorized work is a list, because each row carries completion state that
+   must survive greyscale — the check and the label, not the colour.
 
    These render section *bodies* only. The title, the one-line summary and the
    open/closed state belong to the Collapsible that wraps them, so every
@@ -14,26 +14,37 @@ const words = (item) => item.replace(/_/g, ' ')
 export function ReceivedItems({ items, selected, onToggle, onPhotograph }) {
   return (
     <ChipRow>
-      {items.map((item) => (
-        <span key={item} className="intake-item">
-          <Chip selected={selected.includes(item)} onClick={() => onToggle(item)}>
-            {words(item)}
-          </Chip>
-          {/* Evidence, offered at the moment the item is recorded rather than
-              later on a separate screen. "It came with life jackets" is a
-              claim; a photo of those life jackets is proof, and the customer
-              dispute happens months afterwards.
-
-              Only present while the item is. The chip names the item, so the
-              button beside it does not repeat the name — it says "Photo",
-              which is what tapping it does. */}
-          {selected.includes(item) ? (
-            <Button variant="text" size="sm" icon="camera" onClick={() => onPhotograph?.(item)}>
-              Photo
-            </Button>
-          ) : null}
-        </span>
-      ))}
+      {items.map((item) => {
+        const present = selected.includes(item)
+        return (
+          /* One pill per item, holding both the claim and the evidence for it:
+             "it came with life jackets" is a claim, a photo of those life
+             jackets is proof, and the dispute happens months later. The camera
+             is inside the pill it belongs to, so it never has to be read as
+             belonging to the pill beside it. */
+          <span key={item} className="intake-pill" data-on={present ? 'true' : 'false'}>
+            <button
+              type="button"
+              className="intake-pill__toggle"
+              aria-pressed={present}
+              onClick={() => onToggle(item)}
+            >
+              {present ? <Icon name="check" size={16} /> : null}
+              {words(item)}
+            </button>
+            {present ? (
+              <button
+                type="button"
+                className="intake-pill__camera"
+                aria-label={`Photograph ${words(item)}`}
+                onClick={() => onPhotograph?.(item)}
+              >
+                <Icon name="camera" size={18} />
+              </button>
+            ) : null}
+          </span>
+        )
+      })}
     </ChipRow>
   )
 }

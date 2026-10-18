@@ -302,6 +302,13 @@ export default function SetupScreen() {
     ? sync.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : 'never'
 
+  /* Role and name, unless the name already is the role. */
+  const roleLabel = ROLE_LABEL[employee.role]
+  const signOutSupport =
+    roleLabel.toLowerCase() === String(employee.name).trim().toLowerCase()
+      ? roleLabel
+      : `${roleLabel} · ${employee.name}`
+
   return (
     <div>
       <TopBar title="Setup" />
@@ -379,13 +386,14 @@ export default function SetupScreen() {
         onClick={() => navigate('change-pin')}
         trailing={<Icon name="right" size={20} />}
       />
-      {/* Who is signed in, on the row that ends the session. It is the only
-          fact on this screen that matters at sign-out time, and a row of its
-          own said nothing that could be acted on. */}
+      {/* Who is signed in, on the row that ends the session. Role and name are
+          both useful — the role is what you are allowed to do, the name is who
+          you are — but the yard's admin account is literally named "admin", and
+          "Admin · admin" reads like a mistake rather than a fact. */}
       <ListItem
         icon="logout"
         title="Sign out"
-        support={`${ROLE_LABEL[employee.role]} · ${employee.name}`}
+        support={signOutSupport}
         onClick={signOut}
         trailing={<Icon name="right" size={20} />}
       />

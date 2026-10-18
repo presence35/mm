@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import Icon from './Icon'
+import { isSectionOpen, rememberSection } from '../engines/collapseState.js'
 
 /*
  * Collapsible section — one line when closed, the detail when open.
@@ -10,13 +11,39 @@ import Icon from './Icon'
  *
  * Stateless beyond its own open/closed flag: it renders whatever summary and
  * children it is handed, and knows nothing about cards.
+ *
+ * `stateKey` makes that flag outlive the screen: the section opens the way the
+ * worker left it, on this phone. Keys are literals at the call site, so the
+ * stored set is bounded by the sections that exist rather than by how many
+ * cards have been opened. No key means no memory, which is what a section that
+ * only exists while something is true wants.
+ *
+ * `align='end'` mirrors the head — chevron at the right, count and title
+ * trailing it. It is for a section that stands apart from the run of headings
+ * beneath it rather than part of it.
  */
 
-export default function Collapsible({ title, summary, count, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen)
+export default function Collapsible({
+  title,
+  summary,
+  count,
+  defaultOpen = false,
+  stateKey,
+  align = 'start',
+  children,
+}) {
+  const [open, setOpen] = useState(() => (stateKey ? isSectionOpen(stateKey, defaultOpen) : defaultOpen))
   const id = useId()
   const panelId = `${id}-panel`
   const buttonId = `${id}-button`
+
+  const toggle = () => {
+    setOpen((wasOpen) => {
+      const next = !wasOpen
+      if (stateKey) rememberSection(stateKey, next)
+      return next
+    })
+  }
 
   return (
     <section className="collapsible" data-open={open ? 'true' : 'false'}>
@@ -24,10 +51,10 @@ export default function Collapsible({ title, summary, count, defaultOpen = false
         <button
           id={buttonId}
           type="button"
-          className="collapsible__head"
+          className={`collapsible__head${align === 'end' ? ' collapsible__head--end' : ''}`}
           aria-expanded={open}
           aria-controls={panelId}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
         >
           <Icon name="down" size={24} className="collapsible__chevron" />
           <span className="collapsible__title">{title}</span>

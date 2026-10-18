@@ -143,7 +143,7 @@ export default function CardsScreen({ embedded = false }) {
 
       {recentRows.length ? (
         <div className="recent">
-          <Collapsible title="Recent" count={recentRows.length} defaultOpen>
+          <Collapsible title="Recent" stateKey="cards.recent" count={recentRows.length} defaultOpen align="end">
             {recentRows.map(renderRow)}
           </Collapsible>
         </div>
@@ -157,7 +157,7 @@ export default function CardsScreen({ embedded = false }) {
           </p>
         </div>
       ) : (
-        <div style={{ marginTop: 'var(--space-4)' }}>
+        <div className="list-inset" style={{ marginTop: 'var(--space-4)' }}>
           {groups.map((group) =>
             group.rows.length > 1 ? (
               <div key={group.key} style={{ marginBottom: 'var(--space-4)' }}>

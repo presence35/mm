@@ -319,14 +319,44 @@
   padding: 0 var(--space-4);
 }
 
-/* One intake item and its evidence button. The pair is a single unit, so a
-   camera button stays beside the item it photographs instead of collecting
-   into a second, ragged row of buttons further down. */
-.intake-item {
+/* One intake item and the camera that photographs it, as a single pill. The
+   claim and its evidence are one object, so the camera can never be read as
+   belonging to the pill beside it. Two sibling buttons, not a button inside a
+   button. */
+.intake-pill {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: var(--corner-full);
+  box-shadow: inset 0 0 0 1px var(--outline);
+  overflow: hidden;
+}
+
+.intake-pill[data-on='true'] {
+  background: var(--secondary-container);
+  box-shadow: none;
+}
+
+.intake-pill__toggle,
+.intake-pill__camera {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  font: var(--label-m);
+  color: var(--on-surface-variant);
 }
+
+.intake-pill__toggle { padding: 0 var(--space-3); }
+.intake-pill__camera { padding: 0 var(--space-2) 0 var(--space-3); }
+
+.intake-pill[data-on='true'] .intake-pill__toggle,
+.intake-pill[data-on='true'] .intake-pill__camera {
+  color: var(--on-secondary-container);
+}
+
+/* The seam between the claim and the evidence, so one pill still reads as the
+   two targets it is. */
+.intake-pill__camera { box-shadow: inset 1px 0 0 var(--outline-variant); }
 
 /* ------------------------------------------------------------- Segmented -- */
 
@@ -666,6 +696,25 @@ select.field__input { cursor: pointer; }
   flex-shrink: 0;
 }
 
+/* The tab you are on takes the palette's own indicator, the way an M3
+   navigation bar does — one colour for all six tabs, so the bar reads as part
+   of the app's theme rather than as six unrelated colours. It wraps the icon
+   and stops there: the label sits below it, and the indicator is a sibling of
+   neither.
+
+   It is on the icon rather than the whole tab because a full-height pill is
+   painted as a positioned box, which lands on top of the icon and the label
+   and hides the tab it is pointing at. */
+.nav-bar__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 32px;
+  border-radius: var(--corner-full);
+  transition: background-color var(--duration-medium-1) var(--easing-emphasized);
+}
+
 .nav-bar__item {
   flex: 1;
   display: flex;
@@ -675,27 +724,14 @@ select.field__input { cursor: pointer; }
   gap: var(--space-1);
   min-height: var(--target-min);
   color: var(--on-surface-variant);
-  position: relative;
   transition: color var(--duration-short-3) var(--easing-standard);
 }
 
-.nav-bar__item::before {
-  content: '';
-  position: absolute;
-  inset: var(--space-2) var(--space-2);
-  border-radius: var(--corner-full);
+.nav-bar__item[aria-current='page'] { color: var(--on-surface); }
+.nav-bar__item[aria-current='page'] .nav-bar__icon {
   background: var(--secondary-container);
-  opacity: 0;
-  transition: opacity var(--duration-medium-1) var(--easing-emphasized);
-  pointer-events: none;
+  color: var(--on-secondary-container);
 }
-
-/* The tab you are on takes the palette's own indicator, the way an M3
-   navigation bar does — one colour for all six tabs, so the bar reads as part
-   of the app's theme rather than as six unrelated colours. Colour is never
-   the only signal: the label also goes bold. */
-.nav-bar__item[aria-current='page'] { color: var(--on-secondary-container); }
-.nav-bar__item[aria-current='page']::before { opacity: 1; }
 .nav-bar__item[aria-current='page'] .nav-bar__label { font-weight: 700; }
 
 .nav-bar__label {
@@ -723,18 +759,14 @@ select.field__input { cursor: pointer; }
   min-height: var(--target-min);
   padding: var(--space-2) 0;
   color: var(--on-surface-variant);
-  position: relative;
 }
 
-.nav-rail__item[aria-current='page'] { color: var(--on-secondary-container); }
-.nav-rail__item[aria-current='page']::before {
-  content: '';
-  position: absolute;
-  inset: var(--space-1) var(--space-2);
-  border-radius: var(--corner-full);
+.nav-rail__item[aria-current='page'] { color: var(--on-surface); }
+.nav-rail__item[aria-current='page'] .nav-bar__icon {
   background: var(--secondary-container);
-  opacity: 1;
+  color: var(--on-secondary-container);
 }
+.nav-rail__item[aria-current='page'] .nav-bar__label { font-weight: 700; }
 
 /* --------------------------------------------------------------- Snackbar -- */
 
@@ -1352,6 +1384,11 @@ button.slot:active { filter: brightness(0.94); }
   transform: rotate(180deg);
 }
 
+.collapsible__head--end {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
 .collapsible__title { flex-shrink: 0; }
 
 /* The count answers "is there anything in here" without opening the section. */
@@ -1387,19 +1424,26 @@ button.slot:active { filter: brightness(0.94); }
 }
 
 .collapsible__panel {
+  padding-block: var(--space-3);
   border-top: 1px solid var(--outline-variant);
   border-bottom: 1px solid var(--outline-variant);
 }
 .collapsible__panel[hidden] { display: none; }
 
-/* The recent shortcut floats above the list it shortcuts, so it reads as a
-   band of its own rather than as the first row of the list. */
+/* The recent shortcut floats above the list it shortcuts, and it is inset by
+   the same amount the list below it is, so the two are the same width: a band
+   that is a few pixels wider than the cards under it reads as a mistake. */
 .recent {
-  margin: var(--space-2) var(--space-2) var(--space-4);
+  margin: var(--space-2) var(--space-2) var(--space-5);
   border-radius: var(--corner-m);
   background: var(--surface-container-low);
   overflow: hidden;
 }
+
+/* Rows are cards in legacy, and a card running to the screen edge loses its
+   rounded corner and its left edge. One inset, shared by the Recent band and
+   the list. */
+.list-inset { padding-inline: var(--space-2); }
 /* Count riding on a filter chip. Answers "is this filter worth opening"
    without opening it. */
 .chip__count {
@@ -1492,6 +1536,15 @@ button.slot:active { filter: brightness(0.94); }
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+}
+
+/* Recent, and any other band that is not a card, has no tint to fall back on:
+   legacy's language is white flat cards with hairlines, and
+   `--surface-container-low` lands on the page colour there — the band would
+   simply not be there. So it becomes the legacy card it stands in for. */
+:root[data-palette='legacy'] .recent {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
 }
 
 /* Tinted status chips (legacy). The retired app colour-coded its stage tabs

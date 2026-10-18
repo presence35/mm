@@ -9,6 +9,10 @@
  * The marks are paths rather than Icon.jsx glyphs because "automatic" is a
  * half-filled disc — fill on one side, stroke on the other — and one stroked
  * path cannot say that.
+ *
+ * Keys are the mode *values* ('system', 'light', 'dark'), not the labels: the
+ * picker passes what the theme stores, and a mark keyed 'auto' under a label
+ * called Auto is a mark that silently renders nothing.
  */
 
 const MARKS = {
@@ -22,7 +26,7 @@ const MARKS = {
     </>
   ),
   dark: <path d="M20.5 14.6A8.75 8.75 0 0 1 9.4 3.5a8.75 8.75 0 1 0 11.1 11.1z" fill="var(--primary)" />,
-  auto: (
+  system: (
     <>
       <circle cx="12" cy="12" r="9" fill="none" stroke="var(--primary)" strokeWidth="1.75" />
       <path d="M12 3a9 9 0 0 1 0 18z" fill="var(--primary)" />

@@ -138,6 +138,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
 
       <Collapsible
         title="Items received at intake"
+        stateKey="card.items-received"
         count={received.length}
         summary={`${received.length} of ${SEED_RECEIVED_ITEMS.length} accounted for`}
       >
@@ -149,7 +150,12 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         />
       </Collapsible>
 
-      <Collapsible title="Authorized work" count={authorized.length} summary={`${authorized.length} of ${SEED_AUTHORIZED_WORK.length} authorized`}>
+      <Collapsible
+        title="Authorized work"
+        stateKey="card.authorized-work"
+        count={authorized.length}
+        summary={`${authorized.length} of ${SEED_AUTHORIZED_WORK.length} authorized`}
+      >
         <AuthorizedWork
           work={(card.authorized_work ?? []).map((w) => ({
             ...w,
@@ -161,7 +167,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         />
       </Collapsible>
 
-      <Collapsible title="Condition assessment" summary={conditionSummary}>
+      <Collapsible title="Condition assessment" stateKey="card.condition" summary={conditionSummary}>
         <ListItem
           icon="alert"
           title="Rate condition"
@@ -171,11 +177,11 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         />
       </Collapsible>
 
-      <Collapsible title="Storage prep" summary={card.wrap_required ? 'Wrapping required' : 'No wrap'}>
+      <Collapsible title="Storage prep" stateKey="card.storage-prep" summary={card.wrap_required ? 'Wrapping required' : 'No wrap'}>
         <WrapControl wrapRequired={card.wrap_required} unwrapDone={card.unwrap_done} onChange={actions.patch} />
       </Collapsible>
 
-      <Collapsible title="Photos" count={photos.length} summary={photos.length ? `${photos.length} on this card` : 'None yet'}>
+      <Collapsible title="Photos" stateKey="card.photos" count={photos.length} summary={photos.length ? `${photos.length} on this card` : 'None yet'}>
         <PhotoStrip
           cardId={card.id}
           photos={photos}
@@ -186,7 +192,7 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         />
       </Collapsible>
 
-      <Collapsible title="Work log" count={logs.length} summary={logs.length ? `${logs.length} entries` : 'No entries yet'}>
+      <Collapsible title="Work log" stateKey="card.work-log" count={logs.length} summary={logs.length ? `${logs.length} entries` : 'No entries yet'}>
         <LogList
           logs={logs}
           cardId={card.id}
