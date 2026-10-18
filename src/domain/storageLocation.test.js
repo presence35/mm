@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { locationFieldsFor, isBoathouse, needsLocation, normalizeLocation, locationSummary, SIZE_CLASSES, sizeClassFor, heightSummary, dimensionSummary, positionCode, findPosition, buildingGrid, boathouseGrid, buildingsToDraw, boathousesToDraw, groupByStorageType, positionByCode } from './storageLocation.js'
+import { locationFieldsFor, isBoathouse, needsLocation, normalizeLocation, locationSummary, SIZE_CLASSES, sizeClassFor, heightSummary, dimensionSummary, positionCode, findPosition, buildingGrid, boathouseGrid, buildingsToDraw, boathousesToDraw, groupByStorageType, positionByCode, marinaFill } from './storageLocation.js'
 
 test('boathouse types take boathouse + slip, building takes building + row + col', () => {
   assert.deepEqual(locationFieldsFor('customer_boathouse'), ['boathouse_no', 'slip_no'])
@@ -125,11 +125,13 @@ test('a building grid puts each boat in its own cell and leaves the rest vacant'
   ]
   const grid = buildingGrid({ building: 'Metal 1', cards, layout: [], shape: SHAPE })
 
-  assert.equal(grid.cols.join(''), 'AB')
-  assert.deepEqual(grid.rows.map((r) => r.row), [1, 2])
-  assert.equal(grid.rows[0].cells[1].card.id, 'k-1')
+  /* Letters down the side, numbers across: the same axes the shed is stencilled
+     with, and the same cell codes. */
+  assert.equal(grid.cols.join(','), '1,2')
+  assert.deepEqual(grid.rows.map((r) => r.row), ['A', 'B'])
+  assert.equal(grid.rows[1].cells[0].card.id, 'k-1')
   assert.equal(grid.rows[0].cells[0].card, null)
-  assert.equal(grid.rows[1].cells[0].card, null)
+  assert.equal(grid.rows[1].cells[1].card, null)
   /* Only this building's boats are placed: the row count is not a filter. */
   assert.equal(grid.rows.flatMap((r) => r.cells).filter((c) => c.card).length, 1)
 })
@@ -139,12 +141,13 @@ test('a cell carries the measured position as well as the boat', () => {
   const grid = buildingGrid({ building: 'Metal 1', cards: [], layout, shape: SHAPE })
   const cell = grid.rows[0].cells[0]
 
+  assert.equal(cell.code, 'Metal 1/1/A')
   assert.equal(cell.card, null)
   assert.equal(cell.position.prior_year_customer, 'Hollis')
   assert.equal(sizeClassFor(cell.position).key, 'large')
   /* And a cell the layout does not describe says so rather than guessing. */
-  assert.equal(grid.rows[0].cells[1].position, null)
-  assert.equal(sizeClassFor(grid.rows[0].cells[1].position).label, 'No size')
+  assert.equal(grid.rows[1].cells[0].position, null)
+  assert.equal(sizeClassFor(grid.rows[1].cells[0].position).label, 'No size')
 })
 
 test('a boat with no row or column is surfaced, not dropped off the map', () => {
@@ -174,6 +177,26 @@ test('only buildings that hold something are drawn', () => {
   assert.deepEqual(withPosition, ['Metal 2'])
 })
 
+test('the marina fill counts declared slots, not the ones in use', () => {
+  const shape = { ...SHAPE, boathouseCount: 1, boathouseSlips: 10 }
+  const cards = [
+    { id: 'k-1', storage_type: 'storage_building' },
+    { id: 'k-2', storage_type: 'storage_building', storage_building: 'Metal 1' },
+    { id: 'k-3', storage_type: 'marina_boathouse' },
+    /* A customer's own boathouse is not the marina's to count, and dry land has
+       no slots to fill. */
+    { id: 'k-4', storage_type: 'customer_boathouse' },
+    { id: 'k-5', storage_type: 'dry_land' },
+    { id: 'k-6', storage_type: null },
+  ]
+
+  assert.deepEqual(marinaFill({ cards, shape }), { occupied: 3, capacity: 18 })
+
+  /* An empty marina is an empty bar, not a smaller marina: capacity is what the
+     marina has declared, so it does not fall as buildings empty out. */
+  assert.deepEqual(marinaFill({ cards: [], shape }), { occupied: 0, capacity: 18 })
+})
+
 test('a boathouse grid counts what is in it and places boats by slip', () => {
   const shape = { boathouseSlips: 3 }
   const cards = [
@@ -186,9 +209,8 @@ test('a boathouse grid counts what is in it and places boats by slip', () => {
   assert.equal(grid.slips.length, 3)
   assert.equal(grid.slips[1].card.id, 'k-1')
   assert.equal(grid.slips[0].card, null)
-  /* A boat parked here with no slip is still counted as occupying the
-     boathouse, and is listed rather than lost. */
-  assert.equal(grid.occupied, 2)
+  /* A boat parked here with no slip is still found, and is listed rather than
+     lost. */
   assert.deepEqual(grid.unplaced.map((c) => c.id), ['k-2'])
 })
 

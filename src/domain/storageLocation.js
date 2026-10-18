@@ -206,6 +206,12 @@ export function buildingsToDraw({ cards, layout, shape }) {
 /*
  * One building's grid.
  *
+ * Drawn the way the shed is stencilled: the letters run down the side and the
+ * numbers across the top, so a building 26 columns wide is a tall list on a
+ * phone instead of a table that has to be scrolled sideways. The code a cell
+ * carries is untouched by that — it is still "building/row/column" — so nothing
+ * downstream has to know which axis it is drawn on.
+ *
  * Dimensions belong to the position, so a cell carries the position as well as
  * the card: an empty cell with a recorded size is still worth showing, and a
  * boat in a cell the layout does not describe gets "No size" rather than a size
@@ -215,8 +221,8 @@ export function buildingsToDraw({ cards, layout, shape }) {
  */
 export function buildingGrid({ building, cards, layout, shape }) {
   const here = cardsInBuilding(cards, building)
-  const rows = shape?.rows ?? []
-  const cols = shape?.cols ?? []
+  const across = shape?.rows ?? []
+  const down = shape?.cols ?? []
 
   const cells = new Map()
   const unplaced = []
@@ -230,22 +236,40 @@ export function buildingGrid({ building, cards, layout, shape }) {
 
   return {
     building,
-    cols,
+    cols: across,
     unplaced,
-    rows: rows.map((row) => ({
-      row,
-      cells: cols.map((col) => {
-        const code = buildingCode(building, row, col)
-        return { code, col, card: cells.get(code) ?? null, position: positionByCode(layout, code) }
+    rows: down.map((letter) => ({
+      row: letter,
+      cells: across.map((number) => {
+        const code = buildingCode(building, number, letter)
+        return { code, col: number, card: cells.get(code) ?? null, position: positionByCode(layout, code) }
       }),
     })),
   }
 }
 
+/*
+ * How full the marina is.
+ *
+ * Capacity is what the marina has declared — every building's rows and columns,
+ * every boathouse's slips — so it does not shrink as buildings empty out: an
+ * empty building is the emptiest state, not a smaller marina. A boat occupies a
+ * slot by being in a storage building or a marina boathouse; dry land has no
+ * slots to fill, and a customer's own boathouse is not the marina's to count.
+ */
+export function marinaFill({ cards, shape }) {
+  const capacity =
+    (shape?.buildings ?? []).length * (shape?.rows ?? []).length * (shape?.cols ?? []).length +
+    Number(shape?.boathouseCount ?? 0) * Number(shape?.boathouseSlips ?? 0)
+  const occupied = (cards ?? []).filter(
+    (c) => c.storage_type === 'storage_building' || c.storage_type === 'marina_boathouse',
+  ).length
+  return { occupied, capacity }
+}
+
 export function boathousesToDraw(shape) {
   return Array.from({ length: Number(shape?.boathouseCount ?? 0) }, (_, i) => i + 1)
 }
-
 /* Same shape as a building grid, one row of slips instead of rows of columns. */
 export function boathouseGrid({ boathouse, cards, layout, shape }) {
   const here = cardsInBoathouse(cards, boathouse)
@@ -263,7 +287,6 @@ export function boathouseGrid({ boathouse, cards, layout, shape }) {
 
   return {
     boathouse,
-    occupied: here.length,
     unplaced,
     slips: slips.map((slip) => {
       const code = boathouseCode(boathouse, slip)

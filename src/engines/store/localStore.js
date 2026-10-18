@@ -586,20 +586,25 @@ export function setBoatSerials(boatId, serials) {
    retried sync land on one row instead of two. */
 export function addAssignment(boatId, employeeId, assignedBy = null) {
   const id = `ba-${boatId}-${employeeId}`
-  if (db.assignments.some((a) => a.id === id)) return null
+  if (db.assignments.some((a) => a.boat_id === boatId && a.employee_id === employeeId)) return null
   const row = { id, boat_id: boatId, employee_id: employeeId, assigned_by: assignedBy, version: 0, local_pending: true }
   db.assignments = [...db.assignments, row]
   write('assignments', row)
   return row
 }
 
+/* The pair is the identity, not the id. Rows that arrived by sync or the
+   legacy import carry ids this module never derived, so looking one up by a
+   rebuilt id found nothing for exactly the assignments a real database has.
+   Remove by pair, using each row's own id. */
 export function removeAssignment(boatId, employeeId) {
-  const id = `ba-${boatId}-${employeeId}`
-  if (!db.assignments.some((a) => a.id === id)) return null
-  db.assignments = db.assignments.filter((a) => a.id !== id)
-  idb.removeAndQueue('boat_assignments', id).catch(() => {})
+  const rows = db.assignments.filter((a) => a.boat_id === boatId && a.employee_id === employeeId)
+  if (!rows.length) return null
+  const ids = new Set(rows.map((a) => a.id))
+  db.assignments = db.assignments.filter((a) => !ids.has(a.id))
+  for (const id of ids) idb.removeAndQueue('boat_assignments', id).catch(() => {})
   notify()
-  return id
+  return rows[0].id
 }
 
 export function nextWorkOrderNo(now) {

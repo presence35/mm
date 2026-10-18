@@ -37,7 +37,6 @@ export default function PeopleDetailScreen({ params = {} }) {
           { k: 'Phone', v: customer.phone },
           { k: 'Email', v: customer.email },
           { k: 'City', v: customer.city },
-          { k: 'Boats', v: boats.length },
         ]}
       />
 

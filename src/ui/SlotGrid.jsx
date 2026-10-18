@@ -6,11 +6,10 @@
  * rule lives in domain/storageLocation.js, so the grid and the list can never
  * disagree about who is in Metal 2 row 3.
  *
- * A table, not a div soup: the column letters and the row numbers are headers a
- * screen reader can pair with a cell, and a cell that holds a boat is a real
- * button. Empty cells are not focusable — there is nothing to activate, and 130
- * tab stops of empty boxes would be a worse keyboard experience than no grid at
- * all.
+ * A table, not a div soup: the headers are a column or a row a screen reader
+ * can pair with a cell, and a cell that holds a boat is a real button. Empty
+ * cells are not focusable — there is nothing to activate, and 130 tab stops of
+ * empty boxes would be a worse keyboard experience than no grid at all.
  *
  * Colour is never the only signal. Every occupied cell carries the boat's name,
  * its status *shape* (the same shapes the status pills use) and — for a screen

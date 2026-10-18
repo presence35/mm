@@ -1257,6 +1257,17 @@ button.slot:active { filter: brightness(0.94); }
   background: var(--primary);
 }
 
+/* A labelled meter answers a question nothing else on the screen answers, so
+   the number sits beside the bar as text rather than restating one. */
+.meter--labelled { gap: var(--space-3); }
+
+.meter__label {
+  flex-shrink: 0;
+  color: var(--on-surface-variant);
+  font: var(--label-m);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ----------------------------------------------------------- Stage strip -- */
 
 /* Wraps. It used to scroll horizontally on one line, which hid the later
@@ -1384,10 +1395,13 @@ button.slot:active { filter: brightness(0.94); }
   transform: rotate(180deg);
 }
 
+/* Right-aligned head: title, then count, then the chevron last, so the count
+   reads as part of the heading rather than as a prefix to it. */
 .collapsible__head--end {
-  flex-direction: row-reverse;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
+
+.collapsible__head--end .collapsible__chevron { order: 1; }
 
 .collapsible__title { flex-shrink: 0; }
 
@@ -1435,10 +1449,23 @@ button.slot:active { filter: brightness(0.94); }
    that is a few pixels wider than the cards under it reads as a mistake. */
 .recent {
   margin: var(--space-2) var(--space-2) var(--space-5);
+  border: 1px solid var(--outline-variant);
   border-radius: var(--corner-m);
-  background: var(--surface-container-low);
   overflow: hidden;
 }
+
+/* The outline is what separates the band from the list under it in both states.
+   The fill only arrives with the content: a tint behind a closed section fills
+   space with something it is not showing. Open, fill and outline together
+   gather the head and the rows into one block. */
+.recent:has([data-open='true']) {
+  background: var(--surface-container-low);
+}
+
+/* The band's outline is its own bottom edge, so the head's closing hairline and
+   the panel's would each draw a second line on top of it. */
+.recent .collapsible__head,
+.recent .collapsible__panel { border-bottom: none; }
 
 /* Rows are cards in legacy, and a card running to the screen edge loses its
    rounded corner and its left edge. One inset, shared by the Recent band and
@@ -1542,9 +1569,8 @@ button.slot:active { filter: brightness(0.94); }
    legacy's language is white flat cards with hairlines, and
    `--surface-container-low` lands on the page colour there — the band would
    simply not be there. So it becomes the legacy card it stands in for. */
-:root[data-palette='legacy'] .recent {
+:root[data-palette='legacy'] .recent:has([data-open='true']) {
   background: var(--surface-container-lowest);
-  border: 1px solid var(--outline-variant);
 }
 
 /* Tinted status chips (legacy). The retired app colour-coded its stage tabs

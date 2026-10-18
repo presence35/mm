@@ -18,8 +18,8 @@ import { isSectionOpen, rememberSection } from '../engines/collapseState.js'
  * cards have been opened. No key means no memory, which is what a section that
  * only exists while something is true wants.
  *
- * `align='end'` mirrors the head — chevron at the right, count and title
- * trailing it. It is for a section that stands apart from the run of headings
+ * `align='end'` right-aligns the head, with the count beside the title and the
+ * chevron last. It is for a section that stands apart from the run of headings
  * beneath it rather than part of it.
  */
 

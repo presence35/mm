@@ -21,6 +21,13 @@ export function RouterProvider({ children }) {
   stackRef.current = stack
 
   const dirtyRef = useRef(false)
+  /* Both the app's own back arrow and the browser's button end in
+     history.back(), but only one of them is guaranteed to answer with popstate:
+     Firefox does not fire it for an entry created without user activation, and
+     the root entry is created in a mount effect. So the step back is taken
+     here, once, and a popstate that arrives afterwards is swallowed rather
+     than stepping the stack a second time. */
+  const backGuardRef = useRef(0)
   const [pending, setPending] = useState(null)
 
   const { employee } = useAuth()
@@ -46,6 +53,10 @@ export function RouterProvider({ children }) {
 
   useEffect(() => {
     const onPopState = () => {
+      if (backGuardRef.current > 0) {
+        backGuardRef.current -= 1
+        return
+      }
       const s = stackRef.current
       if (s.length > 1) {
         if (dirtyRef.current) {
@@ -77,8 +88,17 @@ export function RouterProvider({ children }) {
       setPending({ type: 'push', screen, params })
       return
     }
+    /* Any navigation settles whatever a back was waiting for, so a guard that a
+       browser never answered cannot outlive it and swallow a later press. */
+    backGuardRef.current = 0
     window.history.pushState({ screen, params }, '')
     setStack((prev) => [...prev, { screen, params }])
+  }, [])
+
+  const stepBack = useCallback(() => {
+    backGuardRef.current += 1
+    window.history.back()
+    setStack((prev) => prev.slice(0, -1))
   }, [])
 
   const goBack = useCallback(() => {
@@ -87,14 +107,15 @@ export function RouterProvider({ children }) {
       setPending({ type: 'back' })
       return
     }
-    window.history.back()
-  }, [])
+    stepBack()
+  }, [stepBack])
 
   const goTab = useCallback((tab) => {
     if (dirtyRef.current) {
       setPending({ type: 'tab', tab })
       return
     }
+    backGuardRef.current = 0
     window.history.replaceState({ idx: 0 }, '')
     setStack([{ screen: tab, params: {} }])
   }, [])
@@ -109,6 +130,7 @@ export function RouterProvider({ children }) {
 
   const discard = () => {
     dirtyRef.current = false
+    backGuardRef.current = 0
     const action = pending
     setPending(null)
     if (!action) return
@@ -116,7 +138,7 @@ export function RouterProvider({ children }) {
       window.history.pushState({ screen: action.screen, params: action.params }, '')
       setStack((prev) => [...prev, { screen: action.screen, params: action.params }])
     } else if (action.type === 'back') {
-      window.history.back()
+      stepBack()
     } else if (action.type === 'tab') {
       window.history.replaceState({ idx: 0 }, '')
       setStack([{ screen: action.tab, params: {} }])

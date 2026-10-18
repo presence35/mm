@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar, StatusPill, EmptyState, Card, Segmented, Chip, ChipRow, SlotGrid, ListItem, Collapsible } from '../ui'
+import { TopBar, StatusPill, EmptyState, Card, Segmented, Chip, ChipRow, SlotGrid, ListItem, Collapsible, ProgressMeter } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useCards } from '../features/card/useCard.js'
 import * as store from '../engines/store/localStore.js'
@@ -13,6 +13,7 @@ import {
   buildingGrid,
   boathousesToDraw,
   boathouseGrid,
+  marinaFill,
 } from '../domain/storageLocation.js'
 import { statusMeta } from '../domain/cardStatus.js'
 
@@ -56,6 +57,7 @@ export default function MapScreen() {
   }
 
   const buildings = buildingsToDraw({ cards, layout, shape })
+  const fill = marinaFill({ cards, shape })
   const boathouses = boathousesToDraw(shape)
   const hasBoathouses = cards.some((c) => c.storage_type === 'marina_boathouse' || c.storage_type === 'customer_boathouse')
 
@@ -119,6 +121,16 @@ export default function MapScreen() {
           on the navigation bar the phone is displaying, so the bar was a
           caption for a screen nobody navigates to by name. The tabs take the
           space, full width. */}
+      {/* The whole marina on one line. A building's heading can say which of
+          its slots are taken, but only this says how full the place is. */}
+      {fill.capacity ? (
+        <ProgressMeter
+          done={fill.occupied}
+          total={fill.capacity}
+          label={`${fill.occupied} of ${fill.capacity} occupied`}
+        />
+      ) : null}
+
       <header className="map-head">
         {views.length > 1 ? (
           <Segmented options={views} value={active} onChange={setView} ariaLabel="Map view" />
@@ -195,11 +207,9 @@ export default function MapScreen() {
             const grid = boathouseGrid({ boathouse: no, cards, layout, shape })
             return (
               <section key={no}>
-                {/* Legacy's heading, kept: "2/10 occupied" is the number people
-                    ask for out loud. */}
-                <div className="section-head">
-                  Boathouse {no} · {grid.occupied}/{grid.slips.length} occupied
-                </div>
+                {/* No count: the row of slips below already shows which ones
+                    are taken, and "2/10" is the same fact twice. */}
+                <div className="section-head">Boathouse {no}</div>
                 <SlotGrid
                   caption={`Boathouse ${no}, slips 1 to ${grid.slips.length}`}
                   columns={grid.slips.map((s) => s.col)}
