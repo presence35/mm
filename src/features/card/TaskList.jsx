@@ -13,44 +13,28 @@ const words = (item) => item.replace(/_/g, ' ')
 
 export function ReceivedItems({ items, selected, onToggle, onPhotograph }) {
   return (
-    <>
-      <ChipRow>
-        {items.map((item) => (
-          <Chip key={item} selected={selected.includes(item)} onClick={() => onToggle(item)}>
+    <ChipRow>
+      {items.map((item) => (
+        <span key={item} className="intake-item">
+          <Chip selected={selected.includes(item)} onClick={() => onToggle(item)}>
             {words(item)}
           </Chip>
-        ))}
-      </ChipRow>
+          {/* Evidence, offered at the moment the item is recorded rather than
+              later on a separate screen. "It came with life jackets" is a
+              claim; a photo of those life jackets is proof, and the customer
+              dispute happens months afterwards.
 
-      {/* Evidence, offered at the moment the item is recorded rather than
-          later on a separate screen. "It came with life jackets" is a claim;
-          a photo of those life jackets is proof, and the customer dispute
-          happens months afterwards. */}
-      {selected.length ? (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 'var(--space-2)',
-            alignItems: 'center',
-            padding: 'var(--space-2) var(--space-4) var(--space-3)',
-          }}
-        >
-          <span style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)' }}>Photograph what was handed over:</span>
-          {selected.map((item) => (
-            /* Named, not a bare camera glyph: the button opens a file picker,
-               so it has to say what the photo is of before it is tapped. */
-            <Button key={item} variant="tonal" size="sm" icon="camera" onClick={() => onPhotograph?.(item)}>
-              {words(item)}
+              Only present while the item is. The chip names the item, so the
+              button beside it does not repeat the name — it says "Photo",
+              which is what tapping it does. */}
+          {selected.includes(item) ? (
+            <Button variant="text" size="sm" icon="camera" onClick={() => onPhotograph?.(item)}>
+              Photo
             </Button>
-          ))}
-        </div>
-      ) : null}
-
-      <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-4)' }}>
-        {selected.length} of {items.length} accounted for
-      </p>
-    </>
+          ) : null}
+        </span>
+      ))}
+    </ChipRow>
   )
 }
 
@@ -69,8 +53,8 @@ export function AuthorizedWork({ work, onToggleAuthorized, onToggleCompleted }) 
         <ListItem
           key={w.key}
           icon={w.completed ? 'check' : w.authorized ? 'wrench' : 'alert'}
+          tone={w.completed ? 'done' : w.authorized ? 'action' : 'neutral'}
           title={words(w.key)}
-          support={w.completed ? 'Completed' : w.authorized ? 'Authorized — not started' : 'Not authorized'}
           onClick={() => (w.authorized ? onToggleCompleted(w.key) : onToggleAuthorized(w.key))}
           trailing={
             w.completed ? (

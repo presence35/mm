@@ -319,6 +319,15 @@
   padding: 0 var(--space-4);
 }
 
+/* One intake item and its evidence button. The pair is a single unit, so a
+   camera button stays beside the item it photographs instead of collecting
+   into a second, ragged row of buttons further down. */
+.intake-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 /* ------------------------------------------------------------- Segmented -- */
 
 .segmented {
@@ -357,6 +366,64 @@
 }
 .segmented__item[aria-checked='true']::before { opacity: 0; }
 .segmented__item:disabled { opacity: 0.38; }
+
+/* --- Map header ------------------------------------------------------------
+   The map's own header: the three view tabs take the whole bar, so they read
+   wider than the segmented control does anywhere else. They are 40px rather
+   than 48 because the bar is chrome and the tabs are the only thing in it —
+   the 48px target is kept by an invisible band over each tab, the same
+   technique the chips use, so the touch area does not shrink with the paint.
+
+   `overflow: visible` is what lets that band escape the pill's 40px box, so
+   the end tabs carry the pill's radius themselves rather than being clipped
+   by it. */
+.map-head {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.map-head__title {
+  font: var(--headline-s);
+  padding: 0 var(--space-1);
+}
+
+.map-head .segmented {
+  flex: 1;
+  min-height: 40px;
+  overflow: visible;
+}
+
+.map-head .segmented__item {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+}
+
+.map-head .segmented__item::before {
+  border-radius: inherit;
+}
+
+.map-head .segmented__item:first-child {
+  border-start-start-radius: var(--corner-full);
+  border-end-start-radius: var(--corner-full);
+}
+
+.map-head .segmented__item:last-child {
+  border-start-end-radius: var(--corner-full);
+  border-end-end-radius: var(--corner-full);
+}
+
+.map-head .segmented__item::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--target-min);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 
 /* ------------------------------------------------------------ condition -- */
 /* One row per area: the label and its current state, then the rating control.
@@ -617,14 +684,18 @@ select.field__input { cursor: pointer; }
   position: absolute;
   inset: var(--space-2) var(--space-2);
   border-radius: var(--corner-full);
-  background: var(--inverse-surface);
+  background: var(--secondary-container);
   opacity: 0;
   transition: opacity var(--duration-medium-1) var(--easing-emphasized);
   pointer-events: none;
 }
 
-.nav-bar__item[aria-current='page'] { color: var(--on-surface); }
-.nav-bar__item[aria-current='page']::before { opacity: 0.1; }
+/* The tab you are on takes the palette's own indicator, the way an M3
+   navigation bar does — one colour for all six tabs, so the bar reads as part
+   of the app's theme rather than as six unrelated colours. Colour is never
+   the only signal: the label also goes bold. */
+.nav-bar__item[aria-current='page'] { color: var(--on-secondary-container); }
+.nav-bar__item[aria-current='page']::before { opacity: 1; }
 .nav-bar__item[aria-current='page'] .nav-bar__label { font-weight: 700; }
 
 .nav-bar__label {
@@ -655,14 +726,14 @@ select.field__input { cursor: pointer; }
   position: relative;
 }
 
-.nav-rail__item[aria-current='page'] { color: var(--on-surface); }
+.nav-rail__item[aria-current='page'] { color: var(--on-secondary-container); }
 .nav-rail__item[aria-current='page']::before {
   content: '';
   position: absolute;
   inset: var(--space-1) var(--space-2);
   border-radius: var(--corner-full);
-  background: var(--inverse-surface);
-  opacity: 0.1;
+  background: var(--secondary-container);
+  opacity: 1;
 }
 
 /* --------------------------------------------------------------- Snackbar -- */
@@ -1027,16 +1098,18 @@ button.slot:active { filter: brightness(0.94); }
   animation: btn-spin 800ms linear infinite;
 }
 
-/* -------------------------------------------------------------- Palette -- */
+/* ------------------------------------------------- Palette / appearance --
+   One tile shape for both pickers: the colour palette and the light/dark mode
+   answer the same kind of question, so they read as the same control. */
 
-.palette-grid {
+.theme-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--space-3);
   padding: 0 var(--space-4) var(--space-4);
 }
 
-.palette-option {
+.theme-option {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -1051,7 +1124,7 @@ button.slot:active { filter: brightness(0.94); }
   transition: box-shadow var(--duration-short-3) var(--easing-standard);
 }
 
-.palette-option::after {
+.theme-option::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1063,21 +1136,21 @@ button.slot:active { filter: brightness(0.94); }
   z-index: -1;
 }
 
-.palette-option:hover:not(:disabled)::after { opacity: var(--state-hover); }
-.palette-option:active:not(:disabled)::after { opacity: var(--state-pressed); }
+.theme-option:hover:not(:disabled)::after { opacity: var(--state-hover); }
+.theme-option:active:not(:disabled)::after { opacity: var(--state-pressed); }
 
-.palette-option[aria-checked='true'] {
+.theme-option[aria-checked='true'] {
   box-shadow: inset 0 0 0 2px var(--primary);
   background: var(--primary-container);
   color: var(--on-primary-container);
 }
 
-.palette-option__mark { display: flex; flex-shrink: 0; }
-.palette-option__text { min-width: 0; flex: 1; }
+.theme-option__mark { display: flex; flex-shrink: 0; }
+.theme-option__text { min-width: 0; flex: 1; }
 /* Two lines, no more. Every option is therefore the same height: the mark is a
    fixed 48px and the name clamps to two lines, so a long name cannot make one
    option taller than the rest. */
-.palette-option__name {
+.theme-option__name {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1127,14 +1200,14 @@ button.slot:active { filter: brightness(0.94); }
 }
 /* ---------------------------------------------------- Stage / progress -- */
 
-/* The one-line meter under the stage strip: same fact, small horizontal bar.
-   Fill is the primary colour paired with the "4 of 9" word — the bar alone
-   never has to be read. */
+/* The stage bar, sitting under the stage strip where the section rule used to
+   be: the lifecycle as one line. The strip above already names the stage and
+   every legal target, so the bar is a restatement, not the only place the fact
+   lives — which is why it carries no text and no accessible role. */
 .meter {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-4);
+  padding: var(--space-3) var(--space-4);
 }
 
 .meter__track {
@@ -1150,12 +1223,6 @@ button.slot:active { filter: brightness(0.94); }
   height: 100%;
   border-radius: var(--corner-full);
   background: var(--primary);
-}
-
-.meter__word {
-  font: var(--label-s);
-  color: var(--on-surface-variant);
-  flex-shrink: 0;
 }
 
 /* ----------------------------------------------------------- Stage strip -- */
@@ -1324,6 +1391,15 @@ button.slot:active { filter: brightness(0.94); }
   border-bottom: 1px solid var(--outline-variant);
 }
 .collapsible__panel[hidden] { display: none; }
+
+/* The recent shortcut floats above the list it shortcuts, so it reads as a
+   band of its own rather than as the first row of the list. */
+.recent {
+  margin: var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--corner-m);
+  background: var(--surface-container-low);
+  overflow: hidden;
+}
 /* Count riding on a filter chip. Answers "is this filter worth opening"
    without opening it. */
 .chip__count {
@@ -1391,13 +1467,20 @@ button.slot:active { filter: brightness(0.94); }
   border-radius: var(--corner-l);
   margin-block: var(--space-2);
   box-shadow: none;
+  /* One tone, read twice: the leading edge and the leading icon. Declared here
+     so the five tone rules below stay one line each. */
+  --row-tone: var(--on-surface-variant);
 }
 
-:root[data-palette='legacy'] .list-item[data-tone='progress'] { border-left-color: var(--primary); }
-:root[data-palette='legacy'] .list-item[data-tone='action'] { border-left-color: var(--tertiary); }
-:root[data-palette='legacy'] .list-item[data-tone='done'] { border-left-color: var(--success); }
-:root[data-palette='legacy'] .list-item[data-tone='warn'] { border-left-color: var(--warning); }
-:root[data-palette='legacy'] .list-item[data-tone='error'] { border-left-color: var(--error); }
+:root[data-palette='legacy'] .list-item[data-tone='progress'] { --row-tone: var(--primary); border-left-color: var(--primary); }
+:root[data-palette='legacy'] .list-item[data-tone='action'] { --row-tone: var(--tertiary); border-left-color: var(--tertiary); }
+:root[data-palette='legacy'] .list-item[data-tone='done'] { --row-tone: var(--success); border-left-color: var(--success); }
+:root[data-palette='legacy'] .list-item[data-tone='warn'] { --row-tone: var(--warning); border-left-color: var(--warning); }
+:root[data-palette='legacy'] .list-item[data-tone='error'] { --row-tone: var(--error); border-left-color: var(--error); }
+
+/* The row's leading icon takes the same tone, so the mark a worker scans for
+   is the coloured one. The trailing pill keeps the word either way. */
+:root[data-palette='legacy'] .list-item[data-tone] .list-item__leading { color: var(--row-tone); }
 
 /* A toned row is its own card, so the row hairline never runs through one. */
 :root[data-palette='legacy'] .list-item[data-tone] + .list-item { box-shadow: none; }
@@ -1410,6 +1493,23 @@ button.slot:active { filter: brightness(0.94); }
   border-color: transparent;
   box-shadow: none;
 }
+
+/* Tinted status chips (legacy). The retired app colour-coded its stage tabs
+   rather than leaving them neutral, and the tone here is the same
+   `statusMeta.tone` behind the row edge and the status pill — one derivation,
+   three readings. The selected chip keeps its own fill and its check, so a
+   tint is never what tells you a filter is on. */
+:root[data-palette='legacy'] .chip[data-tone]:not([aria-pressed='true']) {
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+  box-shadow: none;
+}
+
+:root[data-palette='legacy'] .chip[data-tone='progress']:not([aria-pressed='true']) { background: var(--primary-container); color: var(--on-primary-container); }
+:root[data-palette='legacy'] .chip[data-tone='action']:not([aria-pressed='true']) { background: var(--tertiary-container); color: var(--on-tertiary-container); }
+:root[data-palette='legacy'] .chip[data-tone='done']:not([aria-pressed='true']) { background: var(--success-container); color: var(--on-success-container); }
+:root[data-palette='legacy'] .chip[data-tone='warn']:not([aria-pressed='true']) { background: var(--warning-container); color: var(--on-warning-container); }
+:root[data-palette='legacy'] .chip[data-tone='error']:not([aria-pressed='true']) { background: var(--error-container); color: var(--on-error-container); }
 
 /* ---------------------------------------------------------------- Checkbox --
    Native input visually hidden but focusable; the box is a sibling decoy the

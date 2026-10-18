@@ -1,31 +1,22 @@
 /*
- * The small horizontal progress bar — the lifecycle in one line.
+ * The small horizontal progress bar.
  *
- * The third telling of the stage fact, beside the StatusPill and the
- * StageStrip. It receives only numbers (`done` / `total`) that
- * domain/cardStatus.js already decided, so it stays stateless and domain-free:
- * no consumer computes its own idea of progress.
+ * It receives only numbers (`done` / `total`) that domain/cardStatus.js already
+ * decided, so it stays stateless and domain-free: no consumer computes its own
+ * idea of progress.
  *
- * Least-privileges on the word, too: colour never carries meaning alone, so
- * the fill is paired with "4 of 9" text and the whole element reads out with
- * role="progressbar" the same way.
+ * Decorative, deliberately. The bar is the separator under the stage strip, and
+ * the strip immediately above it already names the current stage and every
+ * legal target — so the bar repeats a fact that is on screen in words. A
+ * `progressbar` role here would announce the same thing a second time, and the
+ * bar is never the only place its information lives.
  */
-export default function ProgressMeter({ done, total, label = 'Stage progress', className = '' }) {
+export default function ProgressMeter({ done, total, className = '' }) {
   const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((done / total) * 100))) : 0
   return (
-    <div
-      className={`meter ${className}`.trim()}
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={total}
-      aria-valuenow={done}
-      aria-label={label}
-    >
-      <span className="meter__track" aria-hidden="true">
+    <div className={`meter ${className}`.trim()} aria-hidden="true">
+      <span className="meter__track">
         <span className="meter__fill" style={{ width: `${pct}%` }} />
-      </span>
-      <span className="meter__word">
-        {done} of {total}
       </span>
     </div>
   )

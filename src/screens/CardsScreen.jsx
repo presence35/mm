@@ -10,7 +10,7 @@ import { locationSummary } from '../domain/storageLocation.js'
 const FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'intake', label: 'Intake' },
-  { value: 'storage', label: 'In storage' },
+  { value: 'storage', label: 'Storage' },
   { value: 'service', label: 'Service' },
   { value: 'ready', label: 'Ready' },
   { value: 'invoiced', label: 'Invoiced' },
@@ -24,7 +24,7 @@ export default function CardsScreen({ embedded = false }) {
   const [filter, setFilter] = useState('all')
   const recentIds = useRecentCards(employee?.id)
 
-  /* The count belongs on the chip: "In storage 4" answers "do I need to open
+  /* The count belongs on the chip: "Storage 4" answers "do I need to open
      this filter" without opening it, which is the whole value of the number. */
   const counts = useMemo(() => countsByStatus(cards), [cards])
 
@@ -128,7 +128,12 @@ export default function CardsScreen({ embedded = false }) {
         {FILTERS.map((f) => {
           const n = f.value === 'all' ? cards.length : counts[f.value] ?? 0
           return (
-            <Chip key={f.value} selected={filter === f.value} onClick={() => setFilter(f.value)}>
+            <Chip
+              key={f.value}
+              selected={filter === f.value}
+              tone={f.value === 'all' ? undefined : statusMeta(f.value).tone}
+              onClick={() => setFilter(f.value)}
+            >
               {f.label}
               <span className="chip__count">{n}</span>
             </Chip>
@@ -137,7 +142,7 @@ export default function CardsScreen({ embedded = false }) {
       </ChipRow>
 
       {recentRows.length ? (
-        <div style={{ marginTop: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+        <div className="recent">
           <Collapsible title="Recent" count={recentRows.length} defaultOpen>
             {recentRows.map(renderRow)}
           </Collapsible>

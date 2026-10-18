@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar, StatusPill, EmptyState, Card, Segmented, Chip, ChipRow, SlotGrid, ListItem } from '../ui'
+import { TopBar, StatusPill, EmptyState, Card, Segmented, Chip, ChipRow, SlotGrid, ListItem, Collapsible } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useCards } from '../features/card/useCard.js'
 import * as store from '../engines/store/localStore.js'
@@ -114,13 +114,18 @@ export default function MapScreen() {
 
   return (
     <div>
-      <TopBar title="Map" />
-
-      {views.length > 1 ? (
-        <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+      {/* The screen title and the view switcher used to stack: a full-height bar
+          saying "Map" above a second row holding three tabs. "Map" is already
+          on the navigation bar the phone is displaying, so the bar was a
+          caption for a screen nobody navigates to by name. The tabs take the
+          space, full width. */}
+      <header className="map-head">
+        {views.length > 1 ? (
           <Segmented options={views} value={active} onChange={setView} ariaLabel="Map view" />
-        </div>
-      ) : null}
+        ) : (
+          <h1 className="map-head__title">Map</h1>
+        )}
+      </header>
 
       {active === 'list' ? <ListView cards={cards} aboard={aboard} layout={layout} /> : null}
 
@@ -228,15 +233,17 @@ export default function MapScreen() {
 
 /* The list keeps the detail the grid cannot carry: dimensions, the size class in
    words, and last year's occupant, who is a hint for who will ask for the spot
-   back and never a reservation. Rows are read-only, as they were before. */
+   back and never a reservation. Rows are read-only, as they were before.
+
+   Each storage type is a collapsible group rather than a heading and a run of
+   cards, because the list is now long: a marina with several buildings buries
+   the boathouses below the fold, and the group head is the only thing worth
+   scanning. Closed, a group still reports how many boats are in it. */
 function ListView({ cards, aboard, layout }) {
   return (
     <div>
       {groupByStorageType(cards).map((group) => (
-        <section key={group.type}>
-          <div className="section-head">
-            {group.label} · {group.items.length}
-          </div>
+        <Collapsible key={group.type} title={group.label} count={group.items.length} defaultOpen>
           <div style={{ padding: '0 var(--space-4) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {group.items.map((card) => {
               const loc = aboard.get(card.id)
@@ -287,7 +294,7 @@ function ListView({ cards, aboard, layout }) {
               )
             })}
           </div>
-        </section>
+        </Collapsible>
       ))}
     </div>
   )

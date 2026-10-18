@@ -9,7 +9,7 @@
 export const CARD_STATUS = {
   intake: { label: 'Intake', tone: 'action', shape: 'triangle', step: 0 },
   fall_checklist: { label: 'Fall check', tone: 'progress', shape: 'square', step: 1 },
-  storage: { label: 'In storage', tone: 'progress', shape: 'diamond', step: 2 },
+  storage: { label: 'Storage', tone: 'progress', shape: 'diamond', step: 2 },
   spring_checklist: { label: 'Spring check', tone: 'progress', shape: 'slanted', step: 3 },
   service: { label: 'Service', tone: 'action', shape: 'round', step: 4 },
   cleaning: { label: 'Cleaning', tone: 'progress', shape: 'bar', step: 5 },

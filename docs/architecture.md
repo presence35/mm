@@ -326,15 +326,18 @@ src/
                    version.js at build time; it carries the commit, so a deploy
                    that only changed code still reads as a different build.
   theme/     tokens.css, global.css, ThemeProvider.jsx
-  ui/        Icon, ThemeIcon, Button, Checkbox, Surface, Chip, TextField,
-             Feedback, StateViews, StageStrip, ProgressMeter, Collapsible,
-             SlotGrid, ui.css, index.js     — stateless, token-driven
+  ui/        Icon, ThemeIcon, ModeIcon, Button, Checkbox, Surface, Chip,
+             TextField, Feedback, StateViews, StageStrip, ProgressMeter,
+             Collapsible, SlotGrid, ui.css, index.js — stateless, token-driven
              *Note:* ThemeIcon is the one primitive that sets `data-palette` on
              itself, so the palette blocks in tokens.css resolve again inside
              it and each mark is drawn in the colours of the palette it
              advertises. That is why those blocks are `[data-palette='x']` and
              not `:root[data-palette='x']`, and why the derived colour roles
-             live under `[data-palette], :root`.
+             live under `[data-palette], :root`. ModeIcon deliberately does not
+             do this: it answers "which lightness", so it draws in the palette
+             currently in use. `theme-grid`/`theme-option` is the tile shape
+             both pickers use.
   shell/     RouterProvider.jsx, AppShell.jsx, useWindowClass.js
              *Note:* AppShell.NAV is the only list of destinations. The router
              used to export a second one; nothing imported it, and a new tab had
@@ -390,9 +393,13 @@ src/
               domain/conflictDiff.js, because the store's settled-conflict
               sweep needs the same rule
   screens/   composition only:
-             Cards, CardDetail, NewCard, Invoice, People, PeopleDetail, Boats,
-             Boat, Map, Setup, Scan, Admin, Conflicts, Login, PublicCard,
-             Schedule
+             Cards, CardDetail, NewCard, NewBoat, Invoice, People,
+             PeopleDetail, Boats, Boat, Map, Setup, Scan, Admin, Conflicts,
+             Login, PublicCard, Schedule
+             *Note:* NewBoat is the owner→boat flow with no card at its end —
+             a boat can be on file before a job is, and inventing a work order
+             number and a date in to shorten that flow would put a wrong card
+             on file.
 
 version.js — the build's version, derived from the commit: `<pkg>+<count>.<sha>`,
              or package.json when there is no git. Node-only; the client receives

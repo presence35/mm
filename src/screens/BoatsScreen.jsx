@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { TopBar, SearchBar, ListItem, EmptyState, StatusPill } from '../ui'
+import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
+import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
 import { statusMeta } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
@@ -8,21 +9,24 @@ import { locationSummary } from '../domain/storageLocation.js'
 /*
  * Every boat on file, searchable.
  *
- * A row opens the boat's card — the one that is neither invoiced nor archived —
- * and falls back to the owner when the boat has no open card, which is the
- * legacy behaviour and the reason the list is useful in the yard: the boat is
- * what a mechanic has in front of them, not the work order number.
+ * A row opens the boat itself. It used to open the boat's open card, which
+ * meant the boat's own screen — serial numbers, length, who it is assigned to
+ * — was reachable only by first finding that card in the list. The boat is
+ * what a mechanic has in front of them, and the card, the owner and the
+ * storage location all hang off it; the boat screen links to its card in one
+ * tap, so the card is no further away than it was.
  *
- * Editing the boat itself is not behind the row. A row that both opens a card
- * and hides an Edit button puts a second button inside a button, which is
- * invalid and unusable by keyboard and screen reader alike; the boat's own
- * screen is reached from the card it belongs to instead.
+ * Adding a boat is the "plus". A boat could otherwise only come into being as
+ * a side effect of writing a card, which is the wrong way round for a yard
+ * that takes a boat into storage before anyone works on it.
  */
 
 export default function BoatsScreen() {
   const { navigate } = useRouter()
+  const { may } = useAuth()
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState(() => store.listBoats())
+  const mayAdd = may(CAPABILITIES.CREATE_BOAT)
 
   useEffect(() => {
     const refresh = () => setRows(store.listBoats())
@@ -38,23 +42,31 @@ export default function BoatsScreen() {
           .some((v) => String(v).toLowerCase().includes(q)),
   )
 
-  const open = ({ customer, card }) => {
-    if (card) navigate('card', { id: card.id })
-    else if (customer) navigate('people-detail', { id: customer.id })
-  }
+  const open = (row) => navigate('boat', { id: row.boat.id })
 
   if (!rows.length) {
     return (
       <div>
-        <TopBar title="Boats" />
-        <EmptyState icon="boat" title="No boats yet" body="Boats appear here once a card is created for one." />
+        <TopBar
+          title="Boats"
+          actions={mayAdd ? <Fab icon="plus" aria-label="Add a boat" onClick={() => navigate('new-boat')} /> : undefined}
+        />
+        <EmptyState
+          icon="boat"
+          title="No boats yet"
+          body="A boat arrives with its first service card — or add one now to have it on file first."
+          action={mayAdd ? { label: 'Add a boat', icon: 'plus', onClick: () => navigate('new-boat') } : undefined}
+        />
       </div>
     )
   }
 
   return (
     <div>
-      <TopBar title={`Boats · ${shown.length}`} />
+      <TopBar
+        title={`Boats · ${shown.length}`}
+        actions={mayAdd ? <Fab icon="plus" aria-label="Add a boat" onClick={() => navigate('new-boat')} /> : undefined}
+      />
       <SearchBar value={query} onChange={setQuery} placeholder="Search name, model, licence, owner" />
 
       {!shown.length ? (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar, ListItem, Segmented, Button, Divider, StatusPill, Icon, Sheet, Dialog, ThemeIcon } from '../ui'
+import { TopBar, ListItem, Button, Divider, StatusPill, Icon, Sheet, Dialog, ThemeIcon, ModeIcon } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useTheme, PALETTES } from '../theme/ThemeProvider.jsx'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
@@ -9,7 +9,7 @@ import { storageProblem } from '../engines/store/localStore.js'
 import { ROLE_LABEL } from '../engines/auth/permissions.js'
 import { APP_VERSION } from '../appVersion.js'
 
-const MODE_OPTIONS = [
+const MODES = [
   { value: 'system', label: 'Auto' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -17,14 +17,41 @@ const MODE_OPTIONS = [
 
 function PalettePicker({ palette, onChange }) {
   return (
-    <div className="palette-grid" role="radiogroup" aria-label="Colour palette">
+    <div className="theme-grid" role="radiogroup" aria-label="Colour palette">
       {PALETTES.map((p) => (
-        <button key={p.id} className="palette-option" role="radio" aria-checked={palette === p.id} onClick={() => onChange(p.id)}>
-          <span className="palette-option__mark">
+        <button key={p.id} className="theme-option" role="radio" aria-checked={palette === p.id} onClick={() => onChange(p.id)}>
+          <span className="theme-option__mark">
             <ThemeIcon palette={p.id} />
           </span>
-          <span className="palette-option__text">
-            <span className="palette-option__name">{p.name}</span>
+          <span className="theme-option__text">
+            <span className="theme-option__name">{p.name}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* Same tiles as the palette picker, on purpose: the two settings answer the
+   same kind of question, and a segmented control next to a grid read as two
+   unrelated controls. The marks are the existing sun, moon and the half-disc
+   for "follow the phone". */
+function ModePicker({ mode, onChange }) {
+  return (
+    <div className="theme-grid" role="radiogroup" aria-label="Appearance">
+      {MODES.map((m) => (
+        <button
+          key={m.value}
+          className="theme-option"
+          role="radio"
+          aria-checked={mode === m.value}
+          onClick={() => onChange(m.value)}
+        >
+          <span className="theme-option__mark">
+            <ModeIcon mode={m.value} />
+          </span>
+          <span className="theme-option__text">
+            <span className="theme-option__name">{m.label}</span>
           </span>
         </button>
       ))}
@@ -283,10 +310,11 @@ export default function SetupScreen() {
       <PalettePicker palette={palette} onChange={setPalette} />
 
       <div className="section-head">Appearance</div>
-      <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-        <Segmented options={MODE_OPTIONS} value={mode} onChange={setMode} ariaLabel="Light or dark" />
-      </div>
+      <ModePicker mode={mode} onChange={setMode} />
 
+      {/* Sync and the device it runs on are one subject: what is queued, what
+          has been sent, and what to read when there is no signal. They used to
+          be two headings with the same rows under them. */}
       <div className="section-head">Sync</div>
       <ListItem
         icon={sync.state === 'offline' ? 'offline' : 'sync'}
@@ -312,19 +340,6 @@ export default function SetupScreen() {
         onClick={() => (sync.conflicts ? navigate('conflicts') : sync.syncNow())}
       />
 
-      {/* Reachable today so the offline states are testable before the
-          transport lands, not a day after. */}
-      <ListItem
-        icon="offline"
-        title="Simulate no signal"
-        support="For testing the offline states"
-        onClick={() => sync.setForceOffline(!sync.forceOffline)}
-        trailing={<StatusPill tone={sync.forceOffline ? 'warn' : 'neutral'} shape={sync.forceOffline ? 'bar' : 'square'}>{sync.forceOffline ? 'On' : 'Off'}</StatusPill>}
-      />
-
-      <Divider />
-
-      <div className="section-head">This device</div>
       {storageProblem() ? (
         <div className="offline-bar" role="alert" style={{ borderRadius: 'var(--corner-m)', margin: '0 var(--space-4) var(--space-3)' }}>
           <Icon name="alert" size={18} />
@@ -340,8 +355,22 @@ export default function SetupScreen() {
         trailing={<Icon name="right" size={20} />}
       />
 
+      <Divider />
+
+      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? (
+        <>
+          <div className="section-head">Admin</div>
+          <ListItem
+            icon="tune"
+            title="Staff, parts & labels"
+            support="Employees, catalogue, checklist templates"
+            onClick={() => navigate('admin')}
+            trailing={<Icon name="right" size={20} />}
+          />
+        </>
+      ) : null}
+
       <div className="section-head">Account</div>
-      <ListItem icon="users" title={employee.name} support={ROLE_LABEL[employee.role]} />
       {/* Your own PIN, so it is not gated behind being an admin. */}
       <ListItem
         icon="pin"
@@ -350,19 +379,13 @@ export default function SetupScreen() {
         onClick={() => navigate('change-pin')}
         trailing={<Icon name="right" size={20} />}
       />
-      {may(CAPABILITIES.MANAGE_EMPLOYEES) ? (
-        <ListItem
-          icon="tune"
-          title="Admin"
-          support="Employees, catalogue, templates"
-          onClick={() => navigate('admin')}
-          trailing={<Icon name="right" size={20} />}
-        />
-      ) : null}
+      {/* Who is signed in, on the row that ends the session. It is the only
+          fact on this screen that matters at sign-out time, and a row of its
+          own said nothing that could be acted on. */}
       <ListItem
         icon="logout"
         title="Sign out"
-        support="Forget this device"
+        support={`${ROLE_LABEL[employee.role]} · ${employee.name}`}
         onClick={signOut}
         trailing={<Icon name="right" size={20} />}
       />

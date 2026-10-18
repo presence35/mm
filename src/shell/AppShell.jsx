@@ -13,6 +13,7 @@ import MapScreen from '../screens/MapScreen.jsx'
 import SetupScreen from '../screens/SetupScreen.jsx'
 import ScanScreen from '../screens/ScanScreen.jsx'
 import NewCardScreen from '../screens/NewCardScreen.jsx'
+import NewBoatScreen from '../screens/NewBoatScreen.jsx'
 import InvoiceScreen from '../screens/InvoiceScreen.jsx'
 import AdminScreen from '../screens/AdminScreen.jsx'
 import ChangePinScreen from '../screens/ChangePinScreen.jsx'
@@ -41,6 +42,7 @@ const SCREENS = {
   card: CardDetailScreen,
   boat: BoatScreen,
   'new-card': NewCardScreen,
+  'new-boat': NewBoatScreen,
   invoice: InvoiceScreen,
   admin: AdminScreen,
   'change-pin': ChangePinScreen,

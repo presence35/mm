@@ -63,7 +63,6 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
     phase: stagePhase(card.status, s.key),
     selectable: canTransition(card.status, s.key),
   }))
-  const canMove = stages.some((s) => s.selectable)
   const progress = stageProgress(card.status)
 
   const received = card.received_items ?? []
@@ -114,11 +113,11 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
       {/* The stage control is also the way forward and back. Legal targets are
           the only ones rendered as buttons, and legality lives in
           domain/cardStatus.js, not here. */}
-      {progress ? <ProgressMeter done={progress.done} total={progress.total} /> : null}
       <StageStrip stages={stages} onSelect={(key) => actions.patch({ status: key })} />
-      <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4)' }}>
-        {canMove ? 'Tap the next stage to move this card on.' : 'This card is archived. Nothing further to do.'}
-      </p>
+      {/* The meter sits under the strip as the section rule. It restates what the
+          strip already says in words, so it carries no text and no accessible
+          role — see ui/ProgressMeter.jsx. */}
+      {progress ? <ProgressMeter done={progress.done} total={progress.total} /> : null}
 
       <Divider />
 
