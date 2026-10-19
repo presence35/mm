@@ -158,3 +158,34 @@ card."
 4. What does the card header draw when a boat photo and an intake shot both
    exist — the boat's picture, or this season's intake shot? *Leaning: the
    intake shot while the card is open, the boat photo otherwise.*
+
+---
+
+## 4. Storage prep and wrap
+
+**Wanted:** "storage prep wrap UX needs work." Named, not yet described — this
+section is a placeholder so the complaint is not lost, and it deliberately
+proposes nothing until someone who does the work says which part is slow.
+
+**Where it stands today**
+
+- A card already says where the boat goes: `storage_type`
+  (`domain/storageLocation.js:11`, six types) and a slot in the marina's own
+  layout (`ui/SlotGrid.jsx`), drawn per boathouse by `screens/MapScreen.jsx`.
+- Neither the card nor the map shows the *season pass* of a boat — still in the
+  water, hauled, wrapped, slotted — so the yard's real state only exists in the
+  workers' heads. That is the part that reads as broken.
+- Nothing here needs a new store: every fact is a read over card rows that
+  already exist. It is a derivation plus a screen, which is why it is cheap to
+  fix once the shape is agreed.
+
+**Open questions**
+
+1. Is prep a checklist on one card, or a board across the whole yard? *Leaning:
+   a board — "where does this boat go" is decided while looking at the yard.*
+2. Is "wrapped" a stage, a task, or a storage type? *Leaning: a task. Stages are
+   the service lifecycle; wrapping is a job, and it happens to a boat in any
+   stage.*
+3. Who marks a boat slotted — the worker on the dock, or the office when the
+   paper comes back? *Leaning: the worker, offline, because that is where the
+   boat actually lands.*

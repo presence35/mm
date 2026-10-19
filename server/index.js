@@ -11,7 +11,7 @@ import { createDb, bootstrap, hashPin, verifyPin, issueToken, readToken, assertP
 import { APP_VERSION } from '../version.js'
 import { push, pull, registerDevice, touchDevice, collectGarbage, syncState } from './sync.js'
 import { referenceSnapshot } from './reference.js'
-import { storePhoto } from './photos.js'
+import { storePhoto, uploadDir } from './photos.js'
 import { listStaff, createStaff, setStaffActive, resetPin, changeOwnPin } from './staff.js'
 import { T } from './entities.js'
 /* TEMPORARY legacy import over HTTP — delete with server/legacy/import-live.js after the one production import. */
@@ -309,7 +309,7 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       res.status(404).json({ error: 'not_found' })
       return
     }
-    res.sendFile(name, { root: join(ROOT, 'uploads', req.params.cardId) }, (err) => {
+    res.sendFile(name, { root: join(uploadDir(ROOT), req.params.cardId) }, (err) => {
       if (err && !res.headersSent) res.status(404).json({ error: 'not_found' })
     })
   })
@@ -328,7 +328,7 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       `UPDATE ${T('photos')} SET deleted_at = ?, version = ?, updated_at = ?, updated_by = ?, device_id = ? WHERE id = ?`,
       [now, version, now, req.employee.employee_id, req.body?.device_id ?? null, row.id],
     )
-    await unlink(join(ROOT, 'uploads', row.card_id, row.filename)).catch(() => {})
+    await unlink(join(uploadDir(ROOT), row.card_id, row.filename)).catch(() => {})
     await database.run(
       `INSERT INTO ${T('change_log')} (op_id, entity, entity_id, op, version, payload, changed_at, updated_by, device_id)
        VALUES (?, 'photos', ?, 'delete', ?, NULL, ?, ?, ?)`,
@@ -503,7 +503,7 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
     database,
     authenticate,
     adminOnly,
-    uploadsRoot: join(ROOT, 'uploads'),
+    uploadsRoot: uploadDir(ROOT),
     log,
   })
 

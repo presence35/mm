@@ -33,7 +33,7 @@ export async function storePhoto(db, { root, file, cardId, employeeId, deviceId,
   /* Client-generated id, per the sync contract: the server never allocates
      one, so a photo has a final identity before it is ever stored. */
   const id = file.filename?.replace(/\.[a-z0-9]+$/i, '') || randomUUID()
-  const dir = join(root, 'uploads', cardId)
+  const dir = join(uploadDir(root), cardId)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, `${id}${MIME_EXT[file.mimetype]}`), file.buffer)
 
@@ -66,6 +66,11 @@ export async function storePhoto(db, { root, file, cardId, employeeId, deviceId,
   return { ok: true, photo: row }
 }
 
+/* Where photo bytes live. Uploads default to a directory inside the app, which
+   is right for a laptop and wrong for a host that redeploys by replacing the app
+   directory — the bytes vanish with the release. UPLOADS_DIR moves them out, and
+   it is the one place this path is decided: the serving route, the delete and
+   the legacy import all call here. */
 export function uploadDir(root) {
-  return join(root, 'uploads')
+  return process.env.UPLOADS_DIR || join(root, 'uploads')
 }

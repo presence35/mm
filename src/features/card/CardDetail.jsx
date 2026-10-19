@@ -32,6 +32,19 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const [conditionSheet, setConditionSheet] = useState(false)
   const [qrSheet, setQrSheet] = useState(false)
 
+  /* The boat's own picture, drawn behind the card's opening lines. Decoration:
+     the block reads the same with no photo, so the url may legitimately be null
+     and nothing is rendered for it.
+
+     Above the empty states on purpose. A hook behind an early return is a hook
+     whose count changes the moment a card is picked, and on a wide window this
+     pane renders "No card selected" first and the record second — React answers
+     that with #310 (rendered more hooks than the previous render). */
+  const boatPhotoUrl = usePhotoUrl(
+    record?.card?.id ?? null,
+    mainPhoto(record?.card?.photos ?? []),
+  )
+
   if (!record) {
     // Nothing chosen yet is not an error — it is the empty detail pane.
     if (!selected) {
@@ -71,10 +84,6 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const conditionSummary = summarise(card.condition, SEED_CONDITIONS.length)
   const photos = card.photos ?? []
   const logs = card.logs ?? []
-  /* The boat's own picture, drawn behind the card's opening lines. Decoration:
-     the block reads the same with no photo, so the url may legitimately be null
-     and nothing is rendered for it. */
-  const boatPhotoUrl = usePhotoUrl(card.id, mainPhoto(photos))
 
   return (
     <div>
