@@ -374,6 +374,8 @@ export default function SetupScreen() {
             onClick={() => navigate('admin')}
             trailing={<Icon name="right" size={20} />}
           />
+
+          <LegacyImportPanel />
         </>
       ) : null}
 
