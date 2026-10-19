@@ -61,12 +61,31 @@ const SHAPE = {
   half: 'half',
 }
 
-export function StatusPill({ tone = 'neutral', shape = 'round', children, className = '' }) {
-  const classes = ['status-pill', `status-pill--${TONE[tone] ?? tone}`, className].filter(Boolean).join(' ')
+/* A status pill.
+ *
+ * `shape` draws a dot for the status domains that have distinct marks —
+ * appointments, size classes, the wrap/take-off pair on the card. The card
+ * stages deliberately have none: nine arbitrary glyphs had to be memorised, and
+ * the stages only ever run in one order, so `progress` (0–1) draws how far along
+ * a fixed rail the card sits instead. `variant="quiet"` is the row treatment —
+ * unfilled, the tone on its leading edge — while a detail page keeps the fill.
+ */
+export function StatusPill({ tone = 'neutral', shape, progress, variant, children, className = '' }) {
+  const classes = [
+    'status-pill',
+    `status-pill--${TONE[tone] ?? tone}`,
+    variant && `status-pill--${variant}`,
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
     <span className={classes}>
-      <span className={`status-pill__dot status-pill__dot--${SHAPE[shape] ?? shape}`} />
+      {shape ? <span className={`status-pill__dot status-pill__dot--${SHAPE[shape] ?? shape}`} /> : null}
       {children}
+      {typeof progress === 'number' ? (
+        <span className="status-pill__rail" style={{ width: `${Math.round(progress * 100)}%` }} aria-hidden="true" />
+      ) : null}
     </span>
   )
 }

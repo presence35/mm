@@ -33,7 +33,7 @@ Treat these as a contract. If you change one, update **every** place that relies
 6. **Explicit `now` parameter.** Every time-dependent function takes the current time as a parameter and never calls `Date.now()` internally. Staleness, the 30-day retention window, cursor GC, conflict age and token expiry are all time-dependent, and none of them are testable otherwise.
 7. **Pure and deterministic cores.** Engine functions take explicit inputs, hold no hidden state, and produce the same output for the same input. Side effects live outside them.
 8. **Semantic tokens only.** A literal hex, radius, shadow or duration inside a screen is a defect.
-9. **Colour never carries meaning alone.** Every status pairs colour with a label and a distinct shape or pattern.
+9. **Colour never carries meaning alone.** Every status pairs colour with a label and a second, non-colour signal: a distinct shape for the statuses that have one, and, for card stages, their position along a fixed rail. Nine arbitrary glyphs were not memorisable; a position in a fixed order is.
 10. **Light and dark are both first-class.** Never ship one as an afterthought or derive one from the other by inversion.
 11. **Paper card fields are frozen.** Do not remove, rename, or reorder fields because they look redundant. Workers know the paper form.
 12. **No invalid combinations.** A `storage_type` and a location detail that disagree must be unrepresentable, not merely hidden.
@@ -400,9 +400,9 @@ src/
              People rows, its filter counts and its filter all read one answer.
              cardStatus.test.js, storageLocation.test.js, dockState.test.js,
              schedule.test.js, conflictDiff.test.js — beat tests pinning the
-             lifecycle, the unrepresentable-combination rule, the label+tone+shape
-             pairing (oko ThreatEngineTest pattern), the shared ramp/drop-off
-             capacity pool and the season boundary
+             lifecycle, the unrepresentable-combination rule, the label+tone
+             pairing and the stage rail (oko ThreatEngineTest pattern), the shared
+             ramp/drop-off capacity pool and the season boundary
   features/
     card/    CardDetail.jsx, ConditionEditor.jsx, TaskList.jsx,
              LogComposer.jsx, PhotoStrip.jsx, useCard.js

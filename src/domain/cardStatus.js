@@ -7,15 +7,15 @@
  */
 
 export const CARD_STATUS = {
-  intake: { label: 'Intake', tone: 'action', shape: 'triangle', step: 0 },
-  fall_checklist: { label: 'Fall check', tone: 'progress', shape: 'square', step: 1 },
-  storage: { label: 'Storage', tone: 'progress', shape: 'diamond', step: 2 },
-  spring_checklist: { label: 'Spring check', tone: 'progress', shape: 'slanted', step: 3 },
-  service: { label: 'Service', tone: 'action', shape: 'round', step: 4 },
-  cleaning: { label: 'Cleaning', tone: 'progress', shape: 'bar', step: 5 },
-  ready: { label: 'Ready', tone: 'done', shape: 'ring', step: 6 },
-  invoiced: { label: 'Invoiced', tone: 'done', shape: 'half', step: 7 },
-  archived: { label: 'Archived', tone: 'neutral', shape: 'square', step: 8 },
+  intake: { label: 'Intake', tone: 'action', step: 0 },
+  fall_checklist: { label: 'Fall check', tone: 'progress', step: 1 },
+  storage: { label: 'Storage', tone: 'progress', step: 2 },
+  spring_checklist: { label: 'Spring check', tone: 'progress', step: 3 },
+  service: { label: 'Service', tone: 'action', step: 4 },
+  cleaning: { label: 'Cleaning', tone: 'progress', step: 5 },
+  ready: { label: 'Ready', tone: 'done', step: 6 },
+  invoiced: { label: 'Invoiced', tone: 'done', step: 7 },
+  archived: { label: 'Archived', tone: 'neutral', step: 8 },
 }
 
 export const STATUS_ORDER = Object.keys(CARD_STATUS)
@@ -69,7 +69,7 @@ export function canTransition(from, to) {
 }
 
 export function statusMeta(status) {
-  return CARD_STATUS[status] ?? { label: status ?? '—', tone: 'neutral', shape: 'square', step: 0 }
+  return CARD_STATUS[status] ?? { label: status ?? '—', tone: 'neutral', step: 0 }
 }
 
 /* ------------------------------------------------------- stage strip model
@@ -112,6 +112,15 @@ export function stageProgress(status) {
   const at = STATUS_ORDER.indexOf(status)
   if (at < 0) return null
   return { done: at + 1, total: STATUS_ORDER.length }
+}
+
+/* The same position as a 0–1 fraction, for the rail on a status pill. Nine
+   arbitrary glyphs had to be memorised; how far along a fixed rail you are does
+   not, because the stages only ever run in one order. One derivation, so the
+   pill, the strip and the meter cannot disagree. */
+export function stageFraction(status) {
+  const progress = stageProgress(status)
+  return progress ? progress.done / progress.total : null
 }
 
 /* Counts for the Cards filter chips. Every card lands in exactly one bucket,

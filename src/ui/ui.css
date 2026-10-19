@@ -300,17 +300,15 @@
 .chip:active:not(:disabled)::after { opacity: var(--state-pressed); }
 .chip:disabled { opacity: 0.38; }
 
-/* Selected state: fill + a check, never colour alone. */
+/* Selected state: the fill, with `aria-pressed` for assistive tech. No tick —
+   the label already names the answer, and a panel of filter chips is a page of
+   marks before it is a page of ticks. */
 .chip[aria-pressed='true'],
 .chip[aria-selected='true'] {
   background: var(--secondary-container);
   color: var(--on-secondary-container);
   box-shadow: none;
 }
-
-.chip__check { display: none; }
-.chip[aria-pressed='true'] .chip__check,
-.chip[aria-selected='true'] .chip__check { display: block; }
 
 /* Every control that sits above a list shares the list's inset, so the search
    field, the filter chip and the rows below line up on one margin. In-card chip
@@ -973,8 +971,10 @@ select.field__input { cursor: pointer; }
 }
 
 /* ----------------------------------------------------------------- Status --
-   A status pill. Colour is never the only signal — every pill carries its
-   label, and each status has a distinct glyph shape. */
+   A status pill. Colour is never the only signal: every pill carries its label,
+   and the statuses that have a glyph (appointments, size classes, wrap) carry
+   that too. A card stage carries its position in the order instead — see
+   `.status-pill--quiet` below. */
 
 .status-pill {
   display: inline-flex;
@@ -986,6 +986,8 @@ select.field__input { cursor: pointer; }
   font: var(--label-m);
   letter-spacing: 0.04em;
   white-space: nowrap;
+  position: relative;
+  overflow: hidden;
 }
 
 .status-pill__dot {
@@ -1024,12 +1026,35 @@ select.field__input { cursor: pointer; }
   clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
 }
 
-.status-pill--neutral { background: var(--surface-container-highest); color: var(--on-surface-variant); }
-.status-pill--progress { background: var(--primary-container); color: var(--on-primary-container); }
-.status-pill--action { background: var(--tertiary-container); color: var(--on-tertiary-container); }
-.status-pill--done { background: var(--success-container); color: var(--on-success-container); }
-.status-pill--warn { background: var(--warning-container); color: var(--on-warning-container); }
-.status-pill--error { background: var(--error-container); color: var(--on-error-container); }
+.status-pill--neutral { --pill-tone: var(--on-surface-variant); background: var(--surface-container-highest); color: var(--on-surface-variant); }
+.status-pill--progress { --pill-tone: var(--primary); background: var(--primary-container); color: var(--on-primary-container); }
+.status-pill--action { --pill-tone: var(--tertiary); background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.status-pill--done { --pill-tone: var(--success); background: var(--success-container); color: var(--on-success-container); }
+.status-pill--warn { --pill-tone: var(--warning); background: var(--warning-container); color: var(--on-warning-container); }
+.status-pill--error { --pill-tone: var(--error); background: var(--error-container); color: var(--on-error-container); }
+
+/* A row's status. The tone moves to a leading edge and the stage's position to a
+   rail along the bottom, so thirty rows are not thirty filled boxes. The width
+   is fixed — every quiet pill the same — and that is what makes the rails
+   comparable: "two thirds along" has to mean the same number of pixels in every
+   row or it means nothing. The label says which stage; the rail says how far. */
+.status-pill--quiet {
+  width: 128px;
+  justify-content: flex-start;
+  padding: 0 var(--space-2);
+  border-left: 3px solid var(--pill-tone);
+  border-radius: var(--corner-s);
+  background: none;
+  color: var(--on-surface);
+}
+
+.status-pill__rail {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--pill-tone);
+}
 
 /* ------------------------------------------------------------- Slot grid --
    The marina's physical grid. Buildings are 26 columns wide and scroll
@@ -1494,17 +1519,21 @@ button.slot:active { filter: brightness(0.94); }
   overflow: hidden;
 }
 
-/* The outline is what separates the band from the list under it in both states.
-   The fill only arrives with the content: a tint behind a closed section fills
-   space with something it is not showing. Open, fill and outline together
-   gather the head and the rows into one block. */
+/* One fill for the whole band. The head used to carry `--secondary-container`,
+   which made the band two panels stacked: a tinted label bar over a different
+   tinted body. It is a label, so it sits on the band's own fill, and a hairline
+   says where the rows begin. The outline then closes the block, so the band has
+   an end that no row divider can be mistaken for. */
 .recent:has([data-open='true']) {
   background: var(--surface-container-low);
 }
 
-/* The band's outline is its own bottom edge, so the head's closing hairline and
-   the panel's would each draw a second line on top of it. */
-.recent .collapsible__head,
+.recent .collapsible[data-open='true'] .collapsible__head {
+  background: none;
+  color: var(--on-surface-variant);
+  border-bottom: 1px solid var(--outline-variant);
+}
+
 .recent .collapsible__panel { border-bottom: none; }
 
 /* Rows are cards in legacy, and a card running to the screen edge loses its
@@ -1613,36 +1642,30 @@ button.slot:active { filter: brightness(0.94); }
   background: var(--surface-container-lowest);
 }
 
-/* Tinted status chips (legacy). The retired app colour-coded its stage tabs
-   rather than leaving them neutral, and the tone here is the same
-   `statusMeta.tone` behind the row edge and the status pill — one derivation,
-   three readings. The selected chip keeps its own fill and its check, so a
-   tint is never what tells you a filter is on. */
-/* A row's status is read twice: its leading edge and its trailing pill. The edge
-   has to be the tone's own colour — a container edge at 88% lightness would not
-   be there at all on a white card — so the pill and the chip take that same
-   colour, with the on-colour for their text. One swatch, three places. */
-:root[data-palette='legacy'] .chip[data-tone]:not([aria-pressed='true']) {
-  color: var(--on-surface);
-  box-shadow: none;
-}
-
-:root[data-palette='legacy'] .chip[data-tone]:not([aria-pressed='true']) .chip__count {
+/* Tinted states (legacy). The retired app colour-coded its stage tabs, and the
+   tone here is the same `statusMeta.tone` behind the row edge and the status
+   pill — one derivation, three readings.
+ *
+ * The tone appears on the *chosen* chip and on a row's quiet pill, never on
+ * everything at once: nine solid chips read as nine things already switched on,
+ * which is exactly what they are not. */
+:root[data-palette='legacy'] .chip[data-tone='progress'][aria-pressed='true'] { background: var(--primary); color: var(--on-primary); }
+:root[data-palette='legacy'] .chip[data-tone='action'][aria-pressed='true'] { background: var(--tertiary); color: var(--on-tertiary); }
+:root[data-palette='legacy'] .chip[data-tone='done'][aria-pressed='true'] { background: var(--success); color: var(--on-success); }
+:root[data-palette='legacy'] .chip[data-tone='warn'][aria-pressed='true'] { background: var(--warning); color: var(--on-warning); }
+:root[data-palette='legacy'] .chip[data-tone='error'][aria-pressed='true'] { background: var(--error); color: var(--on-error); }
+:root[data-palette='legacy'] .chip[data-tone][aria-pressed='true'] .chip__count {
   background: transparent;
   color: inherit;
 }
 
-:root[data-palette='legacy'] .status-pill--progress { background: var(--primary); color: var(--on-primary); }
-:root[data-palette='legacy'] .status-pill--action { background: var(--tertiary); color: var(--on-tertiary); }
-:root[data-palette='legacy'] .status-pill--done { background: var(--success); color: var(--on-success); }
-:root[data-palette='legacy'] .status-pill--warn { background: var(--warning); color: var(--on-warning); }
-:root[data-palette='legacy'] .status-pill--error { background: var(--error); color: var(--on-error); }
-
-:root[data-palette='legacy'] .chip[data-tone='progress']:not([aria-pressed='true']) { background: var(--primary); color: var(--on-primary); }
-:root[data-palette='legacy'] .chip[data-tone='action']:not([aria-pressed='true']) { background: var(--tertiary); color: var(--on-tertiary); }
-:root[data-palette='legacy'] .chip[data-tone='done']:not([aria-pressed='true']) { background: var(--success); color: var(--on-success); }
-:root[data-palette='legacy'] .chip[data-tone='warn']:not([aria-pressed='true']) { background: var(--warning); color: var(--on-warning); }
-:root[data-palette='legacy'] .chip[data-tone='error']:not([aria-pressed='true']) { background: var(--error); color: var(--on-error); }
+/* A quiet pill keeps its own ink; only its edge and rail take the tone, so the
+   row edge, the edge of the pill and its rail are one swatch. */
+:root[data-palette='legacy'] .status-pill--progress:not(.status-pill--quiet) { background: var(--primary); color: var(--on-primary); }
+:root[data-palette='legacy'] .status-pill--action:not(.status-pill--quiet) { background: var(--tertiary); color: var(--on-tertiary); }
+:root[data-palette='legacy'] .status-pill--done:not(.status-pill--quiet) { background: var(--success); color: var(--on-success); }
+:root[data-palette='legacy'] .status-pill--warn:not(.status-pill--quiet) { background: var(--warning); color: var(--on-warning); }
+:root[data-palette='legacy'] .status-pill--error:not(.status-pill--quiet) { background: var(--error); color: var(--on-error); }
 
 /* ---------------------------------------------------------------- Checkbox --
    Native input visually hidden but focusable; the box is a sibling decoy the

@@ -15,7 +15,7 @@ import {
   boathouseGrid,
   marinaFill,
 } from '../domain/storageLocation.js'
-import { statusMeta } from '../domain/cardStatus.js'
+import { statusMeta, stageFraction } from '../domain/cardStatus.js'
 
 /* Where the boat physically is.
  *
@@ -97,7 +97,6 @@ export default function MapScreen() {
       key: cell.code,
       card: cell.card,
       tone: meta.tone,
-      shape: meta.shape,
       text: name.slice(0, SLOT_TEXT_CHARS),
       label: `${cell.code} — ${name}. ${meta.label}. ${position ? size.label : 'No size recorded'}`,
     }
@@ -280,7 +279,7 @@ function ListView({ cards, aboard, layout, onOpen }) {
                     support={[locationSummary(card), loc?.customer?.name].filter(Boolean).join(' · ')}
                     onClick={() => onOpen(card)}
                     trailing={
-                      <StatusPill tone={meta.tone} shape={meta.shape}>
+                      <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(card.status)}>
                         {meta.label}
                       </StatusPill>
                     }

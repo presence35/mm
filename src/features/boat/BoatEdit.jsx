@@ -166,7 +166,7 @@ export default function BoatEdit({ record }) {
           support="Open the service card"
           onClick={() => navigate('card', { id: card.id })}
           trailing={
-            <StatusPill tone={meta.tone} shape={meta.shape}>
+            <StatusPill tone={meta.tone}>
               {meta.label}
             </StatusPill>
           }

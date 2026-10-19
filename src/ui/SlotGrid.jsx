@@ -11,9 +11,12 @@
  * cells are not focusable — there is nothing to activate, and 130 tab stops of
  * empty boxes would be a worse keyboard experience than no grid at all.
  *
- * Colour is never the only signal. Every occupied cell carries the boat's name,
- * its status *shape* (the same shapes the status pills use) and — for a screen
- * reader — the status in words.
+/*
+ * Colour is never the only signal. Every occupied cell carries the boat's name
+ * and — for a screen reader — the stage in words. The mark is a plain dot: the
+ * stages are told apart by their name and their position in the order, not by
+ * nine glyphs nobody could learn. Vacant cells that the layout describes carry
+ * their size class's own shape, which is a list of three, not nine.
  */
 
 function Cell({ cell, onSelect }) {
@@ -35,7 +38,7 @@ function Cell({ cell, onSelect }) {
   return (
     <td className="slot-cell">
       <button type="button" className={`slot slot--${tone}`} aria-label={label} onClick={() => onSelect?.(card)}>
-        <span className={`status-pill__dot status-pill__dot--${shape}`} />
+        <span className="status-pill__dot" />
         <span className="slot__text" aria-hidden="true">
           {text}
         </span>

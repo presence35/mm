@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, stageProgress, countsByStatus, OPTIONAL_STAGES, activeCardFor, statusOptions } from './cardStatus.js'
+import { CARD_STATUS, STATUS_ORDER, nextStatuses, canTransition, statusMeta, STAGES, stagePhase, stageProgress, stageFraction, countsByStatus, OPTIONAL_STAGES, activeCardFor, statusOptions } from './cardStatus.js'
 
 test('every stage is offered as a filter, in lifecycle order', () => {
   const options = statusOptions()
@@ -14,18 +14,27 @@ test('every stage is offered as a filter, in lifecycle order', () => {
   for (const option of options) {
     assert.equal(option.label, CARD_STATUS[option.value].label)
     assert.ok(option.tone)
-    assert.ok(option.shape)
   }
 })
 
-/* No-mirror rule: every status pairs colour (tone) with a label and a shape. */
-test('every status carries label + tone + shape, so colour never stands alone', () => {
+/* No-mirror rule: every status pairs colour (tone) with a label and a position
+   in the order — colour never stands alone, and the position is what the pill's
+   rail shows. */
+test('every status carries label + tone + step, and the rail rises with it', () => {
   for (const s of STATUS_ORDER) {
     const m = CARD_STATUS[s]
     assert.ok(m.label, s)
     assert.ok(m.tone, s)
-    assert.ok(m.shape, s)
+    assert.equal(typeof m.step, 'number', s)
   }
+
+  const fractions = STATUS_ORDER.map((s) => stageFraction(s))
+  assert.equal(fractions[0], 1 / 9)
+  assert.equal(fractions.at(-1), 1)
+  for (let i = 1; i < fractions.length; i += 1) assert.ok(fractions[i] > fractions[i - 1], STATUS_ORDER[i])
+  /* An unknown status has no position, so it draws no rail rather than a wrong
+     one. */
+  assert.equal(stageFraction('no-such-status'), null)
 })
 
 test('lifecycle order matches the paper flow', () => {

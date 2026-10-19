@@ -49,6 +49,11 @@ export default function PeopleScreen() {
   const toggleFilter = (value) =>
     setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
+  /* Nothing chosen and everything chosen show the same list, so `All` is on in
+     both and tapping it flips between them. */
+  const allOn = filters.length === filterOptions.length
+  const filtered = filters.length > 0 && !allOn
+
   const q = query.trim().toLowerCase()
   const rows = people.filter(({ customer, standing }) => {
     if (filters.length && !filters.includes(standing)) return false
@@ -72,17 +77,20 @@ export default function PeopleScreen() {
         <SearchBar value={query} onChange={setQuery} placeholder="Search name, phone, email" />
         <IconButton
           icon="filter"
-          className={filters.length ? 'filter-btn--on' : undefined}
-          filled={filters.length > 0}
+          className={filtered ? 'filter-btn--on' : undefined}
+          filled={filtered}
           aria-expanded={filtersOpen}
-          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by standing'}
+          label={filtered ? `Filters: ${filters.length} on` : 'Filter by standing'}
           onClick={() => setFiltersOpen((open) => !open)}
         />
       </div>
 
       {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+          <Chip
+            selected={!filtered}
+            onClick={() => setFilters(filtered ? [] : filterOptions.map((o) => o.value))}
+          >
             All
             <span className="chip__count">{people.length}</span>
           </Chip>

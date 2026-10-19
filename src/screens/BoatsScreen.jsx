@@ -3,7 +3,7 @@ import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab, Chip, ChipRow
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta, statusOptions } from '../domain/cardStatus.js'
+import { statusMeta, statusOptions, stageFraction } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
 
 /* A boat's card as a filter value. `none` is "no card", and a status the app
@@ -52,12 +52,17 @@ export default function BoatsScreen() {
     for (const row of rows) counts[stageOf(row.card)] += 1
     return [
       ...statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
-      { value: NO_CARD, label: 'No card', shape: 'square', count: counts[NO_CARD] },
+      { value: NO_CARD, label: 'No card', count: counts[NO_CARD] },
     ]
   }, [rows])
 
   const toggleFilter = (value) =>
     setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
+
+  /* Nothing chosen and everything chosen show the same list, so `All` is on in
+     both and tapping it flips between them. */
+  const allOn = filters.length === filterOptions.length
+  const filtered = filters.length > 0 && !allOn
 
   const q = query.trim().toLowerCase()
   const shown = rows.filter(({ boat, customer, card }) => {
@@ -97,24 +102,26 @@ export default function BoatsScreen() {
         <SearchBar value={query} onChange={setQuery} placeholder="Search name, model, licence, owner" />
         <IconButton
           icon="filter"
-          className={filters.length ? 'filter-btn--on' : undefined}
-          filled={filters.length > 0}
+          className={filtered ? 'filter-btn--on' : undefined}
+          filled={filtered}
           aria-expanded={filtersOpen}
-          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by stage'}
+          label={filtered ? `Filters: ${filters.length} on` : 'Filter by stage'}
           onClick={() => setFiltersOpen((open) => !open)}
         />
       </div>
 
       {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+          <Chip
+            selected={!filtered}
+            onClick={() => setFilters(filtered ? [] : filterOptions.map((o) => o.value))}
+          >
             All
             <span className="chip__count">{rows.length}</span>
           </Chip>
           {filterOptions.map((option) => (
             <Chip
               key={option.value}
-              shape={option.shape}
               tone={option.tone}
               selected={filters.includes(option.value)}
               onClick={() => toggleFilter(option.value)}
@@ -153,11 +160,11 @@ export default function BoatsScreen() {
               onClick={() => open(row)}
               trailing={
                 meta ? (
-                  <StatusPill tone={meta.tone} shape={meta.shape}>
+                  <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(card.status)}>
                     {meta.label}
                   </StatusPill>
                 ) : (
-                  <StatusPill tone="neutral" shape="square">
+                  <StatusPill tone="neutral" variant="quiet">
                     No card
                   </StatusPill>
                 )

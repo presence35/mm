@@ -79,7 +79,7 @@ export default function PeopleDetailScreen({ params = {} }) {
               support={`${locationSummary(c)} · in ${c.date_in ?? '—'}`}
               onClick={() => navigate('card', { id: c.id })}
               trailing={
-                <StatusPill tone={meta.tone} shape={meta.shape}>
+                <StatusPill tone={meta.tone}>
                   {meta.label}
                 </StatusPill>
               }

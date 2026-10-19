@@ -4,7 +4,7 @@ import { useCards, useRecentCards } from '../features/card/useCard.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta, statusOptions, countsByStatus } from '../domain/cardStatus.js'
+import { statusMeta, statusOptions, stageFraction, countsByStatus } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
 
 export default function CardsScreen({ embedded = false }) {
@@ -29,6 +29,12 @@ export default function CardsScreen({ embedded = false }) {
 
   const toggleFilter = (value) =>
     setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
+
+  /* Nothing chosen and everything chosen are the same list, so `All` is on in
+     both and tapping it flips between them: the nine chips light up, then go
+     out. It reads as the select-all it is instead of a dead "no filter" chip. */
+  const allOn = filters.length === filterOptions.length
+  const filtered = filters.length > 0 && !allOn
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -74,10 +80,10 @@ export default function CardsScreen({ embedded = false }) {
      An id whose card has left the store (synced away, or never arrived here)
      drops out rather than rendering a dead row. */
   const recentRows = useMemo(() => {
-    if (filters.length || query.trim()) return []
+    if (filtered || query.trim()) return []
     const byId = new Map(rows.map((row) => [row.card.id, row]))
     return recentIds.map((id) => byId.get(id)).filter(Boolean)
-  }, [recentIds, rows, query, filters])
+  }, [recentIds, rows, query, filtered])
 
   const renderRow = ({ card, boat, customer }) => {
     const meta = statusMeta(card.status)
@@ -89,7 +95,7 @@ export default function CardsScreen({ embedded = false }) {
         support={[customer?.name, locationSummary(card)].filter(Boolean).join(' · ')}
         onClick={() => navigate('card', { id: card.id })}
         trailing={
-          <StatusPill tone={meta.tone} shape={meta.shape}>
+          <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(card.status)}>
             {meta.label}
           </StatusPill>
         }
@@ -129,10 +135,10 @@ export default function CardsScreen({ embedded = false }) {
         <SearchBar value={query} onChange={setQuery} placeholder="Search work order, boat, customer" />
         <IconButton
           icon="filter"
-          className={filters.length ? 'filter-btn--on' : undefined}
-          filled={filters.length > 0}
+          className={filtered ? 'filter-btn--on' : undefined}
+          filled={filtered}
           aria-expanded={filtersOpen}
-          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by stage'}
+          label={filtered ? `Filters: ${filters.length} on` : 'Filter by stage'}
           onClick={() => setFiltersOpen((open) => !open)}
         />
       </div>
@@ -142,14 +148,16 @@ export default function CardsScreen({ embedded = false }) {
           ink exactly then, and its label counts them. */}
       {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+          <Chip
+            selected={!filtered}
+            onClick={() => setFilters(filtered ? [] : filterOptions.map((o) => o.value))}
+          >
             All
             <span className="chip__count">{cards.length}</span>
           </Chip>
           {filterOptions.map((option) => (
             <Chip
               key={option.value}
-              shape={option.shape}
               tone={option.tone}
               selected={filters.includes(option.value)}
               onClick={() => toggleFilter(option.value)}

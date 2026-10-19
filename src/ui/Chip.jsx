@@ -1,13 +1,14 @@
 import Icon from './Icon'
 
 /* Chips — filter/select criteria only. Never a button, never navigation.
-   Selected state shows a leading check as well as the fill, so selection
-   survives greyscale.
+   The state is the fill plus `aria-pressed`: no tick, no glyph. A tick inside a
+   chip is one more mark to read on a panel that is already a page of marks, and
+   the label names the answer either way.
 
    `tone`, when passed, comes from the same statusMeta call that labels the
-   chip, and only paints it in the legacy palette — the count and the label
-   still carry the meaning everywhere else. */
-export function Chip({ icon, shape, selected, onClick, disabled, tone, children, ...rest }) {
+   chip, and paints it only once the chip is chosen — an unchosen chip that is
+   already coloured reads as switched on. */
+export function Chip({ icon, selected, onClick, disabled, tone, children, ...rest }) {
   return (
     <button
       className="chip"
@@ -17,16 +18,7 @@ export function Chip({ icon, shape, selected, onClick, disabled, tone, children,
       data-tone={tone ?? undefined}
       {...rest}
     >
-      {selected ? (
-        <Icon name="check" size={16} className="chip__check" />
-      ) : shape ? (
-        /* A filter chip carries the shape its status uses on a row, so two
-           stages that share a tone are still told apart once the label is lost
-           to greyscale or a glance. */
-        <span className={`status-pill__dot status-pill__dot--${shape}`} />
-      ) : icon ? (
-        <Icon name={icon} size={16} />
-      ) : null}
+      {icon ? <Icon name={icon} size={16} /> : null}
       {children}
     </button>
   )

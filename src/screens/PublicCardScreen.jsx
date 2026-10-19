@@ -78,7 +78,7 @@ export default function PublicCardScreen({ token }) {
             {record.boat.length_ft ? ` · ${record.boat.length_ft} ft` : ''}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-3)' }}>
-            <StatusPill tone={meta.tone} shape={meta.shape}>
+            <StatusPill tone={meta.tone}>
               {record.status_label}
             </StatusPill>
           </div>
