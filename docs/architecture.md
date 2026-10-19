@@ -329,12 +329,12 @@ src/
   theme/     tokens.css, global.css, ThemeProvider.jsx
   ui/        Icon, ThemeIcon, ModeIcon, Button, Checkbox, Surface, Chip,
              TextField, Feedback, StateViews, StageStrip, ProgressMeter,
-             Collapsible, FilterSheet, SlotGrid, ui.css, index.js — stateless,
+             Collapsible, SlotGrid, ui.css, index.js — stateless,
              token-driven
-             *Note:* FilterSheet is the filter for every list with one: the
-             options, their counts and the chosen value are the caller's, and each
-             option carries the dot shape of the row it matches, so two stages
-             that share a tone are still told apart without colour.
+             *Note:* a list's filter is a panel of chips under the search row,
+             not a sheet: several stages can be on at once, and the funnel that
+             opens it is solid exactly while any of them is. The field's own
+             clear button is the same action as Escape.
              *Note:* ThemeIcon is the one primitive that sets `data-palette` on
              itself, so the palette blocks in tokens.css resolve again inside
              it and each mark is drawn in the colours of the palette it

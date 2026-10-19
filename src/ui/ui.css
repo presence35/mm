@@ -322,7 +322,9 @@
   padding: 0 var(--space-4);
 }
 
-.chip-row--flush { padding: 0 var(--space-2); }
+/* The filter panel: the same chips the card body uses, on the list's inset, with
+   room under them before the rows they narrow. */
+.chip-row--flush { padding: 0 var(--space-2) var(--space-2); }
 
 /* One intake item and the camera that photographs it, as a single pill. The
    claim and its evidence are one object, so the camera can never be read as
@@ -652,10 +654,38 @@ select.field__input { cursor: pointer; }
   color: var(--on-surface-variant);
 }
 
-/* Above a list, the field takes the list's own inset: the search box, the
-   filter chip and the rows below then share one margin. Inside a sheet it keeps
-   the sheet's inset, which is what the rest of the sheet's content uses. */
-.search-bar--flush { margin-inline: var(--space-2); }
+/* The field and the filter funnel, side by side on the list's own inset, so the
+   controls, the chips they open and the rows below start on one margin. */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-2);
+}
+
+.search-row .search-bar {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Unmuted exactly while a filter is on: the chips are out of sight then, so the
+   funnel is the only thing on screen saying the list is narrowed. */
+.filter-btn--on { color: var(--on-surface); }
+
+/* The field's own clear button, and no browser-drawn second one beside it.
+   A full target fits the pill because the padding gives way to it. */
+.search-bar:has(.search-bar__clear) { padding-right: var(--space-1); }
+
+.search-bar input::-webkit-search-cancel-button,
+.search-bar input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Above a list, the field takes the list's own inset behind the row that holds
+   it. Inside a sheet it keeps the sheet's inset, which is what the rest of the
+   sheet's content uses. */
 
 .search-bar:focus-within { box-shadow: inset 0 0 0 2px var(--primary); }
 .search-bar input {
@@ -1476,72 +1506,6 @@ button.slot:active { filter: brightness(0.94); }
    the panel's would each draw a second line on top of it. */
 .recent .collapsible__head,
 .recent .collapsible__panel { border-bottom: none; }
-
-/* ----------------------------------------------------------- Filter sheet --
-   One row per option, as tall as a target, so the whole set is reachable
-   whatever the phone's width. The mark is the option's own dot shape in the
-   tone that goes with it: two stages can share a tone, and then the shape is
-   what tells them apart. */
-.filter-list {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1) var(--space-3) var(--space-4);
-}
-
-.filter-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: var(--target-min);
-  padding: 0 var(--space-3);
-  border-radius: var(--corner-s);
-  text-align: left;
-  color: var(--on-surface);
-  font: var(--body-l);
-  --option-tone: var(--on-surface-variant);
-  transition: background-color var(--duration-short-2) var(--easing-standard);
-}
-
-.filter-option:hover:not(:disabled) { background: var(--surface-container-high); }
-.filter-option:active:not(:disabled) { background: var(--surface-container-highest); }
-
-.filter-option[data-tone='progress'] { --option-tone: var(--primary); }
-.filter-option[data-tone='action'] { --option-tone: var(--tertiary); }
-.filter-option[data-tone='done'] { --option-tone: var(--success); }
-.filter-option[data-tone='warn'] { --option-tone: var(--warning); }
-.filter-option[data-tone='error'] { --option-tone: var(--error); }
-
-.filter-option .status-pill__dot { color: var(--option-tone); }
-.filter-option__mark { flex-shrink: 0; width: 10px; height: 10px; }
-
-.filter-option__label { flex: 1; min-width: 0; }
-
-.filter-option__count {
-  flex-shrink: 0;
-  min-width: 20px;
-  padding: 0 var(--space-1);
-  border-radius: var(--corner-full);
-  background: var(--surface-container-highest);
-  color: var(--on-surface-variant);
-  font: var(--label-s);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-/* The chosen one keeps its own fill and its check, so selection is never colour
-   alone — and the mark switches to the fill's on-colour so it stays legible. */
-.filter-option[aria-checked='true'] {
-  background: var(--secondary-container);
-  color: var(--on-secondary-container);
-}
-
-.filter-option[aria-checked='true'] .status-pill__dot { color: var(--on-secondary-container); }
-
-.filter-option[aria-checked='true'] .filter-option__count {
-  background: var(--on-secondary-container);
-  color: var(--secondary-container);
-}
 
 /* Rows are cards in legacy, and a card running to the screen edge loses its
    rounded corner and its left edge. One inset, shared by the Recent band and

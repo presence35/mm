@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TopBar, SearchBar, ListItem, EmptyState, Chip, ChipRow, IconButton, FilterSheet } from '../ui'
+import { TopBar, SearchBar, ListItem, EmptyState, Chip, ChipRow, IconButton } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import * as store from '../engines/store/localStore.js'
 import { STANDINGS, standingOf } from '../domain/dockState.js'
@@ -16,8 +16,8 @@ import { STANDINGS, standingOf } from '../domain/dockState.js'
 export default function PeopleScreen() {
   const { navigate } = useRouter()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('all')
-  const [filterOpen, setFilterOpen] = useState(false)
+  const [filters, setFilters] = useState([])
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [customers, setCustomers] = useState(() => store.listCustomers())
 
   useEffect(() => {
@@ -43,17 +43,15 @@ export default function PeopleScreen() {
   const filterOptions = useMemo(() => {
     const counts = Object.fromEntries(STANDINGS.map((s) => [s.value, 0]))
     for (const person of people) counts[person.standing] += 1
-    return [
-      { value: 'all', label: 'All', count: people.length },
-      ...STANDINGS.map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
-    ]
+    return STANDINGS.map((s) => ({ ...s, count: counts[s.value] ?? 0 }))
   }, [people])
 
-  const activeFilter = filterOptions.find((o) => o.value === filter) ?? filterOptions[0]
+  const toggleFilter = (value) =>
+    setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
   const q = query.trim().toLowerCase()
   const rows = people.filter(({ customer, standing }) => {
-    if (filter !== 'all' && standing !== filter) return false
+    if (filters.length && !filters.includes(standing)) return false
     if (!q) return true
     return [customer.name, customer.phone, customer.email].filter(Boolean).some((v) => v.toLowerCase().includes(q))
   })
@@ -70,50 +68,42 @@ export default function PeopleScreen() {
   return (
     <div>
       <TopBar title={`People · ${rows.length}`} />
-      <SearchBar
-        className="search-bar--flush"
-        value={query}
-        onChange={setQuery}
-        placeholder="Search name, phone, email"
-        trailing={
-          <IconButton
-            icon="filter"
-            label={activeFilter.value === 'all' ? 'Filter by standing' : `Showing ${activeFilter.label}`}
-            onClick={() => setFilterOpen(true)}
-          />
-        }
-      />
+      <div className="search-row">
+        <SearchBar value={query} onChange={setQuery} placeholder="Search name, phone, email" />
+        <IconButton
+          icon="filter"
+          className={filters.length ? 'filter-btn--on' : undefined}
+          filled={filters.length > 0}
+          aria-expanded={filtersOpen}
+          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by standing'}
+          onClick={() => setFiltersOpen((open) => !open)}
+        />
+      </div>
 
-      {activeFilter.value === 'all' ? null : (
+      {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip
-            icon="close"
-            aria-label={`Clear the ${activeFilter.label} filter`}
-            onClick={() => setFilter('all')}
-          >
-            {activeFilter.label}
-            <span className="chip__count">{activeFilter.count}</span>
+          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+            All
+            <span className="chip__count">{people.length}</span>
           </Chip>
+          {filterOptions.map((option) => (
+            <Chip
+              key={option.value}
+              selected={filters.includes(option.value)}
+              onClick={() => toggleFilter(option.value)}
+            >
+              {option.label}
+              <span className="chip__count">{option.count}</span>
+            </Chip>
+          ))}
         </ChipRow>
-      )}
-
-      <FilterSheet
-        open={filterOpen}
-        title="Show who"
-        options={filterOptions}
-        value={filter}
-        onSelect={(value) => {
-          setFilter(value)
-          setFilterOpen(false)
-        }}
-        onDismiss={() => setFilterOpen(false)}
-      />
+      ) : null}
 
       {!rows.length ? (
         <div className="state-view">
           <p className="state-view__title">Nothing matches</p>
           <p className="state-view__body">
-            {q ? `No one matches “${query.trim()}”.` : `No one is ${activeFilter.label.toLowerCase()}.`}
+            {q ? `No one matches “${query.trim()}”.` : 'No one is in those standings.'}
           </p>
         </div>
       ) : (

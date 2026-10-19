@@ -7,7 +7,7 @@ import Icon from './Icon'
    `tone`, when passed, comes from the same statusMeta call that labels the
    chip, and only paints it in the legacy palette — the count and the label
    still carry the meaning everywhere else. */
-export function Chip({ icon, selected, onClick, disabled, tone, children, ...rest }) {
+export function Chip({ icon, shape, selected, onClick, disabled, tone, children, ...rest }) {
   return (
     <button
       className="chip"
@@ -17,7 +17,16 @@ export function Chip({ icon, selected, onClick, disabled, tone, children, ...res
       data-tone={tone ?? undefined}
       {...rest}
     >
-      {selected ? <Icon name="check" size={16} className="chip__check" /> : icon ? <Icon name={icon} size={16} /> : null}
+      {selected ? (
+        <Icon name="check" size={16} className="chip__check" />
+      ) : shape ? (
+        /* A filter chip carries the shape its status uses on a row, so two
+           stages that share a tone are still told apart once the label is lost
+           to greyscale or a glance. */
+        <span className={`status-pill__dot status-pill__dot--${shape}`} />
+      ) : icon ? (
+        <Icon name={icon} size={16} />
+      ) : null}
       {children}
     </button>
   )

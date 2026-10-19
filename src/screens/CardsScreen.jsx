@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton, FilterSheet } from '../ui'
+import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton } from '../ui'
 import { useCards, useRecentCards } from '../features/card/useCard.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
@@ -12,26 +12,23 @@ export default function CardsScreen({ embedded = false }) {
   const { navigate } = useRouter()
   const { employee } = useAuth()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('all')
-  const [filterOpen, setFilterOpen] = useState(false)
+  const [filters, setFilters] = useState([])
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const recentIds = useRecentCards(employee?.id)
 
-  /* The count belongs on the option: "Storage 4" answers "do I need to open this
-     filter" without opening it, which is the whole value of the number. Every
-     stage is offered, in lifecycle order, from the one place stages are
-     declared — the row of chips that used to do this job could only hold the
-     six that fitted on a line. */
+  /* Every stage is offered, in lifecycle order, from the one place stages are
+     declared, and several can be on at once — a panel of toggles rather than a
+     sheet you could only take one answer out of. The count on a chip is the
+     number of rows in that stage, which is what makes the chip worth tapping. */
   const counts = useMemo(() => countsByStatus(cards), [cards])
 
   const filterOptions = useMemo(
-    () => [
-      { value: 'all', label: 'All', count: cards.length },
-      ...statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
-    ],
-    [cards.length, counts],
+    () => statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
+    [counts],
   )
 
-  const activeFilter = filterOptions.find((o) => o.value === filter) ?? filterOptions[0]
+  const toggleFilter = (value) =>
+    setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -42,13 +39,13 @@ export default function CardsScreen({ embedded = false }) {
         return { card, boat, customer }
       })
       .filter(({ card, boat, customer }) => {
-        if (filter !== 'all' && card.status !== filter) return false
+        if (filters.length && !filters.includes(card.status)) return false
         if (!q) return true
         return [card.work_order_no, boat?.name, boat?.model, boat?.licence, customer?.name]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q))
       })
-  }, [cards, query, filter])
+  }, [cards, query, filters])
 
   /* One boat usually holds one card, and a bubble around a single row is
      noise. A boat holding several gets a container, so its work reads as one
@@ -77,10 +74,10 @@ export default function CardsScreen({ embedded = false }) {
      An id whose card has left the store (synced away, or never arrived here)
      drops out rather than rendering a dead row. */
   const recentRows = useMemo(() => {
-    if (filter !== 'all' || query.trim()) return []
+    if (filters.length || query.trim()) return []
     const byId = new Map(rows.map((row) => [row.card.id, row]))
     return recentIds.map((id) => byId.get(id)).filter(Boolean)
-  }, [recentIds, rows, query, filter])
+  }, [recentIds, rows, query, filters])
 
   const renderRow = ({ card, boat, customer }) => {
     const meta = statusMeta(card.status)
@@ -128,48 +125,41 @@ export default function CardsScreen({ embedded = false }) {
         />
       ) : null}
 
-      <SearchBar
-        className="search-bar--flush"
-        value={query}
-        onChange={setQuery}
-        placeholder="Search work order, boat, customer"
-        trailing={
-          <IconButton
-            icon="filter"
-            label={activeFilter.value === 'all' ? 'Filter by stage' : `Showing ${activeFilter.label}`}
-            onClick={() => setFilterOpen(true)}
-          />
-        }
-      />
+      <div className="search-row">
+        <SearchBar value={query} onChange={setQuery} placeholder="Search work order, boat, customer" />
+        <IconButton
+          icon="filter"
+          className={filters.length ? 'filter-btn--on' : undefined}
+          filled={filters.length > 0}
+          aria-expanded={filtersOpen}
+          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by stage'}
+          onClick={() => setFiltersOpen((open) => !open)}
+        />
+      </div>
 
-      {/* A filter that is on has to be readable without opening the sheet again:
-          one chip, named, with its count, that clears when it is tapped. */}
-      {activeFilter.value === 'all' ? null : (
+      {/* The chips are only on screen while the panel is open, so the funnel is
+          the one thing that says a filter is on: it is solid and in full-strength
+          ink exactly then, and its label counts them. */}
+      {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip
-            icon="close"
-            tone={activeFilter.tone}
-            aria-label={`Clear the ${activeFilter.label} filter`}
-            onClick={() => setFilter('all')}
-          >
-            {activeFilter.label}
-            <span className="chip__count">{activeFilter.count}</span>
+          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+            All
+            <span className="chip__count">{cards.length}</span>
           </Chip>
+          {filterOptions.map((option) => (
+            <Chip
+              key={option.value}
+              shape={option.shape}
+              tone={option.tone}
+              selected={filters.includes(option.value)}
+              onClick={() => toggleFilter(option.value)}
+            >
+              {option.label}
+              <span className="chip__count">{option.count}</span>
+            </Chip>
+          ))}
         </ChipRow>
-      )}
-
-      <FilterSheet
-        open={filterOpen}
-        title="Show stage"
-        options={filterOptions}
-        value={filter}
-        onSelect={(value) => {
-          setFilter(value)
-          setFilterOpen(false)
-        }}
-        onDismiss={() => setFilterOpen(false)}
-      />
-
+      ) : null}
       {recentRows.length ? (
         <div className="recent">
           <Collapsible title="Recent" stateKey="cards.recent" count={recentRows.length} defaultOpen align="end">
@@ -182,7 +172,7 @@ export default function CardsScreen({ embedded = false }) {
         <div className="state-view">
           <p className="state-view__title">Nothing matches</p>
           <p className="state-view__body">
-            {query ? `No card matches “${query}”.` : 'No cards at this stage.'}
+            {query ? `No card matches “${query}”.` : 'No cards at the chosen stages.'}
           </p>
         </div>
       ) : (

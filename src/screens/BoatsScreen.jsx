@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab, Chip, ChipRow, IconButton, FilterSheet } from '../ui'
+import { TopBar, SearchBar, ListItem, EmptyState, StatusPill, Fab, Chip, ChipRow, IconButton } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth, CAPABILITIES } from '../engines/auth/AuthProvider.jsx'
 import * as store from '../engines/store/localStore.js'
 import { statusMeta, statusOptions } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
+
+/* A boat's card as a filter value. `none` is "no card", and a status the app
+   does not recognise lands under that same chip rather than vanishing from both
+   the count and the list. */
+const NO_CARD = 'none'
+const STAGE_VALUES = new Set(statusOptions().map((s) => s.value))
+const stageOf = (card) => (card?.status && STAGE_VALUES.has(card.status) ? card.status : NO_CARD)
 
 /*
  * Every boat on file, searchable.
@@ -25,8 +32,8 @@ export default function BoatsScreen() {
   const { navigate } = useRouter()
   const { may } = useAuth()
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('all')
-  const [filterOpen, setFilterOpen] = useState(false)
+  const [filters, setFilters] = useState([])
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [rows, setRows] = useState(() => store.listBoats())
   const mayAdd = may(CAPABILITIES.CREATE_BOAT)
 
@@ -37,32 +44,24 @@ export default function BoatsScreen() {
 
   /* The stages a card can be in, offered the same way the Cards list offers
      them, plus the boats that have no card at all — a boat can be on file
-     before anyone has written one. Counted over the boats, not the cards. */
+     before anyone has written one. Counted over the boats, not the cards, and
+     from the same `stageOf` the list filters by, so a chip's number and the
+     rows it shows can never disagree. */
   const filterOptions = useMemo(() => {
-    const counts = Object.fromEntries(statusOptions().map((s) => [s.value, 0]))
-    let noCard = 0
-    for (const row of rows) {
-      const key = row.card?.status
-      if (!key || !(key in counts)) noCard += 1
-      else counts[key] += 1
-    }
+    const counts = Object.fromEntries([...STAGE_VALUES, NO_CARD].map((value) => [value, 0]))
+    for (const row of rows) counts[stageOf(row.card)] += 1
     return [
-      { value: 'all', label: 'All', count: rows.length },
       ...statusOptions().map((s) => ({ ...s, count: counts[s.value] ?? 0 })),
-      { value: 'none', label: 'No card', shape: 'square', count: noCard },
+      { value: NO_CARD, label: 'No card', shape: 'square', count: counts[NO_CARD] },
     ]
   }, [rows])
 
-  const activeFilter = filterOptions.find((o) => o.value === filter) ?? filterOptions[0]
+  const toggleFilter = (value) =>
+    setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
   const q = query.trim().toLowerCase()
-  const matchesFilter = (card) => {
-    if (filter === 'all') return true
-    if (filter === 'none') return !card
-    return card?.status === filter
-  }
   const shown = rows.filter(({ boat, customer, card }) => {
-    if (!matchesFilter(card)) return false
+    if (filters.length && !filters.includes(stageOf(card))) return false
     if (!q) return true
     return [boat.name, boat.model, boat.motor_type, boat.licence, customer?.name]
       .filter(Boolean)
@@ -94,51 +93,44 @@ export default function BoatsScreen() {
         title={`Boats · ${shown.length}`}
         actions={mayAdd ? <Fab icon="plus" aria-label="Add a boat" onClick={() => navigate('new-boat')} /> : undefined}
       />
-      <SearchBar
-        className="search-bar--flush"
-        value={query}
-        onChange={setQuery}
-        placeholder="Search name, model, licence, owner"
-        trailing={
-          <IconButton
-            icon="filter"
-            label={activeFilter.value === 'all' ? 'Filter by stage' : `Showing ${activeFilter.label}`}
-            onClick={() => setFilterOpen(true)}
-          />
-        }
-      />
+      <div className="search-row">
+        <SearchBar value={query} onChange={setQuery} placeholder="Search name, model, licence, owner" />
+        <IconButton
+          icon="filter"
+          className={filters.length ? 'filter-btn--on' : undefined}
+          filled={filters.length > 0}
+          aria-expanded={filtersOpen}
+          label={filters.length ? `Filters: ${filters.length} on` : 'Filter by stage'}
+          onClick={() => setFiltersOpen((open) => !open)}
+        />
+      </div>
 
-      {activeFilter.value === 'all' ? null : (
+      {filtersOpen ? (
         <ChipRow className="chip-row--flush">
-          <Chip
-            icon="close"
-            tone={activeFilter.tone}
-            aria-label={`Clear the ${activeFilter.label} filter`}
-            onClick={() => setFilter('all')}
-          >
-            {activeFilter.label}
-            <span className="chip__count">{activeFilter.count}</span>
+          <Chip selected={!filters.length} onClick={() => setFilters([])}>
+            All
+            <span className="chip__count">{rows.length}</span>
           </Chip>
+          {filterOptions.map((option) => (
+            <Chip
+              key={option.value}
+              shape={option.shape}
+              tone={option.tone}
+              selected={filters.includes(option.value)}
+              onClick={() => toggleFilter(option.value)}
+            >
+              {option.label}
+              <span className="chip__count">{option.count}</span>
+            </Chip>
+          ))}
         </ChipRow>
-      )}
-
-      <FilterSheet
-        open={filterOpen}
-        title="Show stage"
-        options={filterOptions}
-        value={filter}
-        onSelect={(value) => {
-          setFilter(value)
-          setFilterOpen(false)
-        }}
-        onDismiss={() => setFilterOpen(false)}
-      />
+      ) : null}
 
       {!shown.length ? (
         <div className="state-view">
           <p className="state-view__title">Nothing matches</p>
           <p className="state-view__body">
-            {q ? `No boat matches “${query.trim()}”.` : `No boat is in ${activeFilter.label}.`}
+            {q ? `No boat matches “${query.trim()}”.` : 'No boat is in those stages.'}
           </p>
         </div>
       ) : (

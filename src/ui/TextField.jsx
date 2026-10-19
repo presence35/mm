@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import Icon from './Icon'
+import { IconButton } from './Button'
 
 /*
  * `ref` reaches the input rather than this component. React 19 passes it as an
@@ -86,7 +87,12 @@ export function SelectField({ label, value, onChange, options, required, ...rest
   )
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search', trailing, className = '' }) {
+export function SearchBar({ value, onChange, placeholder = 'Search', className = '' }) {
+  /* Escape and the × are one action, handled here rather than left to the
+     browser: a native search input clears on Escape in Firefox and not in
+     Safari, and the field has to behave the same on both. */
+  const clear = () => onChange('')
+
   return (
     <div className={`search-bar ${className}`.trim()}>
       <Icon name="search" size={20} />
@@ -94,10 +100,16 @@ export function SearchBar({ value, onChange, placeholder = 'Search', trailing, c
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && value) {
+            e.preventDefault()
+            clear()
+          }
+        }}
         placeholder={placeholder}
         aria-label={placeholder}
       />
-      {trailing}
+      {value ? <IconButton icon="close" className="search-bar__clear" label="Clear search" onClick={clear} /> : null}
     </div>
   )
 }

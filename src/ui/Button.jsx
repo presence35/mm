@@ -35,11 +35,13 @@ export function Button({
   )
 }
 
-export function IconButton({ icon, label, variant, disabled, className = '', ...rest }) {
+/* `filled` is a state, not a style: the one caller that uses it is the filter
+   funnel, which is solid exactly while a filter is on. */
+export function IconButton({ icon, label, variant, disabled, className = '', filled = false, ...rest }) {
   const classes = ['icon-btn', variant && `icon-btn--${variant}`, className].filter(Boolean).join(' ')
   return (
     <button className={classes} aria-label={label} disabled={disabled} {...rest}>
-      <Icon name={icon} size={24} />
+      <Icon name={icon} size={24} filled={filled} />
     </button>
   )
 }
