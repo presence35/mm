@@ -66,9 +66,14 @@ const SHAPE = {
  * `shape` draws a dot for the status domains that have distinct marks —
  * appointments, size classes, the wrap/take-off pair on the card. The card
  * stages deliberately have none: nine arbitrary glyphs had to be memorised, and
- * the stages only ever run in one order, so `progress` (0–1) draws how far along
- * a fixed rail the card sits instead. `variant="quiet"` is the row treatment —
- * unfilled, the tone on its leading edge — while a detail page keeps the fill.
+ * the stages only ever run in one order, so `progress` (0–1) fills a fixed rail
+ * instead. `variant="quiet"` is the row treatment — unfilled, tone on the rail
+ * only — while a detail page keeps the fill.
+ *
+ * The rail is the track and the fill is inside it: the track is one length on
+ * every row, so the fill measures the same distance wherever it appears. A
+ * percentage of the pill's own box was only comparable while every box was the
+ * same width, which cost every short label the space of the longest one.
  */
 export function StatusPill({ tone = 'neutral', shape, progress, variant, children, className = '' }) {
   const classes = [
@@ -84,7 +89,9 @@ export function StatusPill({ tone = 'neutral', shape, progress, variant, childre
       {shape ? <span className={`status-pill__dot status-pill__dot--${SHAPE[shape] ?? shape}`} /> : null}
       {children}
       {typeof progress === 'number' ? (
-        <span className="status-pill__rail" style={{ width: `${Math.round(progress * 100)}%` }} aria-hidden="true" />
+        <span className="status-pill__rail" aria-hidden="true">
+          <span className="status-pill__rail-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </span>
       ) : null}
     </span>
   )

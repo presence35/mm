@@ -352,11 +352,16 @@ src/
     pwa/     update.js (reloads an open page when a new worker takes over;
              held while a form has unsaved work)
     store/   localStore.js (sync read API over a hydrated projection),
-             idb.js (IndexedDB), seed.js
+             idb.js (IndexedDB), seed.js, devFixture.js
              *Note:* seed.js holds studio defaults only — the roster, the marina's
              shape, and the paper card's field sets. It deliberately holds no
              sample marina: a cold device queues what the store holds, so invented
              customers, boats or cards would be pushed into the real database.
+             devFixture.js is the exception and is development-only: App.jsx
+             reaches it through a dead `import.meta.env.DEV` branch, so a build
+             has no path to it. It writes one of each stage through localStore's
+             own create calls so a laptop has a list to look at, and skips a store
+             that already holds cards.
              boat_serials and boat_assignments are entities, not columns on
              `boats`. getStorageShape() reads the marina's buildings, rows,
              columns, boathouses and slips out of the storage_layout reference

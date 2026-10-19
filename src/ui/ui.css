@@ -1035,14 +1035,17 @@ select.field__input { cursor: pointer; }
 
 /* A row's status. The stage's position is the only mark: an unfilled pill with
    the tone drawn as a rail along its bottom edge, so thirty rows are not thirty
-   filled boxes and not thirty coloured edges either. The width is fixed — every
-   quiet pill the same, sized to the longest stage name rather than to whatever
-   the row happens to say — and that is what makes the rails comparable: "two
-   thirds along" has to mean the same number of pixels in every row or it means
-   nothing. The label says which stage; the rail says how far. The label sits on
-   the rail's own start line, with no leading padding between them. */
+   filled boxes and not thirty coloured edges either.
+
+   The label hugs its own words and the rail is a track of its own fixed length,
+   not a share of the label's box. Sizing every pill to the longest stage name —
+   "Archived" — made each row reserve room for a word it was not saying, and a
+   percentage of a per-label box cannot be read as a position anyway. The label
+   says which stage; the rail says how far, in the same 64px on every row. The
+   label sits on the rail's own start line, with no leading padding. */
 .status-pill--quiet {
-  width: 88px;
+  width: auto;
+  min-width: 64px;
   justify-content: flex-start;
   padding: 0 var(--space-2) 0 0;
   border-radius: var(--corner-s);
@@ -1050,11 +1053,21 @@ select.field__input { cursor: pointer; }
   color: var(--on-surface);
 }
 
+/* The track is the scale, the fill is the reading. The unfilled part has to be
+   visible or the rail is only "some colour", and a longer bar would read as
+   further along than it is. */
 .status-pill__rail {
   position: absolute;
   left: 0;
   bottom: 0;
+  width: 64px;
   height: 3px;
+  background: var(--outline-variant);
+}
+
+.status-pill__rail-fill {
+  display: block;
+  height: 100%;
   background: var(--pill-tone);
 }
 

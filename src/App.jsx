@@ -13,7 +13,17 @@ function Boot({ children }) {
   const [ready, setReady] = useState(store.isHydrated())
 
   useEffect(() => {
-    store.hydrate().then(() => setReady(true))
+    store.hydrate().then(async () => {
+      /* Dev only, and a dead branch in a production build: a fresh origin has no
+         rows, so there would be nothing to look at. See devFixture.js. It seeds
+         after hydrate, before the first paint, so no screen flashes an empty
+         list. */
+      if (import.meta.env.DEV) {
+        const { seedDevData } = await import('./engines/store/devFixture.js')
+        seedDevData()
+      }
+      setReady(true)
+    })
   }, [])
 
   if (!ready) return null
