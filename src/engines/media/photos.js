@@ -30,7 +30,7 @@ export const PHOTO_TYPES = [
   { value: 'general', label: 'General' },
   { value: 'intake', label: 'Intake' },
   { value: 'damage', label: 'Damage' },
-  { value: 'received_item', label: 'Item received' },
+  { value: 'received_item', label: 'Received' },
   { value: 'condition', label: 'Condition' },
   { value: 'work', label: 'Work in progress' },
   { value: 'completed', label: 'Completed' },

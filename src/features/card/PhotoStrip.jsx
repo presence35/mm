@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Icon, IconButton, StatusPill, EmptyState, Chip, ChipRow } from '../../ui'
+import { Button, Dialog, Icon, IconButton, StatusPill, EmptyState, Chip, ChipRow } from '../../ui'
 import { PHOTO_TYPES, photoTypeLabel, fetchPhotoObjectUrl, storedToken } from '../../engines/media/photos.js'
 
 /*
@@ -107,15 +107,28 @@ export function usePhotoUrl(cardId, photo) {
   return url
 }
 
-function Tile({ photo, url, gone, confirming, onConfirm, onOpen, onRequestDelete, compact }) {
+function Tile({ photo, url, gone, onOpen, onRequestDelete, compact }) {
+  const label = photoTypeLabel(photo.photo_type)
   return (
     <figure
-      onClick={url ? onOpen : undefined}
-      title={url ? 'Open full photo' : undefined}
-      style={{ ...TILE, minWidth: compact ? 88 : TILE.minWidth, height: compact ? 68 : TILE.height, margin: 0, cursor: url ? 'pointer' : 'default' }}
+      style={{
+        ...TILE,
+        minWidth: compact ? 88 : TILE.minWidth,
+        height: compact ? 68 : TILE.height,
+        margin: 0,
+      }}
     >
       {url ? (
-        <img src={url} alt={photo.caption || photoTypeLabel(photo.photo_type)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        /* A button, not a bare onClick on the figure: opening the photo has to
+           be reachable from a keyboard and announce itself. */
+        <button
+          type="button"
+          className="photo-tile__open"
+          onClick={onOpen}
+          aria-label={`Open ${photo.caption || label}`}
+        >
+          <img src={url} alt={photo.caption || label} />
+        </button>
       ) : (
         <>
           <Icon name="camera" size={compact ? 20 : 28} />
@@ -126,17 +139,14 @@ function Tile({ photo, url, gone, confirming, onConfirm, onOpen, onRequestDelete
       )}
 
       {onRequestDelete ? (
-        confirming ? (
-          <span style={{ position: 'absolute', top: 2, right: 2, display: 'flex', gap: 2 }} onClick={(e) => e.stopPropagation()}>
-            <IconButton icon="close" label="Keep photo" onClick={() => onConfirm('keep')} />
-            <IconButton icon="trash" label="Confirm delete photo" onClick={() => onConfirm('delete')} />
-          </span>
-        ) : (
-          <span style={{ position: 'absolute', top: 2, right: 2 }} onClick={(e) => e.stopPropagation()}>
-            <IconButton icon="trash" label="Delete photo" onClick={onRequestDelete} />
-          </span>
-        )
+        <span className="photo-tile__delete" onClick={(e) => e.stopPropagation()}>
+          <IconButton icon="trash" label="Delete photo" variant="destructive" onClick={onRequestDelete} />
+        </span>
       ) : null}
+
+      {/* Plain words, no pill: the type is context for a picture, and a boxed
+          label on a photo competes with the photo for the same small tile. */}
+      <span className="photo-tile__type">{label}</span>
 
       {photo.caption ? (
         <figcaption
@@ -157,18 +167,40 @@ function Tile({ photo, url, gone, confirming, onConfirm, onOpen, onRequestDelete
           {photo.caption}
         </figcaption>
       ) : null}
-      <span style={{ position: 'absolute', top: 2, left: 2 }}>
-        <StatusPill tone="neutral" shape="square">
-          {photoTypeLabel(photo.photo_type)}
-        </StatusPill>
-      </span>
     </figure>
+  )
+}
+
+/* The whole photo, over everything. A blob URL in a new tab is what this was:
+   in the installed app there is no tab, and on a phone the browser blocks it. */
+function PhotoViewer({ photo, url, onClose }) {
+  useEffect(() => {
+    if (!url) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [url, onClose])
+
+  if (!url) return null
+  return (
+    <div
+      className="photo-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-label={photo.caption || photoTypeLabel(photo.photo_type)}
+      onClick={onClose}
+    >
+      <img src={url} alt={photo.caption || photoTypeLabel(photo.photo_type)} />
+    </div>
   )
 }
 
 /* Inline gallery for one log entry: the photos taken while writing it. */
 export function PhotoTiles({ cardId, photos, compact = true }) {
   const { urls, missing } = useThumbnails(cardId, photos)
+  const [open, setOpen] = useState(null)
   if (!photos.length) return null
   return (
     <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto', paddingTop: 'var(--space-2)' }}>
@@ -182,10 +214,11 @@ export function PhotoTiles({ cardId, photos, compact = true }) {
             url={url}
             gone={missing.includes(key)}
             compact={compact}
-            onOpen={url ? () => window.open(url, '_blank', 'noopener') : undefined}
+            onOpen={url ? () => setOpen({ photo: p, url }) : undefined}
           />
         )
       })}
+      <PhotoViewer {...(open ?? {})} onClose={() => setOpen(null)} />
     </div>
   )
 }
@@ -196,7 +229,8 @@ export default function PhotoStrip({ cardId, photos, online, onCapture, onDelete
   const [blocked, setBlocked] = useState(null)
   const [saved, setSaved] = useState(null)
   const [filter, setFilter] = useState('all')
-  const [confirmingId, setConfirmingId] = useState(null)
+  const [open, setOpen] = useState(null)
+  const [deleting, setDeleting] = useState(null)
 
   const shown = filter === 'all' ? photos : photos.filter((p) => (p.photo_type ?? 'general') === filter)
 
@@ -214,6 +248,9 @@ export default function PhotoStrip({ cardId, photos, online, onCapture, onDelete
     }
   }
 
+  /* One question, asked in the app's own voice — the tile is where the photo is,
+     not where the decision is, and a second icon on the picture made "confirm"
+     something to hunt for. */
   const remove = async (photo) => {
     const outcome = await onDelete?.(photo)
     if (outcome && !outcome.ok) setBlocked({ reason: outcome.reason, name: photo.caption || photo.filename })
@@ -258,17 +295,61 @@ export default function PhotoStrip({ cardId, photos, online, onCapture, onDelete
               url={url}
               gone={gone}
               compact={false}
-              confirming={confirmingId === key}
-              onOpen={url ? () => window.open(url, '_blank', 'noopener') : undefined}
-              onRequestDelete={() => setConfirmingId(key)}
-              onConfirm={(action) => {
-                setConfirmingId(null)
-                if (action === 'delete') remove(p)
-              }}
+              onOpen={url ? () => setOpen({ photo: p, url }) : undefined}
+              onRequestDelete={() => setDeleting({ photo: p, url })}
             />
           )
         })}
       </div>
+
+      <PhotoViewer {...(open ?? {})} onClose={() => setOpen(null)} />
+
+      <Dialog
+        open={Boolean(deleting)}
+        title="Delete this photo?"
+        body={
+          deleting ? (
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+              {/* The thing being deleted, at a glance. A delete dialog about a
+                  picture that shows no picture asks the wrong question. */}
+              <div className="photo-thumb">
+                {deleting.url ? (
+                  <img src={deleting.url} alt="" />
+                ) : (
+                  <Icon name="camera" size={24} />
+                )}
+              </div>
+              <div>
+                <strong>
+                  {deleting.photo.caption || photoTypeLabel(deleting.photo.photo_type)}
+                </strong>
+                <p style={{ marginTop: 'var(--space-1)' }}>
+                  It is removed from this card and from every other device. This cannot be undone.
+                </p>
+              </div>
+            </div>
+          ) : null
+        }
+        onDismiss={() => setDeleting(null)}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setDeleting(null)}>
+              Keep
+            </Button>
+            <Button
+              variant="destructive"
+              icon="trash"
+              onClick={() => {
+                const { photo } = deleting
+                setDeleting(null)
+                remove(photo)
+              }}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      />
 
       {shown.length === 0 ? (
         <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: '0 var(--space-4) var(--space-2)' }}>

@@ -970,6 +970,93 @@ select.field__input { cursor: pointer; }
   border-radius: var(--corner-full);
 }
 
+/* ------------------------------------------------- Photo tiles + viewer --
+   The picture is the content, so the only things over it are words: the type in
+   plain label type with a shadow instead of a pill, and the caption bar it
+   already had. Nothing else competes with the photo for the tile. */
+.photo-tile__open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.photo-tile__open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-tile__type {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-2);
+  font: var(--label-s);
+  color: var(--on-surface);
+  text-shadow: 0 1px 3px var(--scrim);
+}
+
+/* Top right, and red: deleting is the destructive thing on this tile, so it
+   reads as one before it is pressed. Pulled past the corner so the glyph sits
+   near the edge rather than wherever a 48px touch target puts it — the tile
+   clips the overhang, which costs a few pixels of target and buys the corner. */
+.photo-tile__delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+}
+
+/* No state circle: on a photo, a grey disc appearing under the cursor is one
+   more shape over the picture, and the icon already says what it does. */
+.photo-tile__delete .icon-btn::after { display: none; }
+
+/* The whole photo, over everything. A blob URL in a new tab was the old
+   behaviour — an installed app has no tab, and a phone blocks it. Nothing but
+   the image: tapping it (or Escape) closes. */
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--scrim);
+  cursor: zoom-out;
+}
+
+.photo-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--corner-m);
+}
+
+/* The thing you are about to delete, at a glance: a delete dialog about a
+   picture that shows no picture asks the wrong question. Falls back to the same
+   camera glyph the tile uses when the bytes are gone. */
+.photo-thumb {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--corner-s);
+  overflow: hidden;
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* ------------------------------------------------------------- Card head --
    The boat's own picture sits behind the card's opening lines: a watermark, not
    a hero. It is deliberately faint — the words must stay the darkest thing on
