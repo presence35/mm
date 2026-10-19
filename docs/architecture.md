@@ -388,7 +388,7 @@ src/
              the behaviour on corrupt or unwritable storage.
     media/   photos.js                       — capture, compress, upload
   domain/    cardStatus.js, storageLocation.js, dockState.js, schedule.js,
-             conflictDiff.js — pure, deterministic
+             conflictDiff.js, photoPick.js — pure, deterministic
              *Note:* storageLocation.js also builds the Map's views —
              groupByStorageType, buildingsToDraw, buildingGrid, boathouseGrid.
              The grid is a rule about position codes, not a layout detail, so
@@ -403,6 +403,9 @@ src/
              dockState.js answers where a customer stands this season — Docked,
              Ashore, Lapsed, None — in one place and with `now` explicit, so the
              People rows, its filter counts and its filter all read one answer.
+             photoPick.js answers which photo represents a card — intake first,
+             then the newest — because the card header's watermark and any later
+             "main picture" flag must not disagree about which image is THE image.
              cardStatus.test.js, storageLocation.test.js, dockState.test.js,
              schedule.test.js, conflictDiff.test.js — beat tests pinning the
              lifecycle, the unrepresentable-combination rule, the label+tone

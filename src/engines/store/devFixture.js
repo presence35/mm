@@ -63,7 +63,7 @@ function locationOf(entry) {
 
 /* Idempotent: a dev store that already has cards is left alone, so a reload
    never doubles the list and the fixture never argues with synced data. */
-export function seedDevData() {
+export async function seedDevData() {
   if (!import.meta.env.DEV) return { seeded: false }
   if (store.listCards().length) return { seeded: false }
 

@@ -20,7 +20,8 @@ import ConditionEditor, { summarise } from './ConditionEditor.jsx'
 import CustomerQrSheet from './CustomerQrSheet.jsx'
 import { ReceivedItems, AuthorizedWork, WrapControl } from './TaskList.jsx'
 import LogComposer, { LogList } from './LogComposer.jsx'
-import PhotoStrip from './PhotoStrip.jsx'
+import PhotoStrip, { usePhotoUrl } from './PhotoStrip.jsx'
+import { mainPhoto } from '../../domain/photoPick.js'
 
 /* Pure presentation. Every prop arrives ready to render; no store access,
    no fetch, no localStorage. */
@@ -70,6 +71,10 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
   const conditionSummary = summarise(card.condition, SEED_CONDITIONS.length)
   const photos = card.photos ?? []
   const logs = card.logs ?? []
+  /* The boat's own picture, drawn behind the card's opening lines. Decoration:
+     the block reads the same with no photo, so the url may legitimately be null
+     and nothing is rendered for it. */
+  const boatPhotoUrl = usePhotoUrl(card.id, mainPhoto(photos))
 
   return (
     <div>
@@ -93,7 +98,11 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         </div>
       ) : null}
 
-      <header style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
+      <header className="card-head" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
+        {/* The boat's picture, quietly: the words on this block have to stay the
+            darkest thing on the surface in both modes, so it is a watermark and
+            not a hero. Decorative — it carries no alt text and takes no taps. */}
+        {boatPhotoUrl ? <img className="card-head__photo" src={boatPhotoUrl} alt="" aria-hidden="true" /> : null}
         {card.is_scanned ? (
           <div className="row" style={{ gap: 'var(--space-2)' }}>
             <StatusPill tone="neutral" shape="square">

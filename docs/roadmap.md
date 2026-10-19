@@ -110,3 +110,51 @@ than just the button text."
    this", that is a permission change, a queueable write, and a rule for two
    phones claiming the same boat. If mechanics may only read their assignment,
    the section stays office/admin furniture and (2) carries all the weight.
+
+---
+
+## 3. The boat's own picture
+
+**Wanted:** "maybe in boat edit you get to add 1 pic, distinct from every service
+card."
+
+**Where it stands today**
+
+- Every photo hangs off a service card (`photos.card_id`, `server/photos.js:22`),
+  so a boat's picture is whichever card happens to hold it, and it is lost from
+  view the moment that card is old. `domain/photoPick.js` answers "which photo
+  represents this card" — intake first, then the newest — and the card header
+  draws it faintly behind its opening lines (`.card-head__photo`, `ui.css`).
+- Nothing in the schema represents the boat itself: `boats` has no photo column
+  and `photos` has no `boat_id`.
+- The upload path already refuses offline and stores through one function
+  (`storePhoto`), which is the whole reason a boat photo is a small change
+  rather than a second photo system.
+
+**Shape of the change (my proposal)**
+
+- A `boat_id` on `photos` (null for a card photo), so one table, one upload
+  path, one strip of code that fetches bytes. Beta: the column is added, not
+  migrated.
+- Boat edit gets the one row: **Boat photo** — the current picture, or "Add
+  photo"/"Replace", with the same online-only rule and the same blocked reason
+  as every other photo.
+- The card header prefers the boat's photo and falls back to the card's intake
+  shot, so `photoPick.js` gains one rule rather than the header gaining a special
+  case.
+- Replacing keeps the old row as a tombstone (never a hard delete) so other
+  devices drop it by delta.
+
+**Open questions**
+
+1. One picture per boat, or a small set with one flagged as the main one?
+   *Leaning: one — "add 1 pic" is the ask, and a set re-opens the flagging
+   question.*
+2. Who may set it — office/admin only, or the mechanic who has the boat in front
+   of them? *Leaning: anyone who can work on the card, because the person who
+   knows what the boat looks like is the one standing next to it.*
+3. Does it follow the boat across seasons? *Leaning: yes. It is the boat, not the
+   card.*
+4. What does the card header draw when a boat photo and an intake shot both
+   exist — the boat's picture, or this season's intake shot? *Leaning: the
+   intake shot while the card is open, the boat photo otherwise.*

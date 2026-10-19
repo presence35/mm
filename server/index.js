@@ -383,7 +383,7 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
       boat: { name: boat?.name ?? null, model: boat?.model ?? null, length_ft: boat?.length_ft ?? null },
       work_order_no: card.work_order_no,
       season_year: card.season_year,
-      status_label: card.status,
+      status: card.status,
       services: services.map((s) => ({ label: s.label ?? 'Service', authorized: !!s.authorized, completed: !!s.completed })),
       updated_at: card.updated_at,
       fake: !!card.is_fake,

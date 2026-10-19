@@ -20,7 +20,7 @@ function Boot({ children }) {
          list. */
       if (import.meta.env.DEV) {
         const { seedDevData } = await import('./engines/store/devFixture.js')
-        seedDevData()
+        await seedDevData()
       }
       setReady(true)
     })

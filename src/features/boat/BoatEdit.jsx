@@ -4,7 +4,7 @@ import { useRouter } from '../../shell/RouterProvider.jsx'
 import { useAuth, CAPABILITIES } from '../../engines/auth/AuthProvider.jsx'
 import { useSync } from '../../engines/sync/SyncProvider.jsx'
 import * as store from '../../engines/store/localStore.js'
-import { statusMeta } from '../../domain/cardStatus.js'
+import { statusMeta, stageFraction } from '../../domain/cardStatus.js'
 import { locationSummary } from '../../domain/storageLocation.js'
 
 /*
@@ -166,7 +166,7 @@ export default function BoatEdit({ record }) {
           support="Open the service card"
           onClick={() => navigate('card', { id: card.id })}
           trailing={
-            <StatusPill tone={meta.tone}>
+            <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(card.status)}>
               {meta.label}
             </StatusPill>
           }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { TopBar, ListItem, KeyValue, Divider, Button, StatusPill, EmptyState } from '../ui'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta } from '../domain/cardStatus.js'
+import { statusMeta, stageFraction } from '../domain/cardStatus.js'
 import { locationSummary } from '../domain/storageLocation.js'
 
 export default function PeopleDetailScreen({ params = {} }) {
@@ -79,7 +79,7 @@ export default function PeopleDetailScreen({ params = {} }) {
               support={`${locationSummary(c)} · in ${c.date_in ?? '—'}`}
               onClick={() => navigate('card', { id: c.id })}
               trailing={
-                <StatusPill tone={meta.tone}>
+                <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(c.status)}>
                   {meta.label}
                 </StatusPill>
               }

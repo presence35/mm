@@ -22,7 +22,7 @@
   "customer_name": "…",
   "boat": { "name": "…", "model": "…", "length_ft": 24 },
   "work_order_no": "…",
-  "status_label": "IN STORAGE",
+  "status": "storage",
   "season_year": 2026,
   "services": [
     { "label": "Outdrive Svc", "authorized": true, "completed": true }

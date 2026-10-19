@@ -73,6 +73,40 @@ function useThumbnails(cardId, photos) {
   return { urls, missing }
 }
 
+/* One photo's bytes, for a caller that shows a single image — the watermark
+   behind the card header. The dependency is the row's identity rather than the
+   array, because the card projection rebuilds its arrays on every read and a
+   re-render must not refetch the same bytes. */
+export function usePhotoUrl(cardId, photo) {
+  const [url, setUrl] = useState(null)
+  const id = photo?.id ?? photo?.filename ?? null
+  const filename = photo?.filename ?? null
+
+  useEffect(() => {
+    if (!id || !filename) {
+      setUrl(null)
+      return
+    }
+    let cancelled = false
+    let created = null
+    ;(async () => {
+      const next = await fetchPhotoObjectUrl({ cardId, filename, token: storedToken() })
+      if (cancelled) {
+        if (next) URL.revokeObjectURL(next)
+        return
+      }
+      created = next
+      setUrl(next)
+    })()
+    return () => {
+      cancelled = true
+      if (created) URL.revokeObjectURL(created)
+    }
+  }, [cardId, id, filename])
+
+  return url
+}
+
 function Tile({ photo, url, gone, confirming, onConfirm, onOpen, onRequestDelete, compact }) {
   return (
     <figure

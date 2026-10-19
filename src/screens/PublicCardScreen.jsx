@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { StatusPill, EmptyState, Divider, KeyValue, Icon } from '../ui'
 import * as store from '../engines/store/localStore.js'
-import { statusMeta } from '../domain/cardStatus.js'
+import { statusMeta, stageFraction } from '../domain/cardStatus.js'
 import { SEED_AUTHORIZED_WORK } from '../engines/store/seed.js'
 
 /*
@@ -27,7 +27,10 @@ function project(card, boat, customer) {
     },
     work_order_no: card.work_order_no,
     season_year: card.season_year,
-    status_label: statusMeta(card.status).label,
+    /* The key, not a label: the viewer resolves it through statusMeta, so the
+       stage the customer is shown and the stage a worker sees come from one
+       place and a renamed stage cannot leave this screen behind. */
+    status: card.status,
     services: (card.authorized_work ?? []).map((w) => ({
       label: SEED_AUTHORIZED_WORK.find((s) => s.key === w.key)?.label ?? w.key,
       authorized: Boolean(w.authorized),
@@ -61,7 +64,7 @@ export default function PublicCardScreen({ token }) {
     )
   }
 
-  const meta = statusMeta(record.status_label)
+  const meta = statusMeta(record.status)
 
   return (
     <div className="app-shell">
@@ -78,8 +81,8 @@ export default function PublicCardScreen({ token }) {
             {record.boat.length_ft ? ` · ${record.boat.length_ft} ft` : ''}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-3)' }}>
-            <StatusPill tone={meta.tone}>
-              {record.status_label}
+            <StatusPill tone={meta.tone} variant="quiet" progress={stageFraction(record.status)}>
+              {meta.label}
             </StatusPill>
           </div>
         </header>
