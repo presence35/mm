@@ -30,9 +30,10 @@ export default function CardsScreen({ embedded = false }) {
   const toggleFilter = (value) =>
     setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
-  /* Nothing chosen and everything chosen are the same list, so `All` is on in
-     both and tapping it flips between them: the nine chips light up, then go
-     out. It reads as the select-all it is instead of a dead "no filter" chip. */
+  /* `All` is a select-all, not a "no filter" chip: it is on only when every
+     stage is on, and tapping it flips between all nine and none, whatever the
+     partial selection was. Nothing chosen and everything chosen narrow the same
+     list, so the funnel and the Recent band read `filtered`, not the chip. */
   const allOn = filters.length === filterOptions.length
   const filtered = filters.length > 0 && !allOn
 
@@ -149,8 +150,8 @@ export default function CardsScreen({ embedded = false }) {
       {filtersOpen ? (
         <ChipRow className="chip-row--flush">
           <Chip
-            selected={!filtered}
-            onClick={() => setFilters(filtered ? [] : filterOptions.map((o) => o.value))}
+            selected={allOn}
+            onClick={() => setFilters(allOn ? [] : filterOptions.map((o) => o.value))}
           >
             All
             <span className="chip__count">{cards.length}</span>

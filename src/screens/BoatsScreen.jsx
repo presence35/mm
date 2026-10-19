@@ -59,8 +59,8 @@ export default function BoatsScreen() {
   const toggleFilter = (value) =>
     setFilters((on) => (on.includes(value) ? on.filter((v) => v !== value) : [...on, value]))
 
-  /* Nothing chosen and everything chosen show the same list, so `All` is on in
-     both and tapping it flips between them. */
+  /* `All` is a select-all: on only when every stage is on, and tapping it flips
+     between all of them and none, whatever the partial selection was. */
   const allOn = filters.length === filterOptions.length
   const filtered = filters.length > 0 && !allOn
 
@@ -113,8 +113,8 @@ export default function BoatsScreen() {
       {filtersOpen ? (
         <ChipRow className="chip-row--flush">
           <Chip
-            selected={!filtered}
-            onClick={() => setFilters(filtered ? [] : filterOptions.map((o) => o.value))}
+            selected={allOn}
+            onClick={() => setFilters(allOn ? [] : filterOptions.map((o) => o.value))}
           >
             All
             <span className="chip__count">{rows.length}</span>
