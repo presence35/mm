@@ -1033,16 +1033,16 @@ select.field__input { cursor: pointer; }
 .status-pill--warn { --pill-tone: var(--warning); background: var(--warning-container); color: var(--on-warning-container); }
 .status-pill--error { --pill-tone: var(--error); background: var(--error-container); color: var(--on-error-container); }
 
-/* A row's status. The tone moves to a leading edge and the stage's position to a
-   rail along the bottom, so thirty rows are not thirty filled boxes. The width
-   is fixed — every quiet pill the same — and that is what makes the rails
-   comparable: "two thirds along" has to mean the same number of pixels in every
-   row or it means nothing. The label says which stage; the rail says how far. */
+/* A row's status. The stage's position is the only mark: an unfilled pill with
+   the tone drawn as a rail along its bottom edge, so thirty rows are not thirty
+   filled boxes and not thirty coloured edges either. The width is fixed — every
+   quiet pill the same — and that is what makes the rails comparable: "two thirds
+   along" has to mean the same number of pixels in every row or it means
+   nothing. The label says which stage; the rail says how far. */
 .status-pill--quiet {
   width: 128px;
   justify-content: flex-start;
   padding: 0 var(--space-2);
-  border-left: 3px solid var(--pill-tone);
   border-radius: var(--corner-s);
   background: none;
   color: var(--on-surface);
@@ -1052,7 +1052,7 @@ select.field__input { cursor: pointer; }
   position: absolute;
   left: 0;
   bottom: 0;
-  height: 2px;
+  height: 3px;
   background: var(--pill-tone);
 }
 
@@ -1659,8 +1659,8 @@ button.slot:active { filter: brightness(0.94); }
   color: inherit;
 }
 
-/* A quiet pill keeps its own ink; only its edge and rail take the tone, so the
-   row edge, the edge of the pill and its rail are one swatch. */
+/* A quiet pill keeps its own ink; only its rail takes the tone, so the row edge
+   and the tone inside the pill cannot disagree. */
 :root[data-palette='legacy'] .status-pill--progress:not(.status-pill--quiet) { background: var(--primary); color: var(--on-primary); }
 :root[data-palette='legacy'] .status-pill--action:not(.status-pill--quiet) { background: var(--tertiary); color: var(--on-tertiary); }
 :root[data-palette='legacy'] .status-pill--done:not(.status-pill--quiet) { background: var(--success); color: var(--on-success); }
