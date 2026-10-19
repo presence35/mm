@@ -8,9 +8,9 @@
 
 export const CARD_STATUS = {
   intake: { label: 'Intake', tone: 'action', step: 0 },
-  fall_checklist: { label: 'Fall check', tone: 'progress', step: 1 },
+  fall_checklist: { label: 'Fall', tone: 'progress', step: 1 },
   storage: { label: 'Storage', tone: 'progress', step: 2 },
-  spring_checklist: { label: 'Spring check', tone: 'progress', step: 3 },
+  spring_checklist: { label: 'Spring', tone: 'progress', step: 3 },
   service: { label: 'Service', tone: 'action', step: 4 },
   cleaning: { label: 'Cleaning', tone: 'progress', step: 5 },
   ready: { label: 'Ready', tone: 'done', step: 6 },

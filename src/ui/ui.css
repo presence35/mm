@@ -1036,13 +1036,15 @@ select.field__input { cursor: pointer; }
 /* A row's status. The stage's position is the only mark: an unfilled pill with
    the tone drawn as a rail along its bottom edge, so thirty rows are not thirty
    filled boxes and not thirty coloured edges either. The width is fixed — every
-   quiet pill the same — and that is what makes the rails comparable: "two thirds
-   along" has to mean the same number of pixels in every row or it means
-   nothing. The label says which stage; the rail says how far. */
+   quiet pill the same, sized to the longest stage name rather than to whatever
+   the row happens to say — and that is what makes the rails comparable: "two
+   thirds along" has to mean the same number of pixels in every row or it means
+   nothing. The label says which stage; the rail says how far. The label sits on
+   the rail's own start line, with no leading padding between them. */
 .status-pill--quiet {
-  width: 128px;
+  width: 88px;
   justify-content: flex-start;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-2) 0 0;
   border-radius: var(--corner-s);
   background: none;
   color: var(--on-surface);
