@@ -52,6 +52,46 @@ export async function planPhotoCopies(legacyPhotoRows, { legacyDir, uploadsRoot 
   return { copies, missing, available: available.size }
 }
 
+/* The row import refuses to run twice, so the photo copy — a side effect of the
+   row plan — could never be repeated. This is the pass that repairs that: bytes
+   only, no rows, driven by what the target already says exists. Safe to run any
+   number of times, and it reports what it cannot find rather than inventing a
+   file. */
+export async function planMissingFiles(rows, { legacyDir, uploadsRoot }) {
+  const available = new Set()
+  try {
+    for (const name of await readdir(legacyDir)) {
+      if (EXT.test(name)) available.add(name)
+    }
+  } catch {
+    return { copies: [], present: 0, missing: rows.map((r) => r.filename), available: 0, dirFound: false }
+  }
+
+  const copies = []
+  const missing = []
+  let present = 0
+
+  for (const row of rows) {
+    const name = String(row.filename ?? '').replace(/^'|'$/g, '')
+    if (!name || !row.cardId) {
+      missing.push(name || '(empty filename)')
+      continue
+    }
+    const to = join(uploadsRoot, row.cardId, name)
+    if (await access(to).then(() => true, () => false)) {
+      present++
+      continue
+    }
+    if (!available.has(name)) {
+      missing.push(name)
+      continue
+    }
+    copies.push({ from: join(legacyDir, name), to })
+  }
+
+  return { copies, present, missing, available: available.size, dirFound: true }
+}
+
 export async function copyPhotos(copies) {
   let copied = 0
   for (const { from, to } of copies) {

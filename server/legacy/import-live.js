@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { readdir } from 'node:fs/promises'
 
 import { plan, ORDER } from './plan.js'
-import { planPhotoCopies } from './photos.js'
+import { planPhotoCopies, planMissingFiles, copyPhotos } from './photos.js'
 import { importInto, legacyImportState, markMigrationComplete, targetCounts } from './import.js'
 import { bootstrap } from '../db/index.js'
 import { PREFIX, T } from '../entities.js'
@@ -224,6 +224,45 @@ export function registerLegacyImportRoutes(app, { database, authenticate, adminO
     } catch (e) {
       log(`legacy-import reset failed: ${e?.message}`)
       res.status(500).json({ error: 'reset_failed', detail: e?.message ?? 'unknown' })
+    }
+  })
+
+  /* Bytes, not rows.
+     The apply step refuses to run twice, so a marina whose first import landed
+     without its photographs would otherwise be stuck with 404s forever. This
+     reads the target's own photo rows and copies only the files that are not in
+     the uploads root yet. It writes no rows, so the duplicate guard does not
+     apply and repeating it costs nothing. */
+  app.post('/api/admin/legacy-import/photos', authenticate, adminOnly, async (req, res) => {
+    try {
+      const photosDir = req.body?.photos_dir || DEFAULT_PHOTOS_DIR
+      const rows = (
+        await database.all(`SELECT card_id, filename FROM ${T('photos')} WHERE deleted_at IS NULL`)
+      ).map((r) => ({ cardId: r.card_id, filename: r.filename }))
+
+      const dirFound = await photosDirExists(photosDir)
+      const planned = dirFound
+        ? await planMissingFiles(rows, { legacyDir: photosDir, uploadsRoot })
+        : { copies: [], present: 0, missing: rows.map((r) => r.filename), available: 0 }
+
+      const copied = await copyPhotos(planned.copies)
+      log(
+        `legacy-import photos: ${rows.length} rows, ${planned.present} already here, ${copied} copied, ${planned.missing.length} without a file`,
+      )
+      res.json({
+        photosDir,
+        photosDirFound: dirFound,
+        rows: rows.length,
+        alreadyPresent: planned.present,
+        copies: planned.copies.length,
+        copied,
+        photosAvailable: planned.available,
+        missing: planned.missing.slice(0, 10),
+        missingTotal: planned.missing.length,
+      })
+    } catch (e) {
+      log(`legacy-import photos failed: ${e?.message}`)
+      res.status(500).json({ error: 'photos_failed', detail: e?.message ?? 'unknown' })
     }
   })
 

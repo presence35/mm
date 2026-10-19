@@ -79,6 +79,8 @@ function LegacyImportPanel() {
   const [result, setResult] = useState(null)
   const [confirmApply, setConfirmApply] = useState(false)
   const [confirmRecord, setConfirmRecord] = useState(false)
+  const [photos, setPhotos] = useState(null)
+  const [photosBusy, setPhotosBusy] = useState(false)
 
   const call = async (path, body) => {
     let token = ''
@@ -109,6 +111,22 @@ function LegacyImportPanel() {
       setError(e.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  /* The row import refuses a second run, so the photographs it failed to copy
+     have no other way across. Files only, no rows. */
+  const copyPhotoFiles = async () => {
+    if (photosBusy) return
+    setPhotosBusy(true)
+    setError('')
+    setPhotos(null)
+    try {
+      setPhotos(await call('photos', {}))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setPhotosBusy(false)
     }
   }
 
@@ -153,6 +171,36 @@ function LegacyImportPanel() {
         <Button fullWidth variant="tonal" onClick={planImport} disabled={busy} loading={busy}>
           Plan from live tables
         </Button>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          onClick={copyPhotoFiles}
+          disabled={photosBusy}
+          loading={photosBusy}
+        >
+          Copy missing photo files
+        </Button>
+
+        {photos ? (
+          <div style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', display: 'grid', gap: 'var(--space-1)' }}>
+            <div>
+              {photos.photosDirFound ? photos.photosDir : `${photos.photosDir} — not readable`}
+            </div>
+            <div>
+              {photos.copied} copied · {photos.alreadyPresent} already here · {photos.missingTotal} without a file
+            </div>
+            {photos.missing?.length ? (
+              <div>
+                No file for {photos.missing.join(', ')}
+                {photos.missingTotal > photos.missing.length
+                  ? ` and ${photos.missingTotal - photos.missing.length} more`
+                  : ''}
+              </div>
+            ) : null}
+            <div>Reopen the card to see them; the pictures are not stored on this device.</div>
+          </div>
+        ) : null}
         {error ? (
           <div className="offline-bar offline-bar--conflict" role="alert">
             <Icon name="alert" size={18} />
