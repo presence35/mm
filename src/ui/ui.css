@@ -1293,6 +1293,36 @@ button.slot:active { filter: brightness(0.94); }
 .offline-bar--syncing { background: var(--primary-container); color: var(--on-primary-container); }
 .offline-bar--conflict { background: var(--error-container); color: var(--on-error-container); }
 
+/* A conflict bar is a way in, so the whole band is the target: the Resolve
+   label says what happens, the row is what the thumb lands on. */
+.offline-bar--action {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  overflow: hidden;
+}
+
+.offline-bar--action::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-short-3) var(--easing-standard);
+}
+
+.offline-bar--action:hover::after { opacity: var(--state-hover); }
+.offline-bar--action:active::after { opacity: var(--state-pressed); }
+
+.offline-bar__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  font: var(--label-l);
+}
+
 /* In the shell the notice floats: the content underneath never moves, so a
    sync cycle cannot reflow the list a worker is reading. Fixed rather than
    absolute so it does not scroll away with the content, and it is silent to
@@ -1355,16 +1385,43 @@ button.slot:active { filter: brightness(0.94); }
   overflow: hidden;
 }
 
-.conflict-card__head { padding: var(--space-2) var(--space-3) 0; }
+/* The whole header is the "keep the server's version" target, and it says so on
+   the right instead of wearing a button. Server is the version the entity
+   already holds, so this is the cheap answer for a card the worker has read and
+   wants out of the way. */
+.conflict-card__head {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  color: var(--on-surface);
+  transition: background-color var(--duration-short-3) var(--easing-standard);
+}
+
+.conflict-card__head:hover { background: var(--surface-container-high); }
+.conflict-card__head:active { background: var(--surface-container-highest); }
+
+.conflict-card__title { display: flex; align-items: center; gap: var(--space-2); }
 
 .conflict-card__name {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
   font: var(--title-s);
   color: var(--on-surface);
 }
 
-.conflict-card__meta { font: var(--body-s); color: var(--on-surface-variant); }
+.conflict-card__hint {
+  flex-shrink: 0;
+  font: var(--label-m);
+  color: var(--on-surface-variant);
+}
+
+.conflict-card__meta {
+  display: block;
+  font: var(--body-s);
+  color: var(--on-surface-variant);
+}
 
 .conflict-card__bar {
   display: flex;
@@ -1429,6 +1486,13 @@ button.slot:active { filter: brightness(0.94); }
 
 .conflict-value:hover { background: var(--surface-container-high); }
 .conflict-value:active { background: var(--secondary-container); color: var(--on-secondary-container); }
+
+/* An empty radio at the end of each candidate: this is one of two, and nothing
+   is decided yet. It fills in on hover, so the row reads as a target before it
+   is tapped. */
+.conflict-value__pick { color: var(--outline); }
+.conflict-value:hover .conflict-value__pick { color: var(--primary); }
+.conflict-value:active .conflict-value__pick { color: var(--on-secondary-container); }
 
 .conflict-value__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 

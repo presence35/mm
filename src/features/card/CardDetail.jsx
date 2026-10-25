@@ -95,16 +95,25 @@ export default function CardDetail({ record, embedded, selected, onBack, onDirty
         />
       ) : null}
 
-      {/* Conflict is a first-class state, not a toast. Both versions survive. */}
+      {/* Conflict is a first-class state, not a toast. Both versions survive.
+          The whole band is the way in: the worker reads "needs review" and taps
+          the thing that said it, rather than a four-letter button at the end of
+          the row. `Resolve` stays as the affordance, not as the hit area. */}
       {conflicted ? (
-        <div className="offline-bar offline-bar--conflict" role="alert">
+        <button
+          type="button"
+          className="offline-bar offline-bar--conflict offline-bar--action"
+          onClick={actions.onResolveConflicts}
+          aria-label="Needs review — this card changed on another device. Open the conflicts."
+        >
           <Icon name="alert" size={18} />
-          Needs review — this card changed on another device
+          <span>Needs review — this card changed on another device</span>
           <span className="spacer" />
-          <Button variant="text" size="sm" onClick={actions.onResolveConflicts}>
+          <span className="offline-bar__cta">
             Resolve
-          </Button>
-        </div>
+            <Icon name="right" size={16} />
+          </span>
+        </button>
       ) : null}
 
       <header className="card-head" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>

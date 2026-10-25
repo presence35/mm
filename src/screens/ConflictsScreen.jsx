@@ -27,8 +27,9 @@ import { useWindowClass } from '../shell/useWindowClass.js'
  * string keeps the server's version, and the two All targets keep one whole
  * side. A screen where a tap chooses and a button then commits was two steps
  * for one decision, and it left cards looking undecided while they were already
- * answered. The phone and server icons are the legend; the words live once, on
- * the screen-level pair.
+ * answered. The card header is that same "keep the server" decision for the
+ * whole card, and says so; the phone and server icons are the legend, with the
+ * words written once on the screen-level pair.
  *
  * Server is the default by omission: the server's version is what the entity
  * currently holds (behaviors-sync.md §Conflicts). Choosing "This device" is the
@@ -42,7 +43,7 @@ import { useWindowClass } from '../shell/useWindowClass.js'
 
 export default function ConflictsScreen() {
   const { goBack } = useRouter()
-  const { resolve, online } = useSync()
+  const { resolve } = useSync()
   const { conflicts, refresh } = useConflicts()
   const width = useWindowClass()
   const root = useRef(null)
@@ -86,15 +87,13 @@ export default function ConflictsScreen() {
           <div className="conflict-intro">
             <p className="conflict-intro__how">Tap the version you want to keep — it applies straight away.</p>
             <p className="conflict-intro__sync">
-              {online
-                ? 'Your choice is pushed to the server on the next sync.'
-                : 'You are offline. Your choice is saved on this device and pushed when you get signal.'}
+              Saved on this device first — the server catches up when it can.
             </p>
           </div>
 
           {reviewable.length > 1 ? (
             <div className="conflict-all">
-              <span className="conflict-all__label">All {reviewable.length}</span>
+              <span className="conflict-all__label">Sync all {reviewable.length} from</span>
               <Bulk large onPick={allSide} />
             </div>
           ) : null}
@@ -162,11 +161,19 @@ function Card({ conflict, onResolve }) {
 
   return (
     <article className="conflict-card">
-      <div className="conflict-card__head">
-        <h2 className="conflict-card__name">{heading}</h2>
-        {conflict.record ? <p className="conflict-card__meta">{conflict.record}</p> : null}
-        {conflict.changedBy ? <p className="conflict-card__meta">{conflict.changedBy}</p> : null}
-      </div>
+      <button
+        type="button"
+        className="conflict-card__head"
+        onClick={() => keep(null)}
+        aria-label={`Keep the server's version for ${heading}`}
+      >
+        <span className="conflict-card__title">
+          <span className="conflict-card__name">{heading}</span>
+          <span className="conflict-card__hint">Keep server</span>
+        </span>
+        {conflict.record ? <span className="conflict-card__meta">{conflict.record}</span> : null}
+        {conflict.changedBy ? <span className="conflict-card__meta">{conflict.changedBy}</span> : null}
+      </button>
 
       <div className="conflict-card__bar">
         <span className="conflict-card__count">{count} different</span>
@@ -222,8 +229,7 @@ function Waiting({ conflict, onResolve }) {
 
 /*
  * One candidate string. Tapping it keeps it; the icon at the left says where it
- * came from, and that is the whole control — no box, no selected state, because
- * there is nothing to select.
+ * came from, the empty radio at the right says it is one of two and undecided.
  */
 function Value({ source, label, value, onSelect }) {
   return (
@@ -235,6 +241,7 @@ function Value({ source, label, value, onSelect }) {
     >
       <Icon name={source} size={18} />
       <span className="conflict-value__text">{value}</span>
+      <Icon name="circle" size={18} className="conflict-value__pick" />
     </button>
   )
 }
