@@ -28,8 +28,8 @@ import { useWindowClass } from '../shell/useWindowClass.js'
  * side. A screen where a tap chooses and a button then commits was two steps
  * for one decision, and it left cards looking undecided while they were already
  * answered. The card header is that same "keep the server" decision for the
- * whole card, and says so; the phone and server icons are the legend, with the
- * words written once on the screen-level pair.
+ * whole card. The phone and server icons are the legend, with the words written
+ * once on the screen-level pair.
  *
  * Server is the default by omission: the server's version is what the entity
  * currently holds (behaviors-sync.md §Conflicts). Choosing "This device" is the
@@ -115,7 +115,7 @@ export default function ConflictsScreen() {
 
 /* The two sides as one control. On the screen-level pair the words are the
    legend for every icon-only row below it; on a card the side is carried by the
-   icon and the word is All. */
+   icon and the number says how much of the card this settles. */
 function Bulk({ onPick, large = false, count = 0 }) {
   const scope = large ? 'everywhere' : `all ${count} field${count === 1 ? '' : 's'}`
   return (
@@ -127,7 +127,7 @@ function Bulk({ onPick, large = false, count = 0 }) {
         aria-label={`Keep this device's version for ${scope}`}
       >
         <Icon name="phone" size={large ? 22 : 20} />
-        {large ? 'This device' : 'All'}
+        {large ? 'This device' : `All ${count}`}
       </button>
       <button
         type="button"
@@ -136,7 +136,7 @@ function Bulk({ onPick, large = false, count = 0 }) {
         aria-label={`Keep the server's version for ${scope}`}
       >
         <Icon name="server" size={large ? 22 : 20} />
-        {large ? 'Server' : 'All'}
+        {large ? 'Server' : `All ${count}`}
       </button>
     </div>
   )
@@ -167,19 +167,16 @@ function Card({ conflict, onResolve }) {
         onClick={() => keep(null)}
         aria-label={`Keep the server's version for ${heading}`}
       >
-        <span className="conflict-card__title">
-          <span className="conflict-card__name">{heading}</span>
-          <span className="conflict-card__hint">Keep server</span>
-        </span>
+        <span className="conflict-card__name">{heading}</span>
         {conflict.record ? <span className="conflict-card__meta">{conflict.record}</span> : null}
         {conflict.changedBy ? <span className="conflict-card__meta">{conflict.changedBy}</span> : null}
       </button>
 
-      <div className="conflict-card__bar">
-        <span className="conflict-card__count">{count} different</span>
-        <span className="spacer" />
-        <Bulk onPick={keepSide} count={count} />
-      </div>
+      {count > 1 ? (
+        <div className="conflict-card__bulk">
+          <Bulk onPick={keepSide} count={count} />
+        </div>
+      ) : null}
 
       <div className="conflict-fields">
         {conflict.rows.map((row) => (

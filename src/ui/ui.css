@@ -1401,20 +1401,12 @@ button.slot:active { filter: brightness(0.94); }
 .conflict-card__head:hover { background: var(--surface-container-high); }
 .conflict-card__head:active { background: var(--surface-container-highest); }
 
-.conflict-card__title { display: flex; align-items: center; gap: var(--space-2); }
-
 .conflict-card__name {
-  flex: 1;
+  display: block;
   min-width: 0;
   overflow-wrap: anywhere;
   font: var(--title-s);
   color: var(--on-surface);
-}
-
-.conflict-card__hint {
-  flex-shrink: 0;
-  font: var(--label-m);
-  color: var(--on-surface-variant);
 }
 
 .conflict-card__meta {
@@ -1423,14 +1415,10 @@ button.slot:active { filter: brightness(0.94); }
   color: var(--on-surface-variant);
 }
 
-.conflict-card__bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3) 0;
-}
-
-.conflict-card__count { font: var(--body-s); color: var(--on-surface-variant); }
+/* Bulk sits under the header and flush left with the field cards: the pointer
+   travels the same short distance to a whole-card choice as to a single
+   string. Hidden on a one-field card, where it would repeat the two rows. */
+.conflict-card__bulk { padding: var(--space-1) var(--space-3) 0; }
 
 /* Bulk. Same two icons as every value below, one size up, so "everything from
    there" is recognisable without reading a word. */
