@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { TopBar, Button, EmptyState, StatusPill, Icon } from '../ui'
+import { useEffect, useRef, useState } from 'react'
+import { TopBar, EmptyState, Icon } from '../ui'
 import { useSync } from '../engines/sync/SyncProvider.jsx'
 import { useConflicts } from '../features/conflicts/useConflicts.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
@@ -18,26 +18,26 @@ import { useWindowClass } from '../shell/useWindowClass.js'
  *
  * One conflict per card, one differing field per card inside it. The queue in
  * the marina is dozens of rows, and a single running column reads as a wall:
- * separated, a worker settles one and is able to leave the rest. On a wide
- * screen the field cards flow across the conflict card — the queue turned on
- * its side — so a four-field disagreement is one glance, not four scrolls.
+ * separated, a worker settles one and can leave the rest. On a wide screen the
+ * field cards flow across the conflict card — the queue turned on its side — so
+ * a four-field disagreement is one glance, not four scrolls.
  *
- * The value is the control. It is the string itself, prefixed by the phone or
- * the server icon and a small label, because the question was never "which
- * button" but "which of these two strings is the one I mean". The chosen row
- * is tinted and ticked, never colour alone.
+ * There is no selection and no Apply. Every tap is a decision: the phone string
+ * keeps that field from this device and the rest from the server, the server
+ * string keeps the server's version, and the two All targets keep one whole
+ * side. A screen where a tap chooses and a button then commits was two steps
+ * for one decision, and it left cards looking undecided while they were already
+ * answered. The phone and server icons are the legend; the words live once, on
+ * the screen-level pair.
  *
- * The heading commits. A worker who has already decided should not hunt for a
- * button at the bottom of the card, so the whole header is the commit and says
- * Apply on its right; the footer button exists only for a mixed choice, where
- * the count is worth spelling out. Each card also carries the two bulk targets
- * — everything from this device, everything from the server — and the screen
- * carries them once for the whole queue, because thirty-six one-field
- * conflicts are a queue nobody reads.
- *
- * Server is preselected because the server's version is what the entity
+ * Server is the default by omission: the server's version is what the entity
  * currently holds (behaviors-sync.md §Conflicts). Choosing "This device" is the
- * deviation, so the default is the state that already exists.
+ * deviation.
+ *
+ * A conflict whose server side never arrived has nothing to compare. It is not
+ * hidden — a disagreement is never silently dropped — but it is one line with
+ * the single decision that exists, rather than a card that looks broken and
+ * offers nothing to tap.
  */
 
 export default function ConflictsScreen() {
@@ -45,6 +45,7 @@ export default function ConflictsScreen() {
   const { resolve, online } = useSync()
   const { conflicts, refresh } = useConflicts()
   const width = useWindowClass()
+  const root = useRef(null)
 
   const act = async (id, choice) => {
     await resolve(id, choice)
@@ -53,8 +54,7 @@ export default function ConflictsScreen() {
 
   /* Every card, one side. Resolving keeps both payloads on both sides and only
      closes the disagreement, so this deletes nothing — it is the same choice
-     the worker would make card by card, made once. A card waiting for its
-     server version has nothing to choose between and is left alone. */
+     the worker would make card by card, made once. */
   const allSide = async (side) => {
     for (const conflict of conflicts) {
       if (!conflict.server_payload) continue
@@ -63,8 +63,11 @@ export default function ConflictsScreen() {
     await refresh()
   }
 
+  const reviewable = conflicts.filter((c) => c.server_payload)
+  const waiting = conflicts.filter((c) => !c.server_payload)
+
   return (
-    <div className="conflicts" data-width={width}>
+    <div className="conflicts" data-width={width} ref={root}>
       <TopBar title="Needs review" onBack={goBack} />
 
       {!conflicts.length ? (
@@ -80,32 +83,40 @@ export default function ConflictsScreen() {
             {conflicts.length} change{conflicts.length === 1 ? '' : 's'} kept — nothing was lost
           </div>
 
-          {conflicts.length > 1 ? (
+          <div className="conflict-intro">
+            <p className="conflict-intro__how">Tap the version you want to keep — it applies straight away.</p>
+            <p className="conflict-intro__sync">
+              {online
+                ? 'Your choice is pushed to the server on the next sync.'
+                : 'You are offline. Your choice is saved on this device and pushed when you get signal.'}
+            </p>
+          </div>
+
+          {reviewable.length > 1 ? (
             <div className="conflict-all">
-              <span className="conflict-all__label">All {conflicts.length}</span>
-              <span className="spacer" />
+              <span className="conflict-all__label">All {reviewable.length}</span>
               <Bulk large onPick={allSide} />
             </div>
           ) : null}
 
-          {conflicts.map((conflict) => (
+          {reviewable.map((conflict) => (
             <Card key={conflict.id} conflict={conflict} onResolve={act} />
           ))}
 
-          <p style={{ font: 'var(--body-s)', color: 'var(--on-surface-variant)', padding: 'var(--space-2) var(--space-4) var(--space-6)' }}>
-            {online
-              ? 'Your choice is pushed to the server on the next sync.'
-              : 'You are offline. Your choice is saved on this device and pushed when you get signal.'}
-          </p>
+          {waiting.map((conflict) => (
+            <Waiting key={conflict.id} conflict={conflict} onResolve={act} />
+          ))}
+
+          <ScrollTop targetRef={root} />
         </>
       )}
     </div>
   )
 }
 
-/* The two sides as one control, so "all of it from here" is a single glance.
-   On a card the side is carried by the icon and the word is All; the
-   screen-level bar has no card context, so it names the side instead. */
+/* The two sides as one control. On the screen-level pair the words are the
+   legend for every icon-only row below it; on a card the side is carried by the
+   icon and the word is All. */
 function Bulk({ onPick, large = false, count = 0 }) {
   const scope = large ? 'everywhere' : `all ${count} field${count === 1 ? '' : 's'}`
   return (
@@ -133,63 +144,26 @@ function Bulk({ onPick, large = false, count = 0 }) {
 }
 
 function Card({ conflict, onResolve }) {
-  /* field → 'mine' | 'theirs'. Absent means server, so a field the worker
-     never looked at keeps the value the entity already holds. */
-  const [chosen, setChosen] = useState({})
-
   const heading = conflict.detail ? `${conflict.type} · ${conflict.detail}` : conflict.type
   const count = conflict.rows.length
-  const waiting = !conflict.server_payload
-  const kept = conflict.rows.filter((r) => chosen[r.field] === 'mine')
-  const mixed = kept.length > 0 && kept.length < count
 
-  const choose = (field, side) => setChosen((c) => ({ ...c, [field]: side }))
-
-  const apply = () => {
-    if (!kept.length) return onResolve(conflict.id, { resolution: 'kept_server' })
-    /* Start from what the server holds and override only the fields the worker
-       chose. Everything they did not touch keeps the value the entity already
-       has, which is the whole point of picking per field. */
+  /* One tap, one answer. With a field, the server's version is the base and
+     only that field comes from this device — everything the worker did not
+     touch keeps the value the entity already holds. */
+  const keep = (field) => {
+    if (!field) return onResolve(conflict.id, { resolution: 'kept_server' })
     const payload = { ...conflict.server_payload }
-    for (const r of kept) payload[r.field] = conflict.local_payload?.[r.field] ?? null
+    payload[field] = conflict.local_payload?.[field] ?? null
     return onResolve(conflict.id, { resolution: 'merged', payload })
   }
 
-  const resolveSide = (side) =>
+  const keepSide = (side) =>
     onResolve(conflict.id, { resolution: side === 'mine' ? 'kept_local' : 'kept_server' })
-
-  if (waiting) {
-    return (
-      <article className="conflict-card">
-        <div className="conflict-card__head">
-          <h2 className="conflict-card__name">{heading}</h2>
-          {conflict.record ? <p className="conflict-card__meta">{conflict.record}</p> : null}
-          <p className="conflict-card__meta">Waiting for this device to pull the other version</p>
-        </div>
-        <div className="conflict-card__bar">
-          <StatusPill tone="neutral" shape="square">
-            Not comparable yet
-          </StatusPill>
-        </div>
-      </article>
-    )
-  }
 
   return (
     <article className="conflict-card">
       <div className="conflict-card__head">
-        <button
-          type="button"
-          className="conflict-card__title"
-          onClick={apply}
-          aria-label={`Apply the chosen versions for ${heading}`}
-        >
-          <span className="conflict-card__name">{heading}</span>
-          <span className="conflict-card__apply">
-            <Icon name="check" size={18} />
-            Apply
-          </span>
-        </button>
+        <h2 className="conflict-card__name">{heading}</h2>
         {conflict.record ? <p className="conflict-card__meta">{conflict.record}</p> : null}
         {conflict.changedBy ? <p className="conflict-card__meta">{conflict.changedBy}</p> : null}
       </div>
@@ -197,7 +171,7 @@ function Card({ conflict, onResolve }) {
       <div className="conflict-card__bar">
         <span className="conflict-card__count">{count} different</span>
         <span className="spacer" />
-        <Bulk onPick={resolveSide} count={count} />
+        <Bulk onPick={keepSide} count={count} />
       </div>
 
       <div className="conflict-fields">
@@ -208,48 +182,87 @@ function Card({ conflict, onResolve }) {
               source="phone"
               label="This device"
               value={row.mine}
-              selected={chosen[row.field] === 'mine'}
-              onSelect={() => choose(row.field, 'mine')}
+              onSelect={() => keep(row.field)}
             />
             <Value
               source="server"
               label="Server"
               value={row.theirs}
-              selected={chosen[row.field] !== 'mine'}
-              onSelect={() => choose(row.field, 'theirs')}
+              onSelect={() => keep(null)}
             />
           </div>
         ))}
       </div>
-
-      {mixed ? (
-        <div className="conflict-card__foot">
-          <Button fullWidth onClick={apply}>
-            {`Apply — ${kept.length} from this device, ${count - kept.length} from the server`}
-          </Button>
-        </div>
-      ) : null}
     </article>
   )
 }
 
+/* Nothing to compare yet: no second version, so the only honest decision is to
+   keep what the server holds and stop the row sitting here forever. */
+function Waiting({ conflict, onResolve }) {
+  return (
+    <div className="conflict-waiting">
+      <div className="conflict-waiting__text">
+        <span className="conflict-waiting__name">{conflict.type}</span>
+        <span className="conflict-waiting__meta">
+          {conflict.record ? `${conflict.record} · ` : ''}Waiting for this device to pull the other version
+        </span>
+      </div>
+      <button
+        type="button"
+        className="conflict-bulk__btn"
+        onClick={() => onResolve(conflict.id, { resolution: 'kept_server' })}
+        aria-label={`Keep the server's version for ${conflict.type}`}
+      >
+        Keep server
+      </button>
+    </div>
+  )
+}
+
 /*
- * One candidate string. Tapping it keeps it; the source icon and label say
- * where it came from, and the tick says it is the one being kept.
+ * One candidate string. Tapping it keeps it; the icon at the left says where it
+ * came from, and that is the whole control — no box, no selected state, because
+ * there is nothing to select.
  */
-function Value({ source, label, value, selected, onSelect }) {
+function Value({ source, label, value, onSelect }) {
   return (
     <button
       type="button"
       className="conflict-value"
-      aria-pressed={selected}
       aria-label={`Keep ${label}: ${value}`}
       onClick={onSelect}
     >
-      <Icon name={source} size={16} />
-      <span className="conflict-value__source">{label}</span>
+      <Icon name={source} size={18} />
       <span className="conflict-value__text">{value}</span>
-      {selected ? <Icon name="check" size={16} /> : null}
+    </button>
+  )
+}
+
+/* The list is long enough to lose the top of it. Fixed rather than in flow, so
+   appearing does not move the card under the worker's thumb. */
+function ScrollTop({ targetRef }) {
+  const [shown, setShown] = useState(false)
+
+  useEffect(() => {
+    const el = targetRef.current?.closest('.screen-body')
+    if (!el) return undefined
+    const onScroll = () => setShown(el.scrollTop > 400)
+    onScroll()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [targetRef])
+
+  if (!shown) return null
+
+  return (
+    <button
+      type="button"
+      className="scroll-top"
+      aria-label="Back to the top"
+      onClick={() => targetRef.current?.closest('.screen-body')?.scrollTo({ top: 0, behavior: 'smooth' })}
+    >
+      <Icon name="up" size={24} />
     </button>
   )
 }
