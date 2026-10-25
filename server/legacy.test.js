@@ -8,6 +8,7 @@ import { sqliteDriver } from './db/driver.js'
 import { FULL_DDL } from './schema.js'
 import { readTables, splitRows, splitValues, unquote, readInsertBlocks } from './legacy/reader.js'
 import { plan, legacyId, toIso, ORDER } from './legacy/plan.js'
+import { planMissingFiles } from './legacy/photos.js'
 import { applyPlan, verify } from './legacy/apply.js'
 import { importInto, legacyImportState, markMigrationComplete, MIGRATION, targetCounts } from './legacy/import.js'
 import { resetMmTables, verdictFor } from './legacy/import-live.js'
@@ -481,4 +482,46 @@ INSERT INTO \`some_future_table\` (\`id\`, \`x\`) VALUES
     p.notes.some((n) => n.includes('some_future_table') && n.includes('NOT MIGRATED')),
     'an unknown table must be visible in the report',
   )
+})
+
+/* The photo copy is a side effect of the row plan, and the row import refuses a
+   second run — so this pass has to stand alone, and must never invent a file. */
+test('planMissingFiles separates files already here, files to copy, and files that are gone', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mm-photos-'))
+  const legacy = join(root, 'legacy')
+  const uploads = join(root, 'uploads')
+  mkdirSync(legacy, { recursive: true })
+  mkdirSync(join(uploads, 'card-a'), { recursive: true })
+  writeFileSync(join(legacy, 'copy-me.jpg'), 'bytes')
+  writeFileSync(join(legacy, 'orphan.jpg'), 'bytes')
+  writeFileSync(join(uploads, 'card-a', 'already.png'), 'bytes')
+
+  const out = await planMissingFiles(
+    [
+      { cardId: 'card-a', filename: 'already.png' },
+      { cardId: 'card-a', filename: 'copy-me.jpg' },
+      { cardId: 'card-a', filename: 'never-existed.jpg' },
+      { cardId: null, filename: 'orphan.jpg' },
+    ],
+    { legacyDir: legacy, uploadsRoot: uploads },
+  )
+
+  assert.equal(out.dirFound, true)
+  assert.equal(out.present, 1)
+  assert.deepEqual(
+    out.copies.map((c) => c.to),
+    [join(uploads, 'card-a', 'copy-me.jpg')],
+  )
+  assert.deepEqual(out.missing, ['never-existed.jpg', 'orphan.jpg'])
+})
+
+test('planMissingFiles calls an unreadable directory unreadable instead of claiming every file is there', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mm-photos-'))
+  const out = await planMissingFiles([{ cardId: 'c', filename: 'x.jpg' }], {
+    legacyDir: join(root, 'no-such-dir'),
+    uploadsRoot: join(root, 'uploads'),
+  })
+  assert.equal(out.dirFound, false)
+  assert.equal(out.copies.length, 0)
+  assert.deepEqual(out.missing, ['x.jpg'])
 })

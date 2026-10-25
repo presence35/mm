@@ -1636,30 +1636,26 @@ button.slot:active { filter: brightness(0.94); }
 
 /* The recent shortcut floats above the list it shortcuts, and it is inset by
    the same amount the list below it is, so the two are the same width: a band
-   that is a few pixels wider than the cards under it reads as a mistake. */
+   that is a few pixels wider than the cards under it reads as a mistake. It
+   holds one row and has no head to open, so its fill is unconditional and the
+   caption is a plain label rather than a control. */
 .recent {
   margin: var(--space-2) var(--space-2) var(--space-5);
   border: 1px solid var(--outline-variant);
   border-radius: var(--corner-m);
   overflow: hidden;
-}
-
-/* One fill for the whole band. The head used to carry `--secondary-container`,
-   which made the band two panels stacked: a tinted label bar over a different
-   tinted body. It is a label, so it sits on the band's own fill, and a hairline
-   says where the rows begin. The outline then closes the block, so the band has
-   an end that no row divider can be mistaken for. */
-.recent:has([data-open='true']) {
   background: var(--surface-container-low);
 }
 
-.recent .collapsible[data-open='true'] .collapsible__head {
-  background: none;
+/* The caption is what stops the single row reading as a duplicate of a card
+   further down the list. */
+.recent__head {
+  font: var(--label-m);
   color: var(--on-surface-variant);
-  border-bottom: 1px solid var(--outline-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: var(--space-2) var(--space-3) 0;
 }
-
-.recent .collapsible__panel { border-bottom: none; }
 
 /* Rows are cards in legacy, and a card running to the screen edge loses its
    rounded corner and its left edge. One inset, shared by the Recent band and
@@ -1763,7 +1759,7 @@ button.slot:active { filter: brightness(0.94); }
    legacy's language is white flat cards with hairlines, and
    `--surface-container-low` lands on the page colour there — the band would
    simply not be there. So it becomes the legacy card it stands in for. */
-:root[data-palette='legacy'] .recent:has([data-open='true']) {
+:root[data-palette='legacy'] .recent {
   background: var(--surface-container-lowest);
 }
 

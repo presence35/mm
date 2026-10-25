@@ -18,18 +18,19 @@ function memoryStorage(failWrites = false) {
   }
 }
 
-test('the last card opened is first, and a card opened twice is one entry', () => {
+test('only the last card opened is kept', () => {
   const s = memoryStorage()
   rememberCard('emp-1', 'c-1', s)
   rememberCard('emp-1', 'c-2', s)
+  assert.deepEqual(readRecents('emp-1', s), ['c-2'])
   rememberCard('emp-1', 'c-1', s)
-  assert.deepEqual(readRecents('emp-1', s), ['c-1', 'c-2'])
+  assert.deepEqual(readRecents('emp-1', s), ['c-1'])
 })
 
-test('the list is capped, newest kept', () => {
+test('a list written by an earlier build resolves to its newest entry', () => {
   const s = memoryStorage()
-  for (const id of ['c-1', 'c-2', 'c-3', 'c-4', 'c-5', 'c-6', 'c-7']) rememberCard('emp-1', id, s)
-  assert.deepEqual(readRecents('emp-1', s), ['c-7', 'c-6', 'c-5', 'c-4', 'c-3'])
+  s.setItem('mm.recents.emp-1', JSON.stringify(['c-2', 'c-1']))
+  assert.deepEqual(readRecents('emp-1', s), ['c-2'])
 })
 
 test('a shared phone keeps one list per worker', () => {

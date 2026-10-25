@@ -189,3 +189,42 @@ proposes nothing until someone who does the work says which part is slow.
 3. Who marks a boat slotted — the worker on the dock, or the office when the
    paper comes back? *Leaning: the worker, offline, because that is where the
    boat actually lands.*
+
+
+---
+
+## 5. Writing expectations into the system (task checklists + end-of-day reminders)
+
+**Wanted:** "What about the idea of writing expectations into the system." Example given: shrink wrapping is a standard process - put up the wood to support the plastic, tie it down with string, add a package of desiccant called No Damp, cover it with plastic, heat the plastic, add ventilation, write the name on the boat, make sure the sticker is attached - then it gets passed on to the person who will store the boat. This can be a checklist, with a notification to the employee ~2 hours after the process begins asking whether all tasks are done, and an end-of-day notification reminding them to check off everything before going home.
+
+**Where it stands today**
+
+- Nothing in the app represents a *process* or *checklist* at all. Tasks are implicit in the service card's status lifecycle and in worker habit. There is no concept of a named procedure with ordered steps, no per-boat completion record, and no notification system of any kind (no push, no in-app reminder, no scheduled job).
+- The closest existing concept is the storage-prep/wrap item above (section 4): wrap is currently modelled as an informal task, and the yard's real state lives in workers' heads. This item is the generalisation of that - any repeated procedure becomes a checklist instead of a memory.
+- Cards already carry `storage_type` and a slot, and assignment already exists as a boat-and-person table (`localStore.addAssignment`), so "who is doing this boat" is answerable. What is missing is "what steps remain on this boat."
+- Offline is the default; notifications that fire on a timer need a decision about whether they are local (device clock) or server-driven, and whether they survive a phone that is asleep or has no signal.
+
+**Shape of the change (my proposal)**
+
+- A named, ordered **checklist template** per procedure (e.g. "Shrink wrap"), with steps. Admin/office authors templates; mechanics never do. Templates are reference data, syncable read-only like `storage_layout`.
+- A checklist instance attaches to a card (or a boat) when the work starts, with each step carrying its own done/not-done state and a timestamp + who. One active instance per card at a time; re-running creates a new instance rather than overwriting, so history survives.
+- Step completion is offline-capable and local-first, same as card edits: write locally with `local_pending`, sync later. Office/admin refusal rules do not apply to a mechanic ticking their own steps.
+- Two reminders, both optional and per-user opt-in:
+  1. A "still in progress?" nudge ~2 hours after the instance was started, if not all steps are done.
+  2. An end-of-day nudge listing the user's cards/instances with unchecked steps, so nothing goes home unfinished.
+- Reminders are **local-first and best-effort**: fire from the device clock while the app is open/foregrounded; no server push, no background service, no guarantee if the phone is off. (A server-driven option is a separate, later item - see open questions.)
+- The wrap item (section 4) is the first consumer: its eight steps become the first template, and "wrapped" stops being a guessed state and becomes "all steps of the wrap checklist done."
+
+**Open questions**
+
+1. Scope of a checklist - per card, per boat, or per yard task with no card? The example is per boat but the idea ("expectations into the system") is broader. *Leaning: per card first; boat-level and yard-level later if wanted.*
+2. Who authors templates - admin only, or office too? *Leaning: admin authors, office can attach an existing template to a card.*
+3. Can a mechanic start a checklist themselves, or only office/admin? The wrap happens on the dock, so a mechanic starting it offline is the realistic case. *Leaning: mechanic can start and tick; only admin/office edit templates.*
+4. Reminders: local device clock (works offline, dies when app closed) vs. server-scheduled push (survives, needs connectivity + a push channel we do not have). *Leaning: local-first and best-effort now; revisit if people miss them.*
+5. End-of-day cutoff - fixed time (e.g. 16:30), or "last activity + N"? And timezone: the marina's, not the device's? *Leaning: marina-local fixed time, configured once.*
+6. What counts as "done" for a step - a single tap, or tap + optional note/photo? *Leaning: single tap; notes/photos are a later embellishment, and photos already have their own online-only path.*
+7. Does an incomplete checklist block anything (e.g. marking the card complete, or the boat moving to a slot)? *Leaning: no - it informs, it does not gate. Gating turns a reminder into a blocker and people work around it.*
+8. Retention: how long do completed instances stay? They are history, but they accumulate. *Leaning: keep for the season, GC with the card.*
+9. Is this the same item as section 4 or separate? It subsumes the "wrap as a task" question there; section 4's board question ("prep as checklist on one card vs. board across the yard") is the same decision as this item's scope question. *Leaning: merge - section 4 becomes the first screen built on top of this, not a parallel item.*
+
+**Not in scope (deliberately):** server push notifications, background services, photo attachments on steps, gating card completion on checklist completion, per-step assignees, and any analytics/reporting on completion rates. Add them only when asked.

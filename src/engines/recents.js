@@ -3,7 +3,9 @@
  *
  * Not a log, and not synced. It answers one question — "which card was I just
  * on?" — so a worker who walked away from the dock and came back does not have
- * to remember a work order number. Five entries, newest first, no repeats.
+ * to remember a work order number. One entry: the last card opened, no repeats.
+ * A list rather than a scalar only so an older stored value still reads as its
+ * newest id instead of being discarded.
  *
  * Keyed by employee, because a shop phone gets handed around: signing in as
  * someone else must not put their cards in your list. It lives in localStorage
@@ -16,7 +18,7 @@
  * its own storage (the tests do).
  */
 
-const LIMIT = 5
+const LIMIT = 1
 
 const EMPTY = Object.freeze([])
 const listeners = new Set()

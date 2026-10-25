@@ -25,6 +25,12 @@ import { useRouter } from '../shell/RouterProvider.jsx'
  * decision that belongs beside each value. Tapping This device or Server picks
  * that side for that field; one button commits the result.
  *
+ * A worker who already knows they want their whole version gets the All fields
+ * row above the list: it fills every field with that side and commits nothing,
+ * so it costs no more state or risk than tapping each field in turn, and the
+ * same single button still commits. It is hidden on a one-field conflict, where
+ * it would be the per-field choice repeated under a second label.
+ *
  * Server is preselected because the server's version is what the entity
  * currently holds (behaviors-sync.md §Conflicts). Choosing "This device" is the
  * deviation, so the default is the state that already exists.
@@ -81,6 +87,17 @@ function Row({ conflict, onResolve }) {
   const waiting = !conflict.server_payload
   const kept = conflict.rows.filter((r) => chosen[r.field] === 'mine')
 
+  /* Which side the All row is on is derived from `chosen`, never a second flag:
+     strip one field back to the server and the row stops being marked, with
+     nothing to keep in step. Server is the empty map, so it stays the absence
+     it already is. */
+  const allMine = conflict.rows.every((r) => chosen[r.field] === 'mine')
+  const allServer = conflict.rows.every((r) => chosen[r.field] !== 'mine')
+  const pickAll = (side) =>
+    setChosen(
+      side === 'mine' ? Object.fromEntries(conflict.rows.map((r) => [r.field, 'mine'])) : {},
+    )
+
   const apply = () => {
     if (!kept.length) return onResolve(conflict.id, { resolution: 'kept_server' })
     /* Start from what the server holds and override only the fields the worker
@@ -132,6 +149,23 @@ function Row({ conflict, onResolve }) {
         ) : null}
       </section>
 
+      {conflict.rows.length > 1 ? (
+        <div role="group" aria-label="All fields" style={{ padding: 'var(--space-2) var(--space-4) 0' }}>
+          <div
+            style={{
+              font: 'var(--title-s)',
+              color: 'var(--on-surface)',
+              paddingBottom: 'var(--space-1)',
+            }}
+          >
+            All fields
+          </div>
+          <Side label="This device" selected={allMine} onSelect={() => pickAll('mine')} />
+          <Side label="Server" selected={allServer} onSelect={() => pickAll('theirs')} />
+          <Divider />
+        </div>
+      ) : null}
+
       <div style={{ padding: 'var(--space-2) var(--space-4) 0' }}>
         {conflict.rows.map((r) => (
           <div key={r.field} style={{ paddingBottom: 'var(--space-3)' }}>
@@ -177,9 +211,10 @@ function Row({ conflict, onResolve }) {
 }
 
 /*
- * One side of one field. The label is the control: pressing it chooses this
+ * One side of one choice. The label is the control: pressing it chooses this
  * side, and the chosen one is marked with a tick as well as a fill, so the
- * choice survives greyscale (architecture.md constraint 9).
+ * choice survives greyscale (architecture.md constraint 9). `value` is omitted
+ * on the All row, where there is no single value to show.
  */
 function Side({ label, value, selected, onSelect }) {
   return (
@@ -215,7 +250,9 @@ function Side({ label, value, selected, onSelect }) {
         {selected ? <Icon name="check" size={16} /> : null}
         {label}
       </span>
-      <span style={{ font: 'var(--body-m)', overflowWrap: 'anywhere' }}>{value}</span>
+      {value === undefined ? null : (
+        <span style={{ font: 'var(--body-m)', overflowWrap: 'anywhere' }}>{value}</span>
+      )}
     </button>
   )
 }

@@ -89,7 +89,7 @@ Contextual only, never in navigation: Card detail · New card wizard · New log 
 
 **Schedule is contextual, not a sixth destination.** M3 caps a navigation bar at five and we are at the limit, so the schedule board is reached from Cards and from a card, and adopts the Cards destination for navigation highlighting.
 
-**Recents is a section, not a destination.** The same cap keeps it inside Cards: a strip above the list, five entries, per worker and per device, gone if the browser clears its storage. It is a shortcut back, not a record — nothing about it is synced.
+**Recents is a section, not a destination.** The same cap keeps it inside Cards: a strip above the list holding only the card this worker last opened, per worker and per device, gone if the browser clears its storage. It is a shortcut back, not a record — nothing about it is synced.
 
 ### Navigation by window size
 
@@ -370,10 +370,12 @@ src/
     sync/    SyncProvider.jsx (state machine), transport.js (the only module
              that does network I/O)
     auth/    AuthProvider.jsx, permissions.js, permissions.test.js (role matrix + offline-refusal)
-    recents.js — the cards this worker last opened, on this device: five, newest
-             first, keyed by employee so a shared phone does not mix two people's
-             lists. localStorage, not the card store, because it is a fact about
-             this phone and must never reach the outbox, a push or a conflict.
+    recents.js — the card this worker last opened, on this device: one entry,
+             keyed by employee so a shared phone does not mix two people's
+             lists. A list rather than a scalar only so an older stored value
+             reads as its newest id. localStorage, not the card store, because
+             it is a fact about this phone and must never reach the outbox, a
+             push or a conflict.
              Recorded in the router's navigate, the one place that knows a card
              was actually opened. recents.test.js pins the cap, the per-worker
              key and the behaviour on corrupt storage.

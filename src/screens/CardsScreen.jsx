@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, Collapsible, IconButton } from '../ui'
+import { TopBar, SearchBar, Chip, ChipRow, ListItem, StatusPill, Fab, EmptyState, Card, IconButton } from '../ui'
 import { useCards, useRecentCards } from '../features/card/useCard.js'
 import { useRouter } from '../shell/RouterProvider.jsx'
 import { useAuth } from '../engines/auth/AuthProvider.jsx'
@@ -78,12 +78,13 @@ export default function CardsScreen({ embedded = false }) {
   /* The shortcut back to the card you were just on. It is not a search result,
      so it stands aside while the list is being filtered — "Recent" sitting
      above "Nothing matches" would be a lie about what the screen is showing.
-     An id whose card has left the store (synced away, or never arrived here)
-     drops out rather than rendering a dead row. */
-  const recentRows = useMemo(() => {
-    if (filtered || query.trim()) return []
-    const byId = new Map(rows.map((row) => [row.card.id, row]))
-    return recentIds.map((id) => byId.get(id)).filter(Boolean)
+     A card that has left the store (synced away, or never arrived here) drops
+     out rather than rendering a dead row. */
+  const recent = useMemo(() => {
+    if (filtered || query.trim()) return null
+    const id = recentIds[0]
+    if (!id) return null
+    return rows.find((row) => row.card.id === id) ?? null
   }, [recentIds, rows, query, filtered])
 
   const renderRow = ({ card, boat, customer }) => {
@@ -169,11 +170,10 @@ export default function CardsScreen({ embedded = false }) {
           ))}
         </ChipRow>
       ) : null}
-      {recentRows.length ? (
+      {recent ? (
         <div className="recent">
-          <Collapsible title="Recent" stateKey="cards.recent" count={recentRows.length} defaultOpen align="end">
-            {recentRows.map(renderRow)}
-          </Collapsible>
+          <p className="recent__head">Recent</p>
+          {renderRow(recent)}
         </div>
       ) : null}
 
