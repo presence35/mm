@@ -1320,6 +1320,154 @@ button.slot:active { filter: brightness(0.94); }
   animation: btn-spin 800ms linear infinite;
 }
 
+/* --- Needs review ---------------------------------------------------------
+   One conflict per card. The queue in the marina is dozens of rows, and read as
+   one column it is a wall nobody opens: separated, a worker settles one and can
+   leave the rest. Each differing field is a card again, so on a wide screen a
+   conflict reads as a row of them — the queue turned on its side. */
+
+.conflicts { padding-bottom: var(--space-6); }
+
+.conflict-all {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) var(--space-2) 0;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-radius: var(--corner-m);
+  background: var(--surface-container);
+}
+
+.conflict-all__label { font: var(--label-m); color: var(--on-surface-variant); }
+
+.conflict-card {
+  margin: var(--space-3) var(--space-2);
+  border-radius: var(--corner-l);
+  background: var(--surface-container-low);
+  box-shadow: inset 0 0 0 1px var(--outline-variant);
+  overflow: hidden;
+}
+
+.conflict-card__head { padding: var(--space-2) var(--space-3) 0; }
+
+/* The heading is the commit: the worker has already read this card, and a trip
+   to a button at the bottom of it is a scroll per card. It says Apply on the
+   right, so a tap on the header is not a surprise. */
+.conflict-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target-min);
+  text-align: left;
+  font: var(--title-s);
+  color: var(--on-surface);
+}
+
+.conflict-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--title-s);
+  color: var(--on-surface);
+}
+
+.conflict-card__apply {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  font: var(--label-m);
+  color: var(--on-surface-variant);
+}
+
+.conflict-card__meta { font: var(--body-s); color: var(--on-surface-variant); }
+
+.conflict-card__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.conflict-card__count { font: var(--body-s); color: var(--on-surface-variant); }
+
+/* Bulk. Same two icons as every value below, one size up, so "everything from
+   there" is recognisable without reading a word. */
+.conflict-bulk { display: flex; gap: var(--space-1); }
+
+.conflict-bulk__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  padding: 0 var(--space-2);
+  border-radius: var(--corner-full);
+  font: var(--label-m);
+  color: var(--on-surface);
+  box-shadow: inset 0 0 0 1px var(--outline);
+}
+
+.conflict-fields { display: grid; gap: var(--space-2); padding: var(--space-3); }
+
+.conflict-field {
+  padding: var(--space-1);
+  border-radius: var(--corner-m);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--outline-variant);
+}
+
+.conflict-field__name {
+  font: var(--label-s);
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-2);
+}
+
+/* The value looks like the string it is: no box, no fill, a full target. The
+   chosen one is tinted, outlined and ticked, so the choice survives greyscale
+   (constraint 9). */
+.conflict-value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--corner-s);
+  text-align: left;
+  font: var(--body-m);
+  color: var(--on-surface);
+}
+
+.conflict-value + .conflict-value { margin-top: var(--space-1); }
+
+.conflict-value[aria-pressed='true'] {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.conflict-value__source {
+  flex-shrink: 0;
+  font: var(--label-s);
+  color: var(--on-surface-variant);
+}
+
+.conflict-value[aria-pressed='true'] .conflict-value__source { color: var(--on-secondary-container); }
+
+.conflict-value__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.conflict-card__foot { padding: 0 var(--space-3) var(--space-3); }
+
+/* Wide screens: the field cards run across the conflict card instead of down
+   it. Two columns at medium, as many as fit when expanded. */
+.conflicts[data-width='medium'] .conflict-fields,
+.conflicts[data-width='expanded'] .conflict-fields {
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
 /* ------------------------------------------------- Palette / appearance --
    One tile shape for both pickers: the colour palette and the light/dark mode
    answer the same kind of question, so they read as the same control. */

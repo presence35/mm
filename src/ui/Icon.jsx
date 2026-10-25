@@ -27,6 +27,12 @@ const P = {
   offline:
     'M2 2l20 20 M8.5 16.4a5 5 0 0 1 7 0 M5 12.9a10 10 0 0 1 3.2-2 M2.5 9.5a15 15 0 0 1 4.6-2.8 M12 19.5h.01 M16.5 10.2a10 10 0 0 1 2.5 2.7',
   alert: 'M12 3 2.5 20h19z M12 9v5 M12 17.5h.01',
+  /* The two places a version can come from, drawn the same way at every size:
+     the phone in the worker's hand, and the machine the card syncs to. */
+  phone:
+    'M6.5 3.5h3L11 7.5 9 9a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2z',
+  server:
+    'M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z M4 14a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z M8 8h.01 M8 16h.01',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M20 20l-4-4',
   calendar: 'M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z M4 11h16 M8 3v4 M16 3v4',
   marker: 'M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',

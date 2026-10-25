@@ -1,16 +1,17 @@
 /*
- * Recents — the cards this worker last opened, on this device.
+ * Recents â€” the cards this worker last opened, on this device.
  *
- * Not a log, and not synced. It answers one question — "which card was I just
- * on?" — so a worker who walked away from the dock and came back does not have
- * to remember a work order number. One entry: the last card opened, no repeats.
- * A list rather than a scalar only so an older stored value still reads as its
- * newest id instead of being discarded.
+ * Not a log, and not synced. It answers one question â€” "which card was I just
+ * on?" â€” so a worker who walked away from the dock and came back does not have
+ * to remember a work order number. Two entries: the card you just left and the
+ * one before it, which is the pair a worker actually moves between. One is
+ * useless (it repeats the row you just tapped); more is a history nobody reads
+ * twice in a day.
  *
  * Keyed by employee, because a shop phone gets handed around: signing in as
  * someone else must not put their cards in your list. It lives in localStorage
  * rather than the card database because it is a fact about this phone, not
- * about the marina — and device preference must never reach the outbox, a push
+ * about the marina â€” and device preference must never reach the outbox, a push
  * or a conflict.
  *
  * Plain module, no interface: there is one storage here and no second
@@ -18,7 +19,7 @@
  * its own storage (the tests do).
  */
 
-const LIMIT = 1
+const LIMIT = 2
 
 const EMPTY = Object.freeze([])
 const listeners = new Set()

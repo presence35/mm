@@ -75,16 +75,16 @@ export default function CardsScreen({ embedded = false }) {
     }))
   }, [rows])
 
-  /* The shortcut back to the card you were just on. It is not a search result,
-     so it stands aside while the list is being filtered — "Recent" sitting
-     above "Nothing matches" would be a lie about what the screen is showing.
-     A card that has left the store (synced away, or never arrived here) drops
-     out rather than rendering a dead row. */
+  /* The shortcut back to the cards you were on. It is not a search result, so
+     it stands aside while the list is being filtered — "Recent" sitting above
+     "Nothing matches" would be a lie about what the screen is showing. A card
+     that has left the store (synced away, or never arrived here) drops out
+     rather than rendering a dead row. Two at most: the card just left, and the
+     one before it; one would only repeat the row you tapped. */
   const recent = useMemo(() => {
-    if (filtered || query.trim()) return null
-    const id = recentIds[0]
-    if (!id) return null
-    return rows.find((row) => row.card.id === id) ?? null
+    if (filtered || query.trim()) return []
+    const byId = new Map(rows.map((row) => [row.card.id, row]))
+    return recentIds.map((id) => byId.get(id)).filter(Boolean)
   }, [recentIds, rows, query, filtered])
 
   const renderRow = ({ card, boat, customer }) => {
@@ -170,10 +170,10 @@ export default function CardsScreen({ embedded = false }) {
           ))}
         </ChipRow>
       ) : null}
-      {recent ? (
+      {recent.length ? (
         <div className="recent">
           <p className="recent__head">Recent</p>
-          {renderRow(recent)}
+          {recent.map(renderRow)}
         </div>
       ) : null}
 

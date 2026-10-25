@@ -39,6 +39,7 @@ const LABELS = {
   status_history: 'Status change',
   invoice_items: 'Invoice line',
   appointments: 'Appointment',
+  boat_assignments: 'Boat assignment',
 }
 
 /* Field names as they should read on screen, per entity where the same column
