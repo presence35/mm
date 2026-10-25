@@ -238,23 +238,45 @@ async function applyDelete(db, { deviceId, actorId, op }) {
 async function conflict(db, op, existing, why) {
   const id = op.conflict_id ?? randomUUID()
   const now = new Date().toISOString()
+  const localPayload = JSON.stringify(op.payload ?? {})
+  const serverPayload = JSON.stringify(existing ? rowToPayload(op.entity, existing) : null)
+  const localRev = Number(op.rev)
+  const serverVersion = existing ? Number(existing.version) : 0
 
+  /*
+   * The id is the caller's: a resolution carries the id of the conflict it was
+   * answering, so re-raising that conflict lands on a row that already exists.
+   * A plain INSERT throws ER_DUP_ENTRY there, and on Express 4 that rejection
+   * is unhandled and takes the process with it.
+   *
+   * Upsert instead, and the row describes the newest disagreement: both
+   * payloads and versions refreshed, detected_at moved to now, and the row is
+   * open again because a later write nullified whatever resolution closed it.
+   * Ignoring the duplicate instead would keep the stale snapshot and let the
+   * caller believe this version was recorded.
+   */
   await db.run(
     `INSERT INTO ${T('card_conflicts')} (id, entity, entity_id, local_payload, server_payload, local_rev, server_version, detected_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET local_payload = ?, server_payload = ?, local_rev = ?, server_version = ?, detected_at = ?, status = 'open', resolution = NULL, resolved_by = NULL, resolved_at = NULL`,
     [
       id,
       op.entity,
       op.entity_id,
-      JSON.stringify(op.payload ?? {}),
-      JSON.stringify(existing ? rowToPayload(op.entity, existing) : null),
-      Number(op.rev),
-      existing ? Number(existing.version) : 0,
+      localPayload,
+      serverPayload,
+      localRev,
+      serverVersion,
+      now,
+      localPayload,
+      serverPayload,
+      localRev,
+      serverVersion,
       now,
     ],
   )
 
-  return { result: 'conflict', conflict_id: id, server_version: existing ? Number(existing.version) : 0, reason: why }
+  return { result: 'conflict', conflict_id: id, server_version: serverVersion, reason: why }
 }
 
 async function logChange(db, { op_id, entity, entity_id, op, version, row, actorId, deviceId, now }) {

@@ -323,14 +323,32 @@ const [hasCachedSession, setHasCachedSession] = useState(() => Boolean(readToken
       try {
         const t = await ensureSession()
         if (t) {
-          await transport.resolveConflict(t, conflictId, {
+          const reply = await transport.resolveConflict(t, conflictId, {
             resolution,
             payload: payload ?? conflict.local_payload,
             deviceId: deviceId.current,
           })
+          /*
+           * The card moved between this conflict being recorded and the tap, so
+           * the resolution did not land and the server answered "conflict" —
+           * this same conflict, refreshed and still open. It was marked
+           * resolved above, so reopen it here: a worker whose choice was
+           * overtaken has to be told, not shown a card that looks settled.
+           */
+          if (reply?.results?.[0]?.result === 'conflict') {
+            await idb.addConflict({
+              id: conflictId,
+              entity: conflict.entity,
+              entity_id: conflict.entity_id,
+              local_payload: payload ?? conflict.local_payload,
+              server_version: Number(reply.results[0].server_version ?? conflict.server_version),
+              status: 'open',
+              detected_at: new Date().toISOString(),
+            })
+          }
         }
       } catch {
-        /* Stays resolved locally; the next cycle pushes the outcome. */
+        /* Offline: stays resolved locally; the next cycle pushes the outcome. */
       }
 
       setConflicts((await idb.openConflicts()).length)

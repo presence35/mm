@@ -234,6 +234,41 @@ test('a stale edit does not overwrite and preserves both versions', async () => 
   assert.equal(JSON.parse(conflicts[0].server_payload).city, 'Comox')
 })
 
+test('a resolution that loses the race re-raises the same conflict, refreshed and still open', async () => {
+  const db = freshDb()
+  const [created] = await push(db, { ...ADMIN, ops: [customer()] })
+  const deviceB = { deviceId: 'dev-b', actorId: 'emp-o', role: 'office' }
+
+  await push(db, { ...deviceB, ops: [{ op_id: 'op-b1', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: created.version, payload: { city: 'Comox' } }] })
+  const [raised] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-a1', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: created.version, payload: { city: 'Campbell River' } }],
+  })
+  assert.equal(raised.result, 'conflict')
+
+  /* The other device writes again, so the conflict's server_version is now
+     stale: resolving it is an ordinary write at that old version, which loses. */
+  await push(db, { ...deviceB, ops: [{ op_id: 'op-b2', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: created.version + 1, payload: { city: 'Nanaimo' } }] })
+
+  /* The resolution carries the id of the conflict it answers. Before the row was
+     an upsert this threw ER_DUP_ENTRY and, on Express 4, killed the process. */
+  const [again] = await push(db, {
+    ...ADMIN,
+    ops: [{ op_id: 'op-a2', entity: 'customers', entity_id: 'c-1', op: 'upsert', rev: created.version + 1, payload: { city: 'Parksville' }, conflict_id: raised.conflict_id }],
+  })
+  assert.equal(again.result, 'conflict')
+  assert.equal(again.conflict_id, raised.conflict_id, 'the id is the caller\'s, not a second row')
+  assert.equal(again.server_version, created.version + 2)
+
+  const rows = await db.all(`SELECT * FROM ${T('card_conflicts')} WHERE id = ?`, [raised.conflict_id])
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].status, 'open', 'the newer disagreement is unresolved')
+  assert.equal(Number(rows[0].server_version), created.version + 2)
+  assert.equal(JSON.parse(rows[0].local_payload).city, 'Parksville', 'the newest losing version is kept')
+  assert.equal(JSON.parse(rows[0].server_payload).city, 'Nanaimo')
+})
+
+
 test('a write that changes nothing is applied, not raised as a conflict', async () => {
   const db = freshDb()
   const op = customer()

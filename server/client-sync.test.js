@@ -557,6 +557,57 @@ test('a per-field merged resolution keeps the chosen field from each side', asyn
   assert.equal(final.payload.city, 'Courtney', 'the untouched field kept the server value')
 })
 
+test('a resolution whose card moved stays open instead of closing silently', async () => {
+  const ID = 'c-stale-resolve-probe'
+  await idb.putAndQueue('customers', { id: ID, name: 'Stale Person', city: 'Comox', version: 0 })
+  await transport.drain(token, 'dev-1')
+  const starting = await idb.get('customers', ID)
+
+  /* Another device moves the card, this device queues an edit on the old
+     version, and the push raises a conflict with both versions kept. */
+  await transport.push(token, 'dev-2', [{
+    op_id: 'op-stale-resolve-b1',
+    entity: 'customers', entity_id: ID, op: 'upsert',
+    rev: starting.version,
+    payload: { ...toPayload(starting), city: 'Courtney' },
+  }])
+  await idb.putAndQueue('customers', { ...starting, name: 'Stale Person Jr' })
+  await transport.drain(token, 'dev-1')
+  const conflict = (await idb.openConflicts()).find((c) => c.entity_id === ID)
+  assert.ok(conflict, 'a conflict is what the push produced')
+
+  /* And it moves again, so the conflict's server_version is stale when the
+     worker taps: the resolution is an ordinary write at the wrong version. */
+  await transport.push(token, 'dev-2', [{
+    op_id: 'op-stale-resolve-b2',
+    entity: 'customers', entity_id: ID, op: 'upsert',
+    rev: starting.version + 1,
+    payload: { ...toPayload(starting), city: 'Nanaimo' },
+  }])
+
+  const first = await transport.resolveConflict(token, conflict.id, {
+    resolution: 'merged',
+    payload: { ...starting, name: 'Stale Person Jr' },
+    deviceId: 'dev-1',
+  })
+  assert.equal(first.results[0].result, 'conflict', 'the resolution lost the race')
+  assert.equal(first.results[0].conflict_id, conflict.id, 'the same conflict, not a second row')
+  assert.ok(
+    (await transport.conflicts(token)).some((c) => c.id === conflict.id),
+    'so it cannot be closed on the server',
+  )
+
+  /* Reopened locally with the version the server now holds, the second tap is an
+     ordinary convergent write and the conflict closes. */
+  const second = await transport.resolveConflict(token, conflict.id, {
+    resolution: 'merged',
+    payload: { ...starting, name: 'Stale Person Jr' },
+    deviceId: 'dev-1',
+  })
+  assert.equal(second.results[0].result, 'applied')
+  assert.ok(!(await transport.conflicts(token)).some((c) => c.id === conflict.id))
+})
+
 test('a conflict with nothing to decide closes itself; a real one does not', async () => {
   const at = new Date().toISOString()
 

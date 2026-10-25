@@ -264,8 +264,11 @@ export function toMySQL(sql) {
 }
 
 /* Column sets that are themselves primary keys, so dropping the conflict target
-   is provably equivalent on MySQL rather than merely usually true. */
+   is provably equivalent on MySQL rather than merely usually true. `id` is here
+   for card_conflicts: re-raising a conflict carries the id of the conflict it
+   answers, so an existing row is the expected case, not an accident. */
 const PRIMARY_KEYS = new Map([
   ['employee_id,source', true],
   ['device_id', true],
+  ['id', true],
 ])

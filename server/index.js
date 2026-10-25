@@ -98,6 +98,26 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
   app.use(express.json({ limit: '2mb' }))
   const log = quiet ? () => {} : console.log
 
+  /*
+   * Express 4 does not await handlers: a rejected promise from an async route
+   * is an unhandled rejection, and Node ends the process. One duplicate key in
+   * a query was enough to take the marina offline. Wrapping at registration
+   * rather than at each call site means a route added later cannot forget it,
+   * and the rejection reaches the error middleware below instead of the void.
+   */
+  for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+    const register = app[method].bind(app)
+    app[method] = (path, ...handlers) =>
+      register(
+        path,
+        ...handlers.map((handler) =>
+          handler?.constructor?.name === 'AsyncFunction'
+            ? (req, res, next) => handler(req, res, next).catch(next)
+            : handler,
+        ),
+      )
+  }
+
   /* ------------------------------------------------------------- session */
 
   function authenticate(req, res, next) {
@@ -227,14 +247,17 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
     }
 
     /* Resolving as kept_local or merged is an ordinary write at
-       server_version + 1 — convergent, not a special case. */
+       server_version + 1 — convergent, not a special case. The op id is unique
+       per attempt: `resolve-<id>` was consumed by sync_ops even when the answer
+       was "conflict", so a corrected second tap replayed the old answer and
+       could never write. */
     const results = await push(database, {
       deviceId: req.body.device_id ?? 'server',
       actorId: req.employee.employee_id,
       role: req.employee.role,
       ops: [
         {
-          op_id: `resolve-${req.params.id}`,
+          op_id: `resolve-${req.params.id}-${randomUUID()}`,
           conflict_id: req.params.id,
           entity: row.entity,
           entity_id: row.entity_id,
@@ -244,6 +267,19 @@ export async function createServer({ db, quiet = false, throttle = makePinThrott
         },
       ],
     })
+
+    /*
+     * A resolution can lose the race: the card moved since this conflict's
+     * server_version, so the push answers "conflict" instead of applying, and
+     * that answer is this same conflict, refreshed and still open. Closing the
+     * row here would discard the disagreement on the server and, since the
+     * client marks it resolved before asking, on the phone too. The results go
+     * back as they are — the client reads the result and reopens.
+     */
+    if (results[0]?.result === 'conflict') {
+      res.json({ results })
+      return
+    }
 
     await database.run(
       `UPDATE ${T('card_conflicts')} SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = ? WHERE id = ?`,
